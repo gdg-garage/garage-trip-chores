@@ -1,6 +1,7 @@
 package config
 
 import (
+	"github.com/gdg-garage/garage-trip-chores/chores"
 	"github.com/gdg-garage/garage-trip-chores/logger"
 	"github.com/gdg-garage/garage-trip-chores/storage"
 )
@@ -8,6 +9,7 @@ import (
 type Config struct {
 	Logger logger.Config
 	Db     storage.Config
+	Chores chores.Config
 }
 
 func defaultConf() *Config {
@@ -18,6 +20,9 @@ func defaultConf() *Config {
 		},
 		Db: storage.Config{
 			DbPath: "data/db.sqlite",
+		},
+		Chores: chores.Config{
+			OversampleRatio: 0.5,
 		},
 	}
 }

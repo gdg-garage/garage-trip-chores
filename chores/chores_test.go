@@ -51,3 +51,27 @@ func TestEmptyStatsInput(t *testing.T) {
 		}
 	}
 }
+func TestOversampleCnt(t *testing.T) {
+	tests := []struct {
+		needed   int
+		ratio    float64
+		expected int
+	}{
+		{4, 0.5, 2},
+		{5, 0.5, 3},
+		{4, 1.0, 4},
+		{4, 2.0, 8},
+		{8, 1.0, 8},
+		{4, 0.0, 0},
+		{0, 0.5, 0},
+		{3, 0.33, 1},
+		{3, 0.34, 2},
+	}
+
+	for _, tt := range tests {
+		got := OversampleCnt(tt.needed, tt.ratio)
+		if got != tt.expected {
+			t.Errorf("OversampleCnt(%d, %.2f) = %d; want %d", tt.needed, tt.ratio, got, tt.expected)
+		}
+	}
+}
