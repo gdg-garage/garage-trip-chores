@@ -12,3 +12,4 @@ Additional features
 * Manually add finished chores
 * Display the track record
 * Display the global statistics
+* Use LLM to make the messages funny
