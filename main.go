@@ -1,9 +1,15 @@
 package main
 
 import (
-	"fmt"
+	"github.com/gdg-garage/garage-trip-chores/config"
+	"github.com/gdg-garage/garage-trip-chores/logger"
 )
 
 func main() {
-	fmt.Println("Chores!")
+	// TODO: Read config from Cobra flags.
+	conf := config.New()
+	logger := logger.New(conf.Logger)
+
+	logger.Info("Chores!")
+
 }
