@@ -1,5 +1,7 @@
 # Garage trip chores
 
+[![Go](https://github.com/gdg-garage/garage-trip-chores/actions/workflows/go.yml/badge.svg)](https://github.com/gdg-garage/garage-trip-chores/actions/workflows/go.yml)
+
 Discord bot which:
 * Tracks chores and who finished them (with global stats)
 * Assigns (mentions) potentional asignees (Discord members) to the chores (based on who worked the lowest amount of time)
