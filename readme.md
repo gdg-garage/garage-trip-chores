@@ -15,6 +15,7 @@ Additional features:
 * Display the track record
 * Display the global statistics
 * Use LLM to make the messages funny
+* Users have capabilities and some chores needs expertise - use Discord roles to assign 
 
 ### Tech stack
 * Golang
