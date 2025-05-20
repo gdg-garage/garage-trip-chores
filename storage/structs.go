@@ -1,6 +1,9 @@
 package storage
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 type User struct {
 	Handle       string
@@ -8,28 +11,103 @@ type User struct {
 }
 
 type Chore struct {
-	Id                    int
+	ID                    uint
 	Name                  string
-	NecessaryCapabilities []string
-	NecessaryWorkers      []string
-	EstimatedTimeMin      int
-	Completed             bool
+	NecessaryCapabilities string // Comma separated list of capabilities
+	NecessaryWorkers      uint
+	EstimatedTimeMin      uint
+	Creator               string // Discord id (prefixed with discord:) of the creator string
+	Completed             *time.Time
+	Cancelled             *time.Time
 	Deadline              *time.Time
+	necessaryCapabilities []string
+}
+
+func (c *Chore) GetCapabilities() []string {
+	c.necessaryCapabilities = strings.Split(c.NecessaryCapabilities, ",")
+	return c.necessaryCapabilities
+}
+
+func (c *Chore) SetCapabilities(capabilities []string) {
+	c.necessaryCapabilities = capabilities
+	c.NecessaryCapabilities = strings.Join(capabilities, ",")
+}
+
+func (c *Chore) Complete() {
+	now := time.Now()
+	c.Completed = &now
+}
+
+func (c *Chore) Cancel() {
+	now := time.Now()
+	c.Cancelled = &now
 }
 
 type WorkLog struct {
-	Id           int
+	ID           uint
 	UserHandle   string
-	ChoreId      int
-	TimeSpentMin *int
+	ChoreId      uint
+	Chore        Chore
+	TimeSpentMin uint
 }
 
-type ChoreAssignments struct {
-	Id         int
+type ChoreAssignment struct {
+	ID         uint
 	UserHandle string
-	ChoreId    int
-	Acked      bool
+	ChoreId    uint
+	Chore      Chore
 	Created    time.Time
+	Acked      *time.Time
 	Refused    *time.Time
 	Timeouted  *time.Time
+}
+
+func (ca *ChoreAssignment) Ack() {
+	now := time.Now()
+	ca.Acked = &now
+}
+
+func (ca *ChoreAssignment) Refuse() {
+	now := time.Now()
+	ca.Refused = &now
+}
+
+func (ca *ChoreAssignment) Timeout() {
+	now := time.Now()
+	ca.Timeouted = &now
+}
+
+type ChoreStats struct {
+	Count    uint
+	TotalMin uint
+}
+
+type ChoreStatsWithCapabilities struct {
+	ChoreStats
+	CapabilitiesMatched uint
+}
+
+type UserChoreStats map[string]ChoreStats
+
+func (st UserChoreStats) Add(other UserChoreStats) UserChoreStats {
+	sum := UserChoreStats{}
+	for user, stats := range st {
+		if _, exists := sum[user]; !exists {
+			sum[user] = ChoreStats{}
+		}
+		temp := sum[user]
+		temp.Count += stats.Count
+		temp.TotalMin += stats.TotalMin
+		sum[user] = temp
+	}
+	for user, stats := range other {
+		if _, exists := sum[user]; !exists {
+			sum[user] = ChoreStats{}
+		}
+		temp := sum[user]
+		temp.Count += stats.Count
+		temp.TotalMin += stats.TotalMin
+		sum[user] = temp
+	}
+	return sum
 }

@@ -20,6 +20,7 @@ Additional features:
 ### Tech stack
 * Golang
   * slog
-  * ???
+  * gorm
+  * discordgo
 * SQLite
 * JJ (VCS)

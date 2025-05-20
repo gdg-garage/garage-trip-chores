@@ -2,25 +2,50 @@ package chores
 
 import (
 	"testing"
+
+	"github.com/gdg-garage/garage-trip-chores/storage"
 )
 
 func TestUserOrderBasedOnStats(t *testing.T) {
-	statistics := UserChoreStats{
-		"user1": ChoreStats{
-			Count:    10,
-			TotalMin: 30,
+	statistics := map[string]storage.ChoreStatsWithCapabilities{
+		"user1": {
+			ChoreStats: storage.ChoreStats{
+				Count:    10,
+				TotalMin: 30,
+			},
+			CapabilitiesMatched: 1,
 		},
-		"user2": ChoreStats{
-			Count:    5,
-			TotalMin: 30,
+		"user2": {
+			ChoreStats: storage.ChoreStats{
+				Count:    5,
+				TotalMin: 30,
+			},
+			CapabilitiesMatched: 2,
 		},
-		"user3": ChoreStats{
-			Count:    10,
-			TotalMin: 40,
+		"user3": {
+			ChoreStats: storage.ChoreStats{
+				Count:    10,
+				TotalMin: 40,
+			},
+			CapabilitiesMatched: 1,
+		},
+		"user4": {
+			ChoreStats: storage.ChoreStats{
+				Count:    4,
+				TotalMin: 30,
+			},
+			CapabilitiesMatched: 1,
+		},
+		"user5": {
+			ChoreStats: storage.ChoreStats{
+				Count:    0,
+				TotalMin: 0,
+			},
+			CapabilitiesMatched: 0,
 		},
 	}
 
-	expectedOrder := []string{"user2", "user1", "user3"}
+	expectedOrder := []string{"user5", "user4", "user1", "user3", "user2"}
 
 	sortedUsers := SortUsersBasedOnChoreStats(statistics)
 
@@ -34,8 +59,9 @@ func TestUserOrderBasedOnStats(t *testing.T) {
 		}
 	}
 }
+
 func TestEmptyStatsInput(t *testing.T) {
-	statistics := UserChoreStats{}
+	statistics := map[string]storage.ChoreStatsWithCapabilities{}
 
 	expectedOrder := []string{}
 
@@ -51,6 +77,7 @@ func TestEmptyStatsInput(t *testing.T) {
 		}
 	}
 }
+
 func TestOversampleCnt(t *testing.T) {
 	tests := []struct {
 		needed   int
@@ -69,9 +96,62 @@ func TestOversampleCnt(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		got := OversampleCnt(tt.needed, tt.ratio)
-		if got != tt.expected {
+		got := OversampleCnt(uint(tt.needed), tt.ratio)
+		if got != uint(tt.expected) {
 			t.Errorf("OversampleCnt(%d, %.2f) = %d; want %d", tt.needed, tt.ratio, got, tt.expected)
+		}
+	}
+}
+
+func TestSliceIntersect(t *testing.T) {
+	tests := []struct {
+		a        []string
+		b        []string
+		expected []string
+	}{
+		{
+			a:        []string{"apple", "banana", "cherry"},
+			b:        []string{"banana", "cherry", "date"},
+			expected: []string{"banana", "cherry"},
+		},
+		{
+			a:        []string{"apple", "banana", "cherry"},
+			b:        []string{"date", "fig", "grape"},
+			expected: []string{},
+		},
+		{
+			a:        []string{"apple", "banana", "cherry"},
+			b:        []string{"apple", "banana", "cherry"},
+			expected: []string{"apple", "banana", "cherry"},
+		},
+		{
+			a:        []string{},
+			b:        []string{"apple", "banana"},
+			expected: []string{},
+		},
+		{
+			a:        []string{"apple", "banana"},
+			b:        []string{},
+			expected: []string{},
+		},
+		{
+			a:        []string{},
+			b:        []string{},
+			expected: []string{},
+		},
+	}
+
+	for _, tt := range tests {
+		got := sliceIntersect(tt.a, tt.b)
+		if len(got) != len(tt.expected) {
+			t.Errorf("sliceIntersect(%v, %v) = %v; want %v", tt.a, tt.b, got, tt.expected)
+			continue
+		}
+		for i, v := range got {
+			if v != tt.expected[i] {
+				t.Errorf("sliceIntersect(%v, %v) = %v; want %v", tt.a, tt.b, got, tt.expected)
+				break
+			}
 		}
 	}
 }
