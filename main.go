@@ -1,6 +1,9 @@
 package main
 
 import (
+	"fmt"
+	"os"
+
 	"github.com/gdg-garage/garage-trip-chores/chores"
 	"github.com/gdg-garage/garage-trip-chores/config"
 	"github.com/gdg-garage/garage-trip-chores/logger"
@@ -8,14 +11,23 @@ import (
 )
 
 func main() {
-	// TODO: Read config from Cobra flags.
-	conf := config.New()
+	conf, err := config.New()
+	if err != nil {
+		fmt.Println("Error reading config", "error", err)
+		os.Exit(1)
+	}
 	logger := logger.New(conf.Logger)
+
+	logger.Debug("Config loaded", "conf", conf)
 
 	logger.Info("Chores!")
 
 	logger.Debug("Initializing storage")
-	s := storage.New(conf.Db, logger)
+	s, err := storage.New(conf.Db, logger)
+	if err != nil {
+		logger.Error("Error initializing storage", "error", err)
+		os.Exit(1)
+	}
 	logger.Debug("Storage initialized")
 
 	logger.Debug("Adding a test chore")
@@ -91,20 +103,15 @@ func main() {
 	}
 
 	cl := chores.NewChoresLogic(s, logger, conf.Chores)
-	ass, err := cl.AssignChoresToUsers([]storage.User{
-		{
-			Handle:       "testuser",
-			Capabilities: []string{"cap1", "cap2"},
-		},
-		{
-			Handle:       "testuser2",
-			Capabilities: []string{"cap1", "cap3"},
-		},
-		{
-			Handle:       "testuser3",
-			Capabilities: []string{"cap2"},
-		},
-	}, c)
+	users, err := s.GetPresentUsers()
+	if err != nil {
+		logger.Error("Error getting present users", "error", err)
+	} else {
+		for _, user := range users {
+			logger.Debug("Present user", "user", user.Handle, "capabilities", user.Capabilities)
+		}
+	}
+	ass, err := cl.AssignChoresToUsers(users, c)
 	if err != nil {
 		logger.Error("Error assigning chores to users", "error", err)
 	} else {
@@ -122,4 +129,6 @@ func main() {
 			logger.Debug("User total stats", "user", user, "stats", stats)
 		}
 	}
+
+	s.GetPresentUsers()
 }

@@ -6,6 +6,7 @@ import (
 )
 
 type User struct {
+	DiscordId    string
 	Handle       string
 	Capabilities []string
 }

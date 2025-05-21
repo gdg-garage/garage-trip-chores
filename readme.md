@@ -19,8 +19,9 @@ Additional features:
 
 ### Tech stack
 * Golang
-  * slog
-  * gorm
-  * discordgo
+  * [slog](https://pkg.go.dev/log/slog)
+  * [gorm](https://github.com/go-gorm/gorm)
+  * [discordgo](https://github.com/bwmarrin/discordgo)
+  * [viper](https://github.com/spf13/viper)
 * SQLite
-* JJ (VCS)
+* [JJ](https://github.com/jj-vcs/jj) (VCS)

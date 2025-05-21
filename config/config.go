@@ -1,9 +1,13 @@
 package config
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/gdg-garage/garage-trip-chores/chores"
 	"github.com/gdg-garage/garage-trip-chores/logger"
 	"github.com/gdg-garage/garage-trip-chores/storage"
+	"github.com/spf13/viper"
 )
 
 type Config struct {
@@ -12,21 +16,39 @@ type Config struct {
 	Chores chores.Config
 }
 
-func defaultConf() *Config {
-	return &Config{
-		Logger: logger.Config{
-			Level:       "debug",
-			IncludeFile: true,
-		},
-		Db: storage.Config{
-			DbPath: "data/db.sqlite",
-		},
-		Chores: chores.Config{
-			OversampleRatio: 0.5,
-		},
-	}
-}
+func New() (*Config, error) {
+	viper.SetDefault("logger.level", "debug")
+	viper.SetDefault("logger.includefile", true)
+	viper.SetDefault("db.dbpath", "data/db.sqlite")
+	viper.SetDefault("db.discordtoken", "???")
+	viper.SetDefault("db.discordguildid", "???")
+	viper.SetDefault("db.presentrole", "chores::present")
+	viper.SetDefault("db.skillprefix", "skill::")
+	viper.SetDefault("chores.oversampleratio", 0.5)
 
-func New() *Config {
-	return defaultConf()
+	viper.SetConfigName("config")
+	viper.SetConfigType("yaml")
+	viper.AddConfigPath(".")
+
+	viper.SetEnvPrefix("CHORES")
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	viper.AutomaticEnv()
+
+	err := viper.ReadInConfig()
+	if err != nil {
+		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+			fmt.Println("Config file not found, continuing without it.")
+			err = nil
+		} else {
+			return nil, err
+		}
+	}
+
+	config := Config{}
+	err = viper.Unmarshal(&config)
+	if err != nil {
+		return nil, err
+	}
+
+	return &config, err
 }
