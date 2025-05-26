@@ -8,7 +8,7 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-func (s *Storage) GetPresentUsers() ([]User, error) {
+func (s *Storage) getGuildRolesMap() (map[string]*discordgo.Role, error) {
 	guild, err := s.discord.State.Guild(s.conf.DiscordGuildId)
 	if err != nil {
 		return nil, err
@@ -17,6 +17,36 @@ func (s *Storage) GetPresentUsers() ([]User, error) {
 	guildRolesMap := make(map[string]*discordgo.Role)
 	for _, role := range guild.Roles {
 		guildRolesMap[role.ID] = role
+	}
+	return guildRolesMap, nil
+}
+
+func (s *Storage) isRoleSkill(role *discordgo.Role) bool {
+	if role == nil {
+		return false
+	}
+	return strings.HasPrefix(role.Name, s.conf.SkillPrefix)
+}
+
+func (s *Storage) GetSkills() ([]string, error) {
+	guildRolesMap, err := s.getGuildRolesMap()
+	if err != nil {
+		return nil, err
+	}
+
+	skills := []string{}
+	for _, role := range guildRolesMap {
+		if s.isRoleSkill(role) {
+			skills = append(skills, role.Name[len(s.conf.SkillPrefix):])
+		}
+	}
+	return skills, nil
+}
+
+func (s *Storage) GetPresentUsers() ([]User, error) {
+	guildRolesMap, err := s.getGuildRolesMap()
+	if err != nil {
+		return nil, err
 	}
 
 	users := []User{}
@@ -32,7 +62,7 @@ func (s *Storage) GetPresentUsers() ([]User, error) {
 				if role.Name == s.conf.PresentRole {
 					isPresent = true
 				}
-				if !strings.HasPrefix(role.Name, s.conf.SkillPrefix) {
+				if !s.isRoleSkill(role) {
 					continue
 				}
 				roles = append(roles, role.Name[len(s.conf.SkillPrefix):])
@@ -51,6 +81,17 @@ func (s *Storage) GetPresentUsers() ([]User, error) {
 	return users, nil
 }
 
+func (s *Storage) GetUserHandleByDiscordId(discordId string) (string, error) {
+	member, err := s.discord.GuildMember(s.conf.DiscordGuildId, discordId)
+	if err != nil {
+		return "", err
+	}
+	if member == nil || member.User == nil {
+		return "", nil
+	}
+	return member.User.Username, nil
+}
+
 func (s *Storage) GetUserStats() (UserChoreStats, error) {
 	type result struct {
 		UserHandle string
@@ -59,6 +100,7 @@ func (s *Storage) GetUserStats() (UserChoreStats, error) {
 	}
 	var results []result
 	stats := UserChoreStats{}
+	// TODO this should be based on ID
 	r := s.db.Model(&WorkLog{}).Select("user_handle, sum(time_spent_min) as total_time, count(*) as total_count").Group("user_handle").Find(&results)
 	if r.Error != nil {
 		return stats, r.Error
@@ -80,6 +122,7 @@ func (s *Storage) GetAssignedStats() (UserChoreStats, error) {
 	}
 	var results []result
 	stats := UserChoreStats{}
+	// TODO this should be based on ID
 	r := s.db.Model(&ChoreAssignment{}).Select("user_handle, sum(chores.estimated_time_min) as total_time, count(*) as total_count").Joins("left join chores on chore_assignments.chore_id = chores.id").Where("refused IS NULL and timeouted IS NULL").Group("user_handle").Find(&results)
 	if r.Error != nil {
 		return stats, r.Error

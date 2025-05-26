@@ -17,7 +17,10 @@ type Chore struct {
 	NecessaryCapabilities string // Comma separated list of capabilities
 	NecessaryWorkers      uint
 	EstimatedTimeMin      uint
-	Creator               string // Discord id (prefixed with discord:) of the creator string
+	AssignmentTimeoutMin  uint
+	CreatorId             string // Discord ID of the user who created the chore
+	CreatorHandle         string // Handle of the user who created the chore
+	Created               time.Time
 	Completed             *time.Time
 	Cancelled             *time.Time
 	Deadline              *time.Time
@@ -46,6 +49,7 @@ func (c *Chore) Cancel() {
 
 type WorkLog struct {
 	ID           uint
+	UserId       string
 	UserHandle   string
 	ChoreId      uint
 	Chore        Chore
@@ -54,6 +58,7 @@ type WorkLog struct {
 
 type ChoreAssignment struct {
 	ID         uint
+	UserId     string
 	UserHandle string
 	ChoreId    uint
 	Chore      Chore

@@ -35,7 +35,7 @@ func main() {
 		storage.Chore{
 			Name:             "Test Chore",
 			EstimatedTimeMin: 20,
-			Creator:          "chores overlord",
+			CreatorHandle:    "chores overlord",
 			NecessaryWorkers: 1,
 		})
 	if err != nil {
@@ -130,5 +130,5 @@ func main() {
 		}
 	}
 
-	s.GetPresentUsers()
+	s.Commands()
 }
