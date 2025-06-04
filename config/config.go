@@ -22,6 +22,7 @@ func New() (*Config, error) {
 	viper.SetDefault("db.dbpath", "data/db.sqlite")
 	viper.SetDefault("db.discordtoken", "???")
 	viper.SetDefault("db.discordguildid", "???")
+	viper.SetDefault("db.discordchannelid", "???")
 	viper.SetDefault("db.presentrole", "chores::present")
 	viper.SetDefault("db.skillprefix", "skill::")
 	viper.SetDefault("chores.oversampleratio", 0.5)
