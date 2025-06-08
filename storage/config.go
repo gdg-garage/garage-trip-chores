@@ -1,10 +1,9 @@
 package storage
 
 type Config struct {
-	DbPath           string `mapstructure:"dbpath"`
-	DiscordToken     string `mapstructure:"discordtoken"`
-	DiscordGuildId   string `mapstructure:"discordguildid"`
-	PresentRole      string `mapstructure:"presentrole"`
-	SkillPrefix      string `mapstructure:"skillprefix"`
-	DiscordChannelId string `mapstructure:"discordchannelid"`
+	DbPath         string `mapstructure:"dbpath"`
+	DiscordToken   string `mapstructure:"discordtoken"`
+	PresentRole    string `mapstructure:"presentrole"`
+	SkillPrefix    string `mapstructure:"skillprefix"`
+	DiscordGuildId string `mapstructure:"discordguildid"`
 }

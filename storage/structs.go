@@ -19,7 +19,6 @@ type Chore struct {
 	EstimatedTimeMin      uint
 	AssignmentTimeoutMin  uint
 	CreatorId             string // Discord ID of the user who created the chore
-	CreatorHandle         string // Handle of the user who created the chore
 	MessageId             string // ID of the message in Discord where the chore was posted
 	Created               time.Time
 	Completed             *time.Time
@@ -51,22 +50,20 @@ func (c *Chore) Cancel() {
 type WorkLog struct {
 	ID           uint
 	UserId       string
-	UserHandle   string
 	ChoreId      uint
 	Chore        Chore
 	TimeSpentMin uint
 }
 
 type ChoreAssignment struct {
-	ID         uint
-	UserId     string
-	UserHandle string
-	ChoreId    uint
-	Chore      Chore
-	Created    time.Time
-	Acked      *time.Time
-	Refused    *time.Time
-	Timeouted  *time.Time
+	ID        uint
+	UserId    string
+	ChoreId   uint
+	Chore     Chore
+	Created   time.Time
+	Acked     *time.Time
+	Refused   *time.Time
+	Timeouted *time.Time
 }
 
 func (ca *ChoreAssignment) Ack() {

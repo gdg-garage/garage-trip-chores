@@ -7,6 +7,7 @@ import (
 	"github.com/gdg-garage/garage-trip-chores/chores"
 	"github.com/gdg-garage/garage-trip-chores/logger"
 	"github.com/gdg-garage/garage-trip-chores/storage"
+	"github.com/gdg-garage/garage-trip-chores/ui"
 	"github.com/spf13/viper"
 )
 
@@ -14,18 +15,22 @@ type Config struct {
 	Logger logger.Config
 	Db     storage.Config
 	Chores chores.Config
+	Ui     ui.Config
 }
 
 func New() (*Config, error) {
 	viper.SetDefault("logger.level", "debug")
 	viper.SetDefault("logger.includefile", true)
+
 	viper.SetDefault("db.dbpath", "data/db.sqlite")
 	viper.SetDefault("db.discordtoken", "???")
 	viper.SetDefault("db.discordguildid", "???")
-	viper.SetDefault("db.discordchannelid", "???")
 	viper.SetDefault("db.presentrole", "chores::present")
 	viper.SetDefault("db.skillprefix", "skill::")
+
 	viper.SetDefault("chores.oversampleratio", 0.5)
+
+	viper.SetDefault("ui.discordchannelid", "???")
 
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")

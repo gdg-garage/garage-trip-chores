@@ -94,19 +94,19 @@ func (s *Storage) GetUserHandleByDiscordId(discordId string) (string, error) {
 
 func (s *Storage) GetUserStats() (UserChoreStats, error) {
 	type result struct {
-		UserHandle string
+		UserId     string
 		TotalTime  int
 		TotalCount int
 	}
 	var results []result
 	stats := UserChoreStats{}
 	// TODO this should be based on ID
-	r := s.db.Model(&WorkLog{}).Select("user_handle, sum(time_spent_min) as total_time, count(*) as total_count").Group("user_handle").Find(&results)
+	r := s.db.Model(&WorkLog{}).Select("user_id, sum(time_spent_min) as total_time, count(*) as total_count").Group("user_id").Find(&results)
 	if r.Error != nil {
 		return stats, r.Error
 	}
 	for _, r := range results {
-		stats[r.UserHandle] = ChoreStats{
+		stats[r.UserId] = ChoreStats{
 			Count:    uint(r.TotalCount),
 			TotalMin: uint(r.TotalTime),
 		}
@@ -116,19 +116,19 @@ func (s *Storage) GetUserStats() (UserChoreStats, error) {
 
 func (s *Storage) GetAssignedStats() (UserChoreStats, error) {
 	type result struct {
-		UserHandle string
+		UserId     string
 		TotalTime  int
 		TotalCount int
 	}
 	var results []result
 	stats := UserChoreStats{}
 	// TODO this should be based on ID
-	r := s.db.Model(&ChoreAssignment{}).Select("user_handle, sum(chores.estimated_time_min) as total_time, count(*) as total_count").Joins("left join chores on chore_assignments.chore_id = chores.id").Where("refused IS NULL and timeouted IS NULL").Group("user_handle").Find(&results)
+	r := s.db.Model(&ChoreAssignment{}).Select("user_id, sum(chores.estimated_time_min) as total_time, count(*) as total_count").Joins("left join chores on chore_assignments.chore_id = chores.id").Where("refused IS NULL and timeouted IS NULL").Group("user_id").Find(&results)
 	if r.Error != nil {
 		return stats, r.Error
 	}
 	for _, r := range results {
-		stats[r.UserHandle] = ChoreStats{
+		stats[r.UserId] = ChoreStats{
 			Count:    uint(r.TotalCount),
 			TotalMin: uint(r.TotalTime),
 		}
@@ -151,11 +151,11 @@ func (s *Storage) GetTotalChoreStats() (UserChoreStats, error) {
 	return userStats.Add(userAssignedStats), nil
 }
 
-func (s *Storage) AssignChore(chore Chore, userHandle string) (ChoreAssignment, error) {
+func (s *Storage) AssignChore(chore Chore, userId string) (ChoreAssignment, error) {
 	ChoreAssignment := ChoreAssignment{
-		Chore:      chore,
-		UserHandle: userHandle,
-		Created:    time.Now(),
+		Chore:   chore,
+		UserId:  userId,
+		Created: time.Now(),
 	}
 	return s.SaveChoreAssignment(ChoreAssignment)
 }
@@ -173,8 +173,20 @@ func (s *Storage) SaveChoreAssignments(assignments []ChoreAssignment) ([]ChoreAs
 	return assignments, r.Error
 }
 
-func (s *Storage) GetChoreAssignments() ([]ChoreAssignment, error) {
+func (s *Storage) GetChoresAssignments() ([]ChoreAssignment, error) {
 	var assignments []ChoreAssignment
 	r := s.db.Preload(clause.Associations).Find(&assignments)
 	return assignments, r.Error
+}
+
+func (s *Storage) GetChoreAssignments(choreId uint) ([]ChoreAssignment, error) {
+	var assignments []ChoreAssignment
+	r := s.db.Preload(clause.Associations).Where("chore_id = ?", choreId).Find(&assignments)
+	return assignments, r.Error
+}
+
+func (s *Storage) GetChoreAssignment(choreId uint, userId string) (ChoreAssignment, error) {
+	var assignment ChoreAssignment
+	r := s.db.Preload(clause.Associations).Where("chore_id = ? AND user_id = ?", choreId, userId).First(&assignment)
+	return assignment, r.Error
 }

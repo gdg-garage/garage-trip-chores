@@ -81,13 +81,13 @@ func (cl ChoresLogic) AssignChoresToUsers(users []storage.User, chore storage.Ch
 
 	userStatsWithCap := map[string]storage.ChoreStatsWithCapabilities{}
 	for _, user := range users {
-		if s, ok := userTotalStats[user.Handle]; ok {
-			userStatsWithCap[user.Handle] = storage.ChoreStatsWithCapabilities{
+		if s, ok := userTotalStats[user.DiscordId]; ok {
+			userStatsWithCap[user.DiscordId] = storage.ChoreStatsWithCapabilities{
 				ChoreStats:          s,
 				CapabilitiesMatched: uint(len(sliceIntersect(user.Capabilities, chore.GetCapabilities()))),
 			}
 		} else {
-			userStatsWithCap[user.Handle] = storage.ChoreStatsWithCapabilities{
+			userStatsWithCap[user.DiscordId] = storage.ChoreStatsWithCapabilities{
 				ChoreStats: storage.ChoreStats{
 					Count:    0,
 					TotalMin: 0,
@@ -103,10 +103,10 @@ func (cl ChoresLogic) AssignChoresToUsers(users []storage.User, chore storage.Ch
 	// Create assignments for the selected users
 	for _, user := range selectedUsers {
 		assignment := storage.ChoreAssignment{
-			UserHandle: user,
-			ChoreId:    chore.ID,
-			Chore:      chore,
-			Created:    time.Now(),
+			UserId:  user,
+			ChoreId: chore.ID,
+			Chore:   chore,
+			Created: time.Now(),
 		}
 		assignments = append(assignments, assignment)
 	}

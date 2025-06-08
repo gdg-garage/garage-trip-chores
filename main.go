@@ -8,6 +8,7 @@ import (
 	"github.com/gdg-garage/garage-trip-chores/config"
 	"github.com/gdg-garage/garage-trip-chores/logger"
 	"github.com/gdg-garage/garage-trip-chores/storage"
+	"github.com/gdg-garage/garage-trip-chores/ui"
 )
 
 func main() {
@@ -23,6 +24,7 @@ func main() {
 	logger.Info("Chores!")
 
 	logger.Debug("Initializing storage")
+
 	s, err := storage.New(conf.Db, logger)
 	if err != nil {
 		logger.Error("Error initializing storage", "error", err)
@@ -35,7 +37,6 @@ func main() {
 		storage.Chore{
 			Name:             "Test Chore",
 			EstimatedTimeMin: 20,
-			CreatorHandle:    "chores overlord",
 			NecessaryWorkers: 1,
 		})
 	if err != nil {
@@ -130,5 +131,6 @@ func main() {
 		}
 	}
 
-	s.Commands()
+	ui := ui.NewUi(s, logger, &cl, s.GetDiscord(), conf.Ui)
+	ui.Commands()
 }
