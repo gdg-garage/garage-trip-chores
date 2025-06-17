@@ -13,6 +13,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/gdg-garage/garage-trip-chores/chores"
 	"github.com/gdg-garage/garage-trip-chores/storage"
+	"gorm.io/gorm"
 )
 
 type Colors struct {
@@ -285,6 +286,11 @@ func (ui *Ui) rejectChore(buttonId string, s *discordgo.Session, i *discordgo.In
 	ui.logger.Debug("Rejecting chore", "chore_id", c.ID, "user_id", i.Member)
 	ass, err := ui.storage.GetChoreAssignment(c.ID, i.Member.User.ID)
 	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			ui.logger.Error("Chore assignment not found", "error", err, "chore_id", c.ID, "user_id", i.Member.User.ID)
+			s.InteractionRespond(i.Interaction, ui.errorInteractionResponse("Chore cannot be rejected, you are not assigned to it."))
+			return
+		}
 		ui.logger.Error("failed to get chore assignment", "error", err, "chore_id", c.ID, "user_id", i.Member.User.ID)
 		s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
 		return
