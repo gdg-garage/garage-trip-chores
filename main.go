@@ -1,12 +1,17 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/signal"
+	"sync"
+	"syscall"
 
 	"github.com/gdg-garage/garage-trip-chores/chores"
 	"github.com/gdg-garage/garage-trip-chores/config"
 	"github.com/gdg-garage/garage-trip-chores/logger"
+	presencetracker "github.com/gdg-garage/garage-trip-chores/presence_tracker"
 	"github.com/gdg-garage/garage-trip-chores/storage"
 	"github.com/gdg-garage/garage-trip-chores/ui"
 )
@@ -131,6 +136,32 @@ func main() {
 		}
 	}
 
+	uc, err := s.GetUsersPresenceCounts()
+	if err != nil {
+		logger.Error("Error getting total stats", "error", err)
+	} else {
+		for user, count := range uc {
+			logger.Debug("User presence count", "user", user, "count", count)
+		}
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	wg := sync.WaitGroup{}
+	sc := make(chan os.Signal, 1)
+	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, syscall.SIGALRM, os.Interrupt)
+
 	ui := ui.NewUi(s, logger, &cl, s.GetDiscord(), conf.Ui)
-	ui.Commands()
+	wg.Add(1)
+	go ui.Commands(ctx, &wg)
+
+	tracker := presencetracker.NewTracker(s, logger, conf.Tracker)
+	wg.Add(1)
+	go tracker.RunTracker(ctx, &wg)
+
+	<-sc
+
+	logger.Info("Shutting down...")
+	cancel()
+	wg.Wait()
+	logger.Info("Shutdown complete")
 }

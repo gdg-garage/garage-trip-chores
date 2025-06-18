@@ -1,13 +1,12 @@
 package ui
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"log/slog"
-	"os"
-	"os/signal"
 	"strings"
-	"syscall"
+	"sync"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -557,7 +556,8 @@ func NewUi(storage *storage.Storage, logger *slog.Logger, chores *chores.ChoresL
 	}
 }
 
-func (ui *Ui) Commands() error {
+func (ui *Ui) Commands(ctx context.Context, wg *sync.WaitGroup) error {
+	defer wg.Done()
 	// 2. Register a handler for incoming interactions (like slash commands).
 	ui.discord.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		if i.Interaction.ChannelID != ui.conf.DiscordChannelId {
@@ -794,24 +794,26 @@ func (ui *Ui) Commands() error {
 	fmt.Println("Commands registered successfully!")
 
 	// 6. Keep the bot running until an interrupt signal is received.
-	fmt.Println("Bot is now running. Press CTRL-C to exit.")
-	sc := make(chan os.Signal, 1)
-	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
-	<-sc // Block until a signal is received.
+	// fmt.Println("Bot is now running. Press CTRL-C to exit.")
+	// sc := make(chan os.Signal, 1)
+	// signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
+	// <-sc // Block until a signal is received.
+
+	<-ctx.Done()
 
 	// 7. Cleanly close the Discord session.
-	fmt.Println("Shutting down...")
+	ui.logger.Info("Shutting down Discord session...")
 	ui.discord.Close()
 
 	// 8. Unregister the commands when the bot shuts down.
 	// This is good practice to avoid stale commands.
-	fmt.Println("Unregistering commands...")
+	ui.logger.Info("Unregistering commands...")
 	for _, v := range registeredCommands {
 		err := ui.discord.ApplicationCommandDelete(ui.discord.State.User.ID, ui.storage.GetDiscordGuidId(), v.ID) // "" for global commands
 		if err != nil {
-			log.Printf("Cannot delete '%v' command: %v", v.Name, err)
+			ui.logger.Error("Cannot delete command", "name", v.Name, "error", err)
 		}
 	}
-	fmt.Println("Commands unregistered.")
+	ui.logger.Info("Commands unregistered.")
 	return nil
 }

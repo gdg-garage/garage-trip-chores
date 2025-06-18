@@ -115,3 +115,9 @@ func (st UserChoreStats) Add(other UserChoreStats) UserChoreStats {
 	}
 	return sum
 }
+
+type PresenceLog struct {
+	ID        uint
+	UserId    string
+	Timestamp time.Time
+}

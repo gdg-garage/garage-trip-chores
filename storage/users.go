@@ -190,3 +190,29 @@ func (s *Storage) GetChoreAssignment(choreId uint, userId string) (ChoreAssignme
 	r := s.db.Preload(clause.Associations).Where("chore_id = ? AND user_id = ?", choreId, userId).First(&assignment)
 	return assignment, r.Error
 }
+
+func (s *Storage) LogUserPresence(userId string) (PresenceLog, error) {
+	log := PresenceLog{
+		UserId:    userId,
+		Timestamp: time.Now(),
+	}
+	r := s.db.Create(&log)
+	return log, r.Error
+}
+
+func (s *Storage) GetUsersPresenceCounts() (map[string]int, error) {
+	type result struct {
+		UserId string
+		Count  int
+	}
+	var results []result
+	counts := make(map[string]int)
+	r := s.db.Model(&PresenceLog{}).Select("user_id, count(*) as count").Group("user_id").Find(&results)
+	if r.Error != nil {
+		return counts, r.Error
+	}
+	for _, res := range results {
+		counts[res.UserId] = res.Count
+	}
+	return counts, r.Error
+}
