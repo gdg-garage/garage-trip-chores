@@ -74,7 +74,7 @@ func (cl ChoresLogic) AssignChoresToUsers(users []storage.User, chore storage.Ch
 	needed := chore.NecessaryWorkers + OversampleCnt(chore.NecessaryWorkers, cl.config.OversampleRatio)
 	assignments := make([]storage.ChoreAssignment, 0, needed)
 
-	userTotalStats, err := cl.storage.GetTotalChoreStats()
+	userTotalStats, err := cl.storage.GetTotalNormalizedChoreStats()
 	if err != nil {
 		return assignments, err
 	}

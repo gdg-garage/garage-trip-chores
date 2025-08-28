@@ -82,8 +82,8 @@ func (ca *ChoreAssignment) Timeout() {
 }
 
 type ChoreStats struct {
-	Count    uint
-	TotalMin uint
+	Count    float64
+	TotalMin float64
 }
 
 type ChoreStatsWithCapabilities struct {

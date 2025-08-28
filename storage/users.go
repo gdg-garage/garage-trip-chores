@@ -107,8 +107,8 @@ func (s *Storage) GetUserStats() (UserChoreStats, error) {
 	}
 	for _, r := range results {
 		stats[r.UserId] = ChoreStats{
-			Count:    uint(r.TotalCount),
-			TotalMin: uint(r.TotalTime),
+			Count:    float64(r.TotalCount),
+			TotalMin: float64(r.TotalTime),
 		}
 	}
 	return stats, nil
@@ -129,8 +129,8 @@ func (s *Storage) GetAssignedStats() (UserChoreStats, error) {
 	}
 	for _, r := range results {
 		stats[r.UserId] = ChoreStats{
-			Count:    uint(r.TotalCount),
-			TotalMin: uint(r.TotalTime),
+			Count:    float64(r.TotalCount),
+			TotalMin: float64(r.TotalTime),
 		}
 	}
 	return stats, nil
@@ -139,7 +139,7 @@ func (s *Storage) GetAssignedStats() (UserChoreStats, error) {
 func (s *Storage) GetTotalChoreStats() (UserChoreStats, error) {
 	userStats, err := s.GetUserStats()
 	if err != nil {
-		return userStats, err
+		return nil, err
 	}
 
 	userAssignedStats, err := s.GetAssignedStats()
@@ -149,6 +149,31 @@ func (s *Storage) GetTotalChoreStats() (UserChoreStats, error) {
 	}
 
 	return userStats.Add(userAssignedStats), nil
+}
+
+func (s *Storage) GetTotalNormalizedChoreStats() (UserChoreStats, error) {
+	userTotalStats, err := s.GetTotalChoreStats()
+	if err != nil {
+		return nil, err
+	}
+
+	usersPresenceCounts, err := s.GetUsersPresenceCounts()
+	if err != nil {
+		return userTotalStats, err
+	}
+
+	for user, stats := range userTotalStats {
+		userPresenceCount := 1
+		if c, ok := usersPresenceCounts[user]; ok {
+			userPresenceCount = c
+		}
+
+		stats.TotalMin /= float64(userPresenceCount)
+		stats.Count /= float64(userPresenceCount)
+		userTotalStats[user] = stats
+	}
+
+	return userTotalStats, nil
 }
 
 func (s *Storage) AssignChore(chore Chore, userId string) (ChoreAssignment, error) {

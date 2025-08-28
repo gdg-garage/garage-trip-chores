@@ -136,6 +136,15 @@ func main() {
 		}
 	}
 
+	ts, err = s.GetTotalNormalizedChoreStats()
+	if err != nil {
+		logger.Error("Error getting total normalized stats", "error", err)
+	} else {
+		for user, stats := range ts {
+			logger.Debug("User normalized total stats", "user", user, "stats", stats)
+		}
+	}
+
 	uc, err := s.GetUsersPresenceCounts()
 	if err != nil {
 		logger.Error("Error getting total stats", "error", err)
