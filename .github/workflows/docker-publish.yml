@@ -23,7 +23,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: tivvit/garage-trip-chores # TODO: Replace with your Docker Hub username/repo
+          images: tivvit/garage-trip-chores
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
