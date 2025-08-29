@@ -1,0 +1,10 @@
+# Ignore git history
+.git
+.gitignore
+
+# Ignore local data and IDE settings
+data/
+.vscode
+
+# Ignore environment variables file
+.env
