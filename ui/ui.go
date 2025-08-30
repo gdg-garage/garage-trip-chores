@@ -316,8 +316,13 @@ func (ui *Ui) rejectChore(buttonId string, s *discordgo.Session, i *discordgo.In
 
 	s.InteractionRespond(i.Interaction, simpleInteractionResponse(fmt.Sprintf("Chore `%d` rejected\n\n*... Dissapointing*", c.ID)))
 
-	// TODO reassign chore to another user or handle reassignment logic
-
+	users, err := ui.storage.GetPresentUsers()
+	if err != nil {
+		ui.logger.Error("Error getting present users", "error", err)
+		s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
+		return
+	}
+	ui.chores.AssignChoresToUsers(users, c)
 	ui.updateChoreMessage(c)
 }
 
@@ -494,7 +499,7 @@ func (ui *Ui) choreCreate(i *discordgo.InteractionCreate) {
 		Name:                 optionMap["name"].StringValue(),
 		NecessaryWorkers:     uint(1),
 		EstimatedTimeMin:     uint(10),
-		AssignmentTimeoutMin: uint(10),
+		AssignmentTimeoutMin: uint(15),
 		CreatorId:            i.Member.User.ID, // Discord ID of the user who created the chore
 		Created:              time.Now(),       // Timestamp when the chore was created
 	}

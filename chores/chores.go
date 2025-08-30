@@ -97,6 +97,27 @@ func (cl ChoresLogic) AssignChoresToUsers(users []storage.User, chore storage.Ch
 		}
 	}
 
+	alreadyAssignedCnt := uint(0)
+	ass, err := cl.storage.GetChoreAssignments(chore.ID)
+	if err != nil {
+		cl.logger.Error("failed to get chore assignments", "error", err, "chore_id", chore.ID)
+		return nil, err
+	}
+	for _, a := range ass {
+		if a.Refused != nil {
+			delete(userStatsWithCap, a.UserId)
+		} else if a.Timeouted != nil {
+			delete(userStatsWithCap, a.UserId)
+		} else {
+			alreadyAssignedCnt++
+		}
+	}
+
+	needed -= alreadyAssignedCnt
+	if needed <= 0 {
+		return assignments, nil
+	}
+
 	sortedUsers := SortUsersBasedOnChoreStats(userStatsWithCap)
 	selectedUsers := sortedUsers[:int(math.Min(float64(len(sortedUsers)), float64(needed)))]
 
