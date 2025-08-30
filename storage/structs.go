@@ -69,16 +69,22 @@ type ChoreAssignment struct {
 func (ca *ChoreAssignment) Ack() {
 	now := time.Now()
 	ca.Acked = &now
+	ca.Refused = nil
+	ca.Timeouted = nil
 }
 
 func (ca *ChoreAssignment) Refuse() {
 	now := time.Now()
 	ca.Refused = &now
+	ca.Acked = nil
+	ca.Timeouted = nil
 }
 
 func (ca *ChoreAssignment) Timeout() {
 	now := time.Now()
 	ca.Timeouted = &now
+	ca.Acked = nil
+	ca.Refused = nil
 }
 
 type ChoreStats struct {
