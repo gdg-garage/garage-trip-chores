@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -1093,8 +1094,153 @@ func (ui *Ui) Commands(ctx context.Context, wg *sync.WaitGroup) error {
 }
 
 func (ui *Ui) stats(i *discordgo.InteractionCreate) {
-	// TODO
-	panic("unimplemented")
+	failedText := "Failed to get stats."
+	embeds := []*discordgo.MessageEmbed{}
+
+	type UserStats struct {
+		workedCount     float64
+		WorkedMin       float64
+		AssignedMin     float64
+		assignedCount   float64
+		TotalMin        float64
+		TotalCount      float64
+		PresentTicks    int
+		NormalizedTotal float64
+	}
+
+	usersStats := map[string]UserStats{}
+
+	userStats, err := ui.storage.GetUserStats()
+	if err != nil {
+		ui.logger.Error("failed to get user stats", "error", err)
+		ui.discord.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
+		return
+	}
+	for k, v := range userStats {
+		_, ok := usersStats[k]
+		if !ok {
+			usersStats[k] = UserStats{}
+		}
+		s := usersStats[k]
+		s.workedCount = v.Count
+		s.WorkedMin = v.TotalMin
+		usersStats[k] = s
+	}
+
+	assignedStats, err := ui.storage.GetAssignedStats()
+	if err != nil {
+		ui.logger.Error("failed to get assigned stats", "error", err)
+		ui.discord.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
+		return
+	}
+	for k, v := range assignedStats {
+		_, ok := usersStats[k]
+		if !ok {
+			usersStats[k] = UserStats{}
+		}
+		s := usersStats[k]
+		s.AssignedMin = v.TotalMin
+		s.assignedCount = v.Count
+		usersStats[k] = s
+	}
+
+	totalStats, err := ui.storage.GetTotalChoreStats()
+	if err != nil {
+		ui.logger.Error("failed to get total chore stats", "error", err)
+		ui.discord.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
+		return
+	}
+	for k, v := range totalStats {
+		_, ok := usersStats[k]
+		if !ok {
+			usersStats[k] = UserStats{}
+		}
+		s := usersStats[k]
+		s.TotalMin = v.TotalMin
+		s.TotalCount = v.Count
+		usersStats[k] = s
+	}
+
+	usersPresenceCounts, err := ui.storage.GetUsersPresenceCounts()
+	if err != nil {
+		ui.logger.Error("failed to get users presence counts", "error", err)
+		ui.discord.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
+		return
+	}
+	for k, v := range usersPresenceCounts {
+		_, ok := usersStats[k]
+		if !ok {
+			usersStats[k] = UserStats{}
+		}
+		s := usersStats[k]
+		s.PresentTicks = v
+		usersStats[k] = s
+	}
+
+	normalizedStats, err := ui.storage.GetTotalNormalizedChoreStats()
+	if err != nil {
+		ui.logger.Error("failed to get normalized chore stats", "error", err)
+		ui.discord.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
+		return
+	}
+	for k, v := range normalizedStats {
+		_, ok := usersStats[k]
+		if !ok {
+			usersStats[k] = UserStats{}
+		}
+		s := usersStats[k]
+		s.NormalizedTotal = v.TotalMin
+		usersStats[k] = s
+	}
+
+	// Convert map to slice for sorting
+	type kv struct {
+		Key   string
+		Value UserStats
+	}
+	var ss []kv
+	for k, v := range usersStats {
+		ss = append(ss, kv{k, v})
+	}
+
+	sort.Slice(ss, func(i, j int) bool {
+		return ss[i].Value.NormalizedTotal > ss[j].Value.NormalizedTotal
+	})
+
+	statsMd := `
+* WorkedCnt
+* WorkedMin
+* AssignedCnt
+* AssignedMin
+* TotalCnt
+* TotalMin
+* PresenceTicks
+* NormalizedTotal
+`
+	statsMd += "```WC\tWM\tAC\tAM\tTC\tTM\tPT\tNT```\n"
+	for _, v := range ss {
+		k := v.Key
+		c := v.Value
+		statsMd += fmt.Sprintf("<@%s>\n", k)
+		statsMd += fmt.Sprintf("```%0.f\t%0.f\t%0.f\t%0.f\t%0.f\t%0.f\t%d\t%.2f```\n",
+			c.workedCount, c.WorkedMin, c.assignedCount, c.AssignedMin, c.TotalCount, c.TotalMin, c.PresentTicks, c.NormalizedTotal)
+	}
+	embed := discordgo.MessageEmbed{
+		Title:       "User stats:",
+		Description: statsMd,
+		Color:       ui.colors.GreenColor,
+	}
+	embeds = append(embeds, &embed)
+
+	r := &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: "Here are user stats:",
+			Embeds:  embeds,
+			Flags:   discordgo.MessageFlagsEphemeral,
+		},
+	}
+	ui.discord.InteractionRespond(i.Interaction, r)
 }
 
 func (ui *Ui) choresCompleted(i *discordgo.InteractionCreate) {
