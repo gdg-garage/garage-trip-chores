@@ -29,7 +29,18 @@ func (s *Storage) GetChores() ([]Chore, error) {
 
 func (s *Storage) GetCompletedChores() ([]Chore, error) {
 	var chores []Chore
-	r := s.db.Where("completed IS NOT NULL").Find(&chores)
+	r := s.db.Where("completed IS NOT NULL").Order("chores.created DESC").Find(&chores)
+	if r.Error != nil {
+		for i := range chores {
+			chores[i].GetCapabilities()
+		}
+	}
+	return chores, r.Error
+}
+
+func (s *Storage) GetUnfinishedChores() ([]Chore, error) {
+	var chores []Chore
+	r := s.db.Where("completed IS NULL and cancelled IS NULL").Order("created DESC").Find(&chores)
 	if r.Error != nil {
 		for i := range chores {
 			chores[i].GetCapabilities()
@@ -42,6 +53,7 @@ func (s *Storage) GetAssignedChoresForUser(userId string) ([]Chore, error) {
 	var chores []Chore
 	r := s.db.Joins("JOIN chore_assignments ON chore_assignments.chore_id = chores.id").
 		Where("chore_assignments.user_id = ? AND chore_assignments.acked IS NULL AND chore_assignments.refused IS NULL AND chore_assignments.timeouted IS NULL and chores.completed IS NULL and chores.cancelled IS NULL", userId).
+		Order("chores.created DESC").
 		Find(&chores)
 	return chores, r.Error
 }
@@ -50,6 +62,7 @@ func (s *Storage) GetAckedChoresForUser(userId string) ([]Chore, error) {
 	var chores []Chore
 	r := s.db.Joins("JOIN chore_assignments ON chore_assignments.chore_id = chores.id").
 		Where("chore_assignments.user_id = ? AND chore_assignments.acked IS NOT NULL and chores.completed IS NULL and chores.cancelled IS NULL", userId).
+		Order("chores.created DESC").
 		Find(&chores)
 	return chores, r.Error
 }

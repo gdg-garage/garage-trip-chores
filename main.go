@@ -37,27 +37,27 @@ func main() {
 	}
 	logger.Debug("Storage initialized")
 
-	logger.Debug("Adding a test chore")
-	c, err := s.SaveChore(
-		storage.Chore{
-			Name:             "Test Chore",
-			EstimatedTimeMin: 20,
-			NecessaryWorkers: 1,
-		})
-	if err != nil {
-		logger.Error("Error adding chore", "error", err)
-		return
-	}
-	logger.Debug("Chore added", "chore", c)
-	c.Complete()
-	logger.Debug("Chore completed", "chore", c)
-	logger.Debug("Updating chore")
-	c, err = s.SaveChore(c)
-	if err != nil {
-		logger.Error("Error updating chore", "error", err)
-		return
-	}
-	logger.Debug("Chore updated", "chore", c)
+	// logger.Debug("Adding a test chore")
+	// c, err := s.SaveChore(
+	// 	storage.Chore{
+	// 		Name:             "Test Chore",
+	// 		EstimatedTimeMin: 20,
+	// 		NecessaryWorkers: 1,
+	// 	})
+	// if err != nil {
+	// 	logger.Error("Error adding chore", "error", err)
+	// 	return
+	// }
+	// logger.Debug("Chore added", "chore", c)
+	// c.Complete()
+	// logger.Debug("Chore completed", "chore", c)
+	// logger.Debug("Updating chore")
+	// c, err = s.SaveChore(c)
+	// if err != nil {
+	// 	logger.Error("Error updating chore", "error", err)
+	// 	return
+	// }
+	// logger.Debug("Chore updated", "chore", c)
 	completed, err := s.GetCompletedChores()
 	if err != nil {
 		logger.Error("Error getting completed chores", "error", err)
@@ -117,15 +117,15 @@ func main() {
 			logger.Debug("Present user", "user", user.Handle, "capabilities", user.Capabilities)
 		}
 	}
-	ass, err := cl.AssignChoresToUsers(users, c)
-	if err != nil {
-		logger.Error("Error assigning chores to users", "error", err)
-	} else {
-		logger.Debug("Chores assigned to users", "cnt", len(ass))
-		for _, a := range ass {
-			logger.Debug("Chore assigned to user", "assignment", a)
-		}
-	}
+	// ass, err := cl.AssignChoresToUsers(users, c)
+	// if err != nil {
+	// 	logger.Error("Error assigning chores to users", "error", err)
+	// } else {
+	// 	logger.Debug("Chores assigned to users", "cnt", len(ass))
+	// 	for _, a := range ass {
+	// 		logger.Debug("Chore assigned to user", "assignment", a)
+	// 	}
+	// }
 
 	ts, err := s.GetTotalChoreStats()
 	if err != nil {

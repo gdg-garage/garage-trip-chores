@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"math"
 	"strings"
 	"sync"
 	"time"
@@ -1097,25 +1098,80 @@ func (ui *Ui) stats(i *discordgo.InteractionCreate) {
 }
 
 func (ui *Ui) choresCompleted(i *discordgo.InteractionCreate) {
-	// TODO
-	panic("unimplemented")
+	limit := 15
+	failedText := "Failed to get completed chores."
+	embeds := []*discordgo.MessageEmbed{}
+
+	completedChores, err := ui.storage.GetCompletedChores()
+	if err != nil {
+		ui.logger.Error("failed to get completed chores", "error", err)
+		ui.discord.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
+		return
+	}
+	completedMd := ""
+	for _, c := range completedChores[:int(math.Min(float64(len(completedChores)), float64(limit)))] {
+		completedMd += fmt.Sprintf("* %s (id: `%d`) %s\n", c.Name, c.ID, ui.getChoreMessageUrl(c))
+	}
+	embed := discordgo.MessageEmbed{
+		Title:       "Completed chores",
+		Description: completedMd,
+		Color:       ui.colors.GreenColor,
+	}
+	embeds = append(embeds, &embed)
+
+	r := &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: "Here are recent completed chores:",
+			Embeds:  embeds,
+			Flags:   discordgo.MessageFlagsEphemeral,
+		},
+	}
+	ui.discord.InteractionRespond(i.Interaction, r)
 }
 
 func (ui *Ui) choresOpen(i *discordgo.InteractionCreate) {
-	// TODO
-	panic("unimplemented")
+	failedText := "Failed to get open chores."
+	embeds := []*discordgo.MessageEmbed{}
+
+	openChores, err := ui.storage.GetUnfinishedChores()
+	if err != nil {
+		ui.logger.Error("failed to get open chores", "error", err)
+		ui.discord.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
+		return
+	}
+	openMd := ""
+	for _, c := range openChores {
+		openMd += fmt.Sprintf("* %s (id: `%d`) %s\n", c.Name, c.ID, ui.getChoreMessageUrl(c))
+	}
+	embed := discordgo.MessageEmbed{
+		Title:       "Open chores",
+		Description: openMd,
+		Color:       ui.colors.GreenColor,
+	}
+	embeds = append(embeds, &embed)
+
+	r := &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: "Here are all open chores:",
+			Embeds:  embeds,
+			Flags:   discordgo.MessageFlagsEphemeral,
+		},
+	}
+	ui.discord.InteractionRespond(i.Interaction, r)
 }
 
 func (ui *Ui) choresList(i *discordgo.InteractionCreate) {
 	userId := i.Interaction.Member.User.ID
-	// failedText := "Failed to get chore assignments."
+	failedText := "Failed to get chore assignments."
 	embeds := []*discordgo.MessageEmbed{}
 
 	// get assigned chores for the user
 	assignedChores, err := ui.storage.GetAssignedChoresForUser(userId)
 	if err != nil {
 		ui.logger.Error("failed to get assigned chores", "error", err, "user_id", userId)
-		// i.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
+		ui.discord.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
 		return
 	}
 	assignedMd := ""
@@ -1135,7 +1191,7 @@ func (ui *Ui) choresList(i *discordgo.InteractionCreate) {
 	ackedChores, err := ui.storage.GetAckedChoresForUser(userId)
 	if err != nil {
 		ui.logger.Error("failed to get acked chores", "error", err, "user_id", userId)
-		// TODO
+		ui.discord.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
 		return
 	}
 	ackedMd := ""

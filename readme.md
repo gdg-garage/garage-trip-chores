@@ -33,6 +33,8 @@ Additional features:
   - [ ] how much time have you spent?
   - [x] delete task?
 - [x] when someone is not present we need to take that to acccount (othewise they will get all the tasks)
-- [ ] list all open tasks
+- [x] list all open tasks
 - [x] list my tasks
 - [ ] list users stats (work log, assign stats, presence stats, total)
+- [ ] How to create a delayed task?
+- [ ] Task scheduler
