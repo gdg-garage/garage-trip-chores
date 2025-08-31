@@ -58,6 +58,6 @@ func (s *Storage) GetDiscord() *discordgo.Session {
 	return s.discord
 }
 
-func (s *Storage) GetDiscordGuidId() string {
+func (s *Storage) GetDiscordGuildId() string {
 	return s.conf.DiscordGuildId
 }

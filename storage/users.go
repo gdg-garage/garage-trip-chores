@@ -100,7 +100,6 @@ func (s *Storage) GetUserStats() (UserChoreStats, error) {
 	}
 	var results []result
 	stats := UserChoreStats{}
-	// TODO this should be based on ID
 	r := s.db.Model(&WorkLog{}).Select("user_id, sum(time_spent_min) as total_time, count(*) as total_count").Group("user_id").Find(&results)
 	if r.Error != nil {
 		return stats, r.Error
@@ -122,8 +121,7 @@ func (s *Storage) GetAssignedStats() (UserChoreStats, error) {
 	}
 	var results []result
 	stats := UserChoreStats{}
-	// TODO this should be based on ID
-	r := s.db.Model(&ChoreAssignment{}).Select("user_id, sum(chores.estimated_time_min) as total_time, count(*) as total_count").Joins("left join chores on chore_assignments.chore_id = chores.id").Where("refused IS NULL and timeouted IS NULL").Group("user_id").Find(&results)
+	r := s.db.Model(&ChoreAssignment{}).Select("user_id, sum(chores.estimated_time_min) as total_time, count(*) as total_count").Joins("left join chores on chore_assignments.chore_id = chores.id").Where("refused IS NULL and timeouted IS NULL and chores.completed IS NULL and chores.cancelled IS NULL").Group("user_id").Find(&results)
 	if r.Error != nil {
 		return stats, r.Error
 	}
@@ -214,6 +212,11 @@ func (s *Storage) GetChoreAssignment(choreId uint, userId string) (ChoreAssignme
 	var assignment ChoreAssignment
 	r := s.db.Preload(clause.Associations).Where("chore_id = ? AND user_id = ?", choreId, userId).First(&assignment)
 	return assignment, r.Error
+}
+
+func (s *Storage) RemoveStorageAssignments(choreId uint) error {
+	r := s.db.Where("chore_id = ?", choreId).Delete(&ChoreAssignment{})
+	return r.Error
 }
 
 func (s *Storage) LogUserPresence(userId string) (PresenceLog, error) {

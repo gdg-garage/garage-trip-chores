@@ -29,6 +29,18 @@ type Ui struct {
 	colors  Colors
 }
 
+const (
+	buttonClickSuffix   = "_button_click:"
+	ackButtonClick      = "ack" + buttonClickSuffix
+	cancelButtonClick   = "cancel" + buttonClickSuffix
+	deleteButtonClick   = "delete" + buttonClickSuffix
+	doneButtonClick     = "done" + buttonClickSuffix
+	editButtonClick     = "edit" + buttonClickSuffix
+	rejectButtonClick   = "reject" + buttonClickSuffix
+	scheduleButtonClick = "schedule" + buttonClickSuffix
+	helpedButtonClick   = "helped" + buttonClickSuffix
+)
+
 func simpleInteractionResponse(content string) *discordgo.InteractionResponse {
 	return &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -81,6 +93,23 @@ func getChoreIdFromButton(customID string) (uint, error) {
 	}
 
 	return choreId, nil
+}
+
+func (ui *Ui) sendDM(discordId string, message *discordgo.MessageSend) error {
+	dmChannel, err := ui.discord.UserChannelCreate(discordId)
+	if err != nil {
+		return fmt.Errorf("failed to create DM channel: %w", err)
+	}
+
+	_, err = ui.discord.ChannelMessageSendComplex(dmChannel.ID, message)
+	if err != nil {
+		return fmt.Errorf("failed to send DM: %w", err)
+	}
+	return nil
+}
+
+func (ui *Ui) getChoreMessageUrl(c storage.Chore) string {
+	return fmt.Sprintf("https://discord.com/channels/%s/%s/%s", ui.storage.GetDiscordGuildId(), ui.conf.DiscordChannelId, c.MessageId)
 }
 
 func (ui *Ui) scheduleChore(buttonId string, s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -136,7 +165,6 @@ func (ui *Ui) scheduleChore(buttonId string, s *discordgo.Session, i *discordgo.
 
 	// Send a public message to the channel announcing the scheduled chore
 	m, err := s.ChannelMessageSendComplex(ui.conf.DiscordChannelId, &discordgo.MessageSend{
-		// Flags:   discordgo.MessageFlagsIsComponentsV2,
 		Content: c.Name,
 		Components: []discordgo.MessageComponent{
 			discordgo.ActionsRow{
@@ -153,22 +181,6 @@ func (ui *Ui) scheduleChore(buttonId string, s *discordgo.Session, i *discordgo.
 					},
 				},
 			},
-
-			// TODO send in followup ephemeral message
-			// discordgo.ActionsRow{
-			// 	Components: []discordgo.MessageComponent{
-			// 		&discordgo.Button{
-			// 			Style:    discordgo.SuccessButton,
-			// 			Label:    "Done!",
-			// 			CustomID: "done_button_click",
-			// 		},
-			// 		&discordgo.Button{
-			// 			Style:    discordgo.DangerButton,
-			// 			Label:    "Cancel",
-			// 			CustomID: "cancel_button_click",
-			// 		},
-			// 	},
-			// },
 
 			// discordgo.ActionsRow{
 			// 	Components: []discordgo.MessageComponent{
@@ -211,9 +223,67 @@ func (ui *Ui) scheduleChore(buttonId string, s *discordgo.Session, i *discordgo.
 	}
 	ui.logger.Info("Chore scheduled and published", "chore_id", c.ID, "message_id", m.ID)
 
+	messageUrl := ui.getChoreMessageUrl(c)
+	err = ui.sendDM(c.CreatorId, &discordgo.MessageSend{
+		Content: fmt.Sprintf("Your chore `%s` (id: `%d`) was scheduled and published in <#%s>.\n%s", c.Name, c.ID, ui.conf.DiscordChannelId, messageUrl),
+		Components: []discordgo.MessageComponent{
+			discordgo.ActionsRow{
+				Components: []discordgo.MessageComponent{
+					&discordgo.Button{
+						Style:    discordgo.SuccessButton,
+						Label:    "Done!",
+						CustomID: doneButtonClick + fmt.Sprint(c.ID),
+					},
+					&discordgo.Button{
+						Style:    discordgo.DangerButton,
+						Label:    "Cancel",
+						CustomID: cancelButtonClick + fmt.Sprint(c.ID),
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		ui.logger.Warn("failed to send DM to creator", "error", err, "chore_id", c.ID, "creator_id", c.CreatorId)
+	}
+
 	r := simpleContainerizedInteractionResponse(fmt.Sprintf("This chore `id: %d` was scheduled and published.", choreId), &ui.colors.GreenColor)
+	r.Data.Components = append(r.Data.Components, discordgo.ActionsRow{
+		Components: []discordgo.MessageComponent{
+			&discordgo.Button{
+				Style:    discordgo.SuccessButton,
+				Label:    "Done!",
+				CustomID: "done_button_click:" + fmt.Sprint(choreId),
+			},
+			&discordgo.Button{
+				Style:    discordgo.DangerButton,
+				Label:    "Cancel",
+				CustomID: "cancel_button_click:" + fmt.Sprint(choreId),
+			},
+		},
+	})
+
 	r.Type = discordgo.InteractionResponseUpdateMessage
 	s.InteractionRespond(i.Interaction, r)
+}
+
+func (ui *Ui) generateWorkLogEmbed(wl []storage.WorkLog) *discordgo.MessageEmbed {
+	if len(wl) == 0 {
+		return nil
+	}
+	worklogMd := ""
+
+	for _, w := range wl {
+		worklogMd += fmt.Sprintf("* <@%s>: %d min\n", w.UserId, w.TimeSpentMin)
+	}
+
+	worklogEmbed := discordgo.MessageEmbed{
+		Type:        discordgo.EmbedTypeRich,
+		Title:       "Workers",
+		Description: worklogMd,
+		Color:       ui.colors.GreenColor,
+	}
+	return &worklogEmbed
 }
 
 func (ui *Ui) generateAssignmentEmbed(ass []storage.ChoreAssignment, title string, color int) *discordgo.MessageEmbed {
@@ -246,19 +316,6 @@ func (ui *Ui) editChore(buttonId string, s *discordgo.Session, i *discordgo.Inte
 	_, err = ui.storage.GetChore(choreId)
 	if err != nil {
 		ui.logger.Error("failed to get chore", "error", err, "chore_id", choreId)
-		s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
-		return
-	}
-	// TODO - probably send another ephermeral message with all buttons and fields
-	s.InteractionRespond(i.Interaction, simpleInteractionResponse("Not implemented."))
-}
-
-func (ui *Ui) removeChore(buttonId string, s *discordgo.Session, i *discordgo.InteractionCreate) {
-	failedText := "Failed to remove chore."
-	choreId, err := getChoreIdFromButton(buttonId)
-	if err != nil {
-		ui.logger.Error("failed to parse chore ID from button", "error", err, "custom_id", buttonId)
-		s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
 		return
 	}
 	chore, err := ui.storage.GetChore(choreId)
@@ -278,6 +335,54 @@ func (ui *Ui) removeChore(buttonId string, s *discordgo.Session, i *discordgo.In
 	r := simpleContainerizedInteractionResponse(fmt.Sprintf("This chore `id: %d` has been removed.", choreId), &ui.colors.RedColor)
 	r.Type = discordgo.InteractionResponseUpdateMessage
 	s.InteractionRespond(i.Interaction, r)
+}
+
+func (ui *Ui) cancelChore(buttonId string, s *discordgo.Session, i *discordgo.InteractionCreate) {
+	failedText := "Failed to remove chore."
+	choreId, err := getChoreIdFromButton(buttonId)
+	if err != nil {
+		ui.logger.Error("failed to parse chore ID from button", "error", err, "custom_id", buttonId)
+		s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
+		return
+	}
+	chore, err := ui.storage.GetChore(choreId)
+	if err != nil {
+		ui.logger.Error("failed to get chore", "error", err, "chore_id", choreId)
+		s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
+		return
+	}
+	if chore.Cancelled != nil {
+		r := simpleContainerizedInteractionResponse(fmt.Sprintf("Chore `id: %d` has been cancelled.", choreId), &ui.colors.RedColor)
+		s.InteractionRespond(i.Interaction, r)
+		return
+	}
+	if chore.Completed != nil {
+		r := simpleContainerizedInteractionResponse(fmt.Sprintf("Chore `id: %d` has been completed and cannot be cancelled.", choreId), &ui.colors.RedColor)
+		s.InteractionRespond(i.Interaction, r)
+		return
+	}
+	t := time.Now()
+	chore.Cancelled = &t // Set the cancelled time to now
+	_, err = ui.storage.SaveChore(chore)
+	if err != nil {
+		ui.logger.Error("failed to save chore", "error", err, "chore_id", choreId)
+		s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
+		return
+	}
+	err = ui.storage.RemoveStorageAssignments(choreId)
+	if err != nil {
+		ui.logger.Error("failed to remove chore assignments", "error", err, "chore_id", choreId)
+		s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
+		return
+	}
+	r := simpleContainerizedInteractionResponse(fmt.Sprintf("This chore `id: %d` has been removed.", choreId), &ui.colors.RedColor)
+	r.Type = discordgo.InteractionResponseUpdateMessage
+	s.InteractionRespond(i.Interaction, r)
+
+	err = ui.updateChoreMessage(chore)
+	if err != nil {
+		ui.logger.Error("failed to update chore message", "error", err, "chore_id", chore.ID)
+	}
 }
 
 func (ui *Ui) rejectChore(buttonId string, s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -334,6 +439,8 @@ func (ui *Ui) ackChore(customID string, s *discordgo.Session, i *discordgo.Inter
 		s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
 		return
 	}
+	var ass storage.ChoreAssignment
+
 	c, err := ui.storage.GetChore(choreId)
 	if err != nil {
 		ui.logger.Error("failed to get chore", "error", err, "chore_id", choreId)
@@ -341,7 +448,7 @@ func (ui *Ui) ackChore(customID string, s *discordgo.Session, i *discordgo.Inter
 		return
 	}
 
-	ass, err := ui.storage.GetChoreAssignment(choreId, i.Member.User.ID)
+	ass, err = ui.storage.GetChoreAssignment(choreId, i.Member.User.ID)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			// Create new assignment
@@ -387,6 +494,17 @@ func (ui *Ui) updateChoreMessage(chore storage.Chore) error {
 	}
 	embeds = append(embeds, &choreEmbed)
 
+	worklogs, err := ui.storage.GetWorkLogsForChore(chore.ID)
+	if err != nil {
+		ui.logger.Error("failed to get work logs for chore", "error", err, "chore_id", chore.ID)
+		return err
+	}
+
+	worklogEmbed := ui.generateWorkLogEmbed(worklogs)
+	if worklogEmbed != nil {
+		embeds = append(embeds, worklogEmbed)
+	}
+
 	assignmentsAll, err := ui.storage.GetChoreAssignments(chore.ID)
 	if err != nil {
 		ui.logger.Error("failed to get chore assignments", "error", err, "chore_id", chore.ID)
@@ -429,28 +547,53 @@ func (ui *Ui) updateChoreMessage(chore storage.Chore) error {
 		embeds = append(embeds, declinedEmbed)
 	}
 
-	_, err = ui.discord.ChannelMessageEditComplex(
-		&discordgo.MessageEdit{
-			Content: &chore.Name,
-			ID:      chore.MessageId,
-			Channel: ui.conf.DiscordChannelId,
-			Components: &[]discordgo.MessageComponent{
-				discordgo.ActionsRow{
-					Components: []discordgo.MessageComponent{
-						&discordgo.Button{
-							Style:    discordgo.PrimaryButton,
-							Label:    "Ack",
-							CustomID: "ack_button_click:" + fmt.Sprint(chore.ID),
-						},
-						&discordgo.Button{
-							Style:    discordgo.SecondaryButton,
-							Label:    "Reject",
-							CustomID: "reject_button_click:" + fmt.Sprint(chore.ID),
-						},
+	buttons := []discordgo.MessageComponent{}
+
+	if chore.Completed == nil && chore.Cancelled == nil {
+		buttons = append(buttons,
+			discordgo.ActionsRow{
+				Components: []discordgo.MessageComponent{
+					&discordgo.Button{
+						Style:    discordgo.PrimaryButton,
+						Label:    "Ack",
+						CustomID: ackButtonClick + fmt.Sprint(chore.ID),
+					},
+					&discordgo.Button{
+						Style:    discordgo.SecondaryButton,
+						Label:    "Reject",
+						CustomID: rejectButtonClick + fmt.Sprint(chore.ID),
 					},
 				},
-			},
-			Embeds: &embeds,
+			})
+	} else if chore.Completed != nil {
+		buttons = append(buttons,
+			discordgo.ActionsRow{
+				Components: []discordgo.MessageComponent{
+					&discordgo.Button{
+						Style:    discordgo.SuccessButton,
+						Label:    "I helped",
+						CustomID: helpedButtonClick + fmt.Sprint(chore.ID),
+					},
+				},
+			})
+	}
+
+	name := ""
+	if chore.Completed != nil {
+		name = "✅ " + chore.Name
+	} else if chore.Cancelled != nil {
+		name = "❌ " + chore.Name
+	} else {
+		name = chore.Name
+	}
+
+	_, err = ui.discord.ChannelMessageEditComplex(
+		&discordgo.MessageEdit{
+			Content:    &name,
+			ID:         chore.MessageId,
+			Channel:    ui.conf.DiscordChannelId,
+			Components: &buttons,
+			Embeds:     &embeds,
 		},
 	)
 	if err != nil {
@@ -462,17 +605,38 @@ func (ui *Ui) updateChoreMessage(chore storage.Chore) error {
 }
 
 func (ui *Ui) generateChoreMd(chore storage.Chore) string {
+	isCompleted := false
+	if chore.Completed != nil {
+		isCompleted = true
+	}
+	isCancelled := false
+	if chore.Cancelled != nil {
+		isCancelled = true
+	}
+	name := chore.Name
+	if isCompleted {
+		name = "✅ " + name
+	}
+	if isCancelled {
+		name = "❌ " + name
+	}
 	choreDesc := fmt.Sprintf("### Name: `%s`\n"+
 		"**Creator**: <@%s>\n"+
 		"**ID**: `%d`\n"+
 		"**Estimated Time (min)**: `%d`\n"+
 		"**Necessary Workers**: `%d`\n"+
 		"**Assignment Timeout (min)**: `%d`",
-		chore.Name, chore.CreatorId, chore.ID, chore.EstimatedTimeMin, chore.NecessaryWorkers,
+		name, chore.CreatorId, chore.ID, chore.EstimatedTimeMin, chore.NecessaryWorkers,
 		chore.AssignmentTimeoutMin)
 
 	if chore.Deadline != nil {
-		choreDesc += fmt.Sprintf("\n**Deadline**: %s", chore.Deadline.Format(time.RFC3339))
+		choreDesc += fmt.Sprintf("\n**Deadline**: %s", chore.Deadline.Format(time.RFC822))
+	}
+	if isCompleted {
+		choreDesc += fmt.Sprintf("\n**Completed**: %s", chore.Completed.Format(time.RFC822))
+	}
+	if isCancelled {
+		choreDesc += fmt.Sprintf("\n**Cancelled**: %s", chore.Cancelled.Format(time.RFC822))
 	}
 
 	return choreDesc
@@ -485,15 +649,6 @@ func (ui *Ui) choreCreate(i *discordgo.InteractionCreate) {
 	for _, opt := range options {
 		optionMap[opt.Name] = opt
 	}
-
-	// TODO this is empty - it will  be filled out for the buttons
-	// fmt.Println("target id", i.ApplicationCommandData().TargetID)
-
-	// if i.Message != nil {
-	// 	fmt.Println("message id", i.Message.ID)
-	// } else {
-	// 	fmt.Println("no message")
-	// }
 
 	chore := storage.Chore{
 		Name:                 optionMap["name"].StringValue(),
@@ -656,17 +811,17 @@ func (ui *Ui) choreCreate(i *discordgo.InteractionCreate) {
 						&discordgo.Button{
 							Style:    discordgo.SuccessButton,
 							Label:    "Schedule",
-							CustomID: "schedule_button_click:" + fmt.Sprint(chore.ID),
+							CustomID: scheduleButtonClick + fmt.Sprint(chore.ID),
 						},
 						&discordgo.Button{
 							Style:    discordgo.SecondaryButton,
 							Label:    "Edit",
-							CustomID: "edit_button_click:" + fmt.Sprint(chore.ID),
+							CustomID: editButtonClick + fmt.Sprint(chore.ID),
 						},
 						&discordgo.Button{
 							Style:    discordgo.DangerButton,
 							Label:    "Delete",
-							CustomID: "delete_button_click:" + fmt.Sprint(chore.ID),
+							CustomID: deleteButtonClick + fmt.Sprint(chore.ID),
 						},
 					},
 				},
@@ -700,90 +855,48 @@ func (ui *Ui) Commands(ctx context.Context, wg *sync.WaitGroup) error {
 	defer wg.Done()
 	// 2. Register a handler for incoming interactions (like slash commands).
 	ui.discord.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
-		if i.Interaction.ChannelID != ui.conf.DiscordChannelId {
-			// If the interaction is not in a channel, we can't respond.
-			s.InteractionRespond(i.Interaction, simpleInteractionResponse("This command can only be used in <#"+ui.conf.DiscordChannelId+"> channel."))
-			return
-		}
-
 		if i.Interaction.Type == discordgo.InteractionApplicationCommand { // Ensure the interaction type is set correctly.
+			if i.Interaction.ChannelID != ui.conf.DiscordChannelId {
+				// If the interaction is not in a channel, we can't respond.
+				s.InteractionRespond(i.Interaction, simpleInteractionResponse("This command can only be used in <#"+ui.conf.DiscordChannelId+"> channel."))
+				return
+			}
 			// Check if the interaction is an ApplicationCommand (a slash command).
 			switch i.ApplicationCommandData().Name {
 			case "chore_create":
 				ui.choreCreate(i) // Call the appropriate handler function.
+			case "chores":
+				ui.choresList(i)
+			case "chores_open":
+				ui.choresOpen(i)
+			case "chores_completed":
+				ui.choresCompleted(i)
+			case "stats":
+				ui.stats(i)
 			}
+
 		}
 		if i.Type == discordgo.InteractionMessageComponent {
 			data := i.MessageComponentData()
 			switch {
 
-			case strings.HasPrefix(data.CustomID, "delete_button_click"):
-				ui.removeChore(data.CustomID, s, i)
-
-			case strings.HasPrefix(data.CustomID, "edit_button_click"):
+			case strings.HasPrefix(data.CustomID, deleteButtonClick) || strings.HasPrefix(data.CustomID, cancelButtonClick):
+				ui.cancelChore(data.CustomID, s, i)
+			case strings.HasPrefix(data.CustomID, editButtonClick):
 				ui.editChore(data.CustomID, s, i)
-
-			case strings.HasPrefix(data.CustomID, "schedule_button_click"):
+			case strings.HasPrefix(data.CustomID, scheduleButtonClick):
 				ui.scheduleChore(data.CustomID, s, i)
-
-			case strings.HasPrefix(data.CustomID, "reject_button_click"):
+			case strings.HasPrefix(data.CustomID, rejectButtonClick):
 				ui.rejectChore(data.CustomID, s, i)
-
-			case strings.HasPrefix(data.CustomID, "ack_button_click"):
+			case strings.HasPrefix(data.CustomID, ackButtonClick):
 				ui.ackChore(data.CustomID, s, i)
-
-				// case "hello_button_click":
-				// 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-				// 		Type: discordgo.InteractionResponseUpdateMessage,
-				// 		Data: &discordgo.InteractionResponseData{
-				// 			Content: "You clicked the button!",
-				// 			Flags:   discordgo.MessageFlagsEphemeral,
-				// 		},
-				// 	})
-				// 	// s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-				// 	// 	Type: discordgo.InteractionResponseChannelMessageWithSource,
-				// 	// 	Data: &discordgo.InteractionResponseData{
-				// 	// 		Content: "You clicked the button!",
-				// 	// 		Flags:   discordgo.MessageFlagsEphemeral,
-				// 	// 	},
-				// 	// })
-				// case "hello_select_menu":
-				// 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-				// 		Type: discordgo.InteractionResponseChannelMessageWithSource,
-				// 		Data: &discordgo.InteractionResponseData{
-				// 			Content: fmt.Sprintf("You selected: %s", data.Values),
-				// 			Flags:   discordgo.MessageFlagsEphemeral,
-				// 		},
-				// 	})
-				// case "nothing_button_click":
-				// 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-				// 		Type: discordgo.InteractionResponseDeferredMessageUpdate,
-				// 	})
-				// case "more_button_click":
-				// 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-				// 		Type: discordgo.InteractionResponseModal,
-				// 		Data: &discordgo.InteractionResponseData{
-				// 			CustomID: "more_modal",
-				// 			Title:    "More Information",
-				// 			Components: []discordgo.MessageComponent{
-				// 				discordgo.ActionsRow{
-				// 					Components: []discordgo.MessageComponent{
-				// 						&discordgo.TextInput{
-				// 							CustomID:    "more_text_input",
-				// 							Label:       "Enter more information",
-				// 							Style:       discordgo.TextInputShort,
-				// 							Placeholder: "Type something here...",
-				// 							Required:    true,
-				// 							MinLength:   1,
-				// 							MaxLength:   100,
-				// 						},
-				// 					},
-				// 				},
-				// 			},
-				// 		},
-				// 	})
+			case strings.HasPrefix(data.CustomID, doneButtonClick):
+				ui.doneChore(data.CustomID, s, i)
+			case strings.HasPrefix(data.CustomID, helpedButtonClick):
+				ui.helpedChore(data.CustomID, s, i)
 			}
 		}
+		// TODO unused
 		if i.Type == discordgo.InteractionModalSubmit {
 			data := i.ModalSubmitData()
 			if data.CustomID == "more_modal" {
@@ -920,12 +1033,32 @@ func (ui *Ui) Commands(ctx context.Context, wg *sync.WaitGroup) error {
 				// },
 			},
 		},
+		{
+			Name:        "chores",
+			Description: "Lists your chores.",
+			Type:        discordgo.ChatApplicationCommand,
+		},
+		{
+			Name:        "chores_open",
+			Description: "Lists unfinished chores.",
+			Type:        discordgo.ChatApplicationCommand,
+		},
+		{
+			Name:        "chores_completed",
+			Description: "Lists completed chores.",
+			Type:        discordgo.ChatApplicationCommand,
+		},
+		{
+			Name:        "stats",
+			Description: "Display chores stats.",
+			Type:        discordgo.ChatApplicationCommand,
+		},
 	}
 
 	// 5. Register the slash commands globally.
 	registeredCommands := make([]*discordgo.ApplicationCommand, len(commands))
 	for i, v := range commands {
-		cmd, err := ui.discord.ApplicationCommandCreate(ui.discord.State.User.ID, ui.storage.GetDiscordGuidId(), v)
+		cmd, err := ui.discord.ApplicationCommandCreate(ui.discord.State.User.ID, ui.storage.GetDiscordGuildId(), v)
 		if err != nil {
 			ui.logger.Error("Cannot create command", "name", v.Name, "error", err)
 		}
@@ -949,11 +1082,236 @@ func (ui *Ui) Commands(ctx context.Context, wg *sync.WaitGroup) error {
 	// This is good practice to avoid stale commands.
 	ui.logger.Info("Unregistering commands...")
 	for _, v := range registeredCommands {
-		err := ui.discord.ApplicationCommandDelete(ui.discord.State.User.ID, ui.storage.GetDiscordGuidId(), v.ID)
+		err := ui.discord.ApplicationCommandDelete(ui.discord.State.User.ID, ui.storage.GetDiscordGuildId(), v.ID)
 		if err != nil {
 			ui.logger.Error("Cannot delete command", "name", v.Name, "error", err)
 		}
 	}
 	ui.logger.Info("Commands unregistered.")
 	return nil
+}
+
+func (ui *Ui) stats(i *discordgo.InteractionCreate) {
+	// TODO
+	panic("unimplemented")
+}
+
+func (ui *Ui) choresCompleted(i *discordgo.InteractionCreate) {
+	// TODO
+	panic("unimplemented")
+}
+
+func (ui *Ui) choresOpen(i *discordgo.InteractionCreate) {
+	// TODO
+	panic("unimplemented")
+}
+
+func (ui *Ui) choresList(i *discordgo.InteractionCreate) {
+	userId := i.Interaction.Member.User.ID
+	// failedText := "Failed to get chore assignments."
+	embeds := []*discordgo.MessageEmbed{}
+
+	// get assigned chores for the user
+	assignedChores, err := ui.storage.GetAssignedChoresForUser(userId)
+	if err != nil {
+		ui.logger.Error("failed to get assigned chores", "error", err, "user_id", userId)
+		// i.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
+		return
+	}
+	assignedMd := ""
+	for _, c := range assignedChores {
+		assignedMd += fmt.Sprintf("* %s (id: `%d`) %s\n", c.Name, c.ID, ui.getChoreMessageUrl(c))
+	}
+	if len(assignedChores) > 0 {
+		embed := discordgo.MessageEmbed{
+			Title:       "Your assigned chores",
+			Description: assignedMd,
+			Color:       ui.colors.OrangeColor,
+		}
+		embeds = append(embeds, &embed)
+	}
+
+	// get acked chores for the user
+	ackedChores, err := ui.storage.GetAckedChoresForUser(userId)
+	if err != nil {
+		ui.logger.Error("failed to get acked chores", "error", err, "user_id", userId)
+		// TODO
+		return
+	}
+	ackedMd := ""
+	for _, c := range ackedChores {
+		ackedMd += fmt.Sprintf("* %s (id: `%d`) %s\n", c.Name, c.ID, ui.getChoreMessageUrl(c))
+	}
+	if len(ackedChores) > 0 {
+		embed := discordgo.MessageEmbed{
+			Title:       "Your acknowledged chores",
+			Description: ackedMd,
+			Color:       ui.colors.GreenColor,
+		}
+		embeds = append(embeds, &embed)
+	}
+
+	if len(embeds) == 0 {
+		embeds = append(embeds, &discordgo.MessageEmbed{
+			Title:       "No chores found!",
+			Description: "You have no chores assigned or acknowledged.",
+			Color:       ui.colors.GreenColor,
+		})
+	}
+
+	r := &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: "Here are your chores:",
+			Embeds:  embeds,
+			Flags:   discordgo.MessageFlagsEphemeral,
+		},
+	}
+	ui.discord.InteractionRespond(i.Interaction, r)
+}
+
+func (ui *Ui) helpedChore(d string, s *discordgo.Session, i *discordgo.InteractionCreate) {
+	failedText := "Failed to log work for chore."
+	choreId, err := getChoreIdFromButton(d)
+	if err != nil {
+		ui.logger.Error("failed to parse chore ID from button", "error", err, "custom_id", d)
+		s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
+		return
+	}
+	userId := i.Interaction.Member.User.ID
+	_, err = ui.storage.GetWorkLogForChoreAndUser(choreId, userId)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			chore, err := ui.storage.GetChore(choreId)
+			if err != nil {
+				ui.logger.Error("failed to get chore", "error", err, "chore_id", choreId)
+				s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
+				return
+			}
+			wl := storage.WorkLog{
+				ChoreId:      chore.ID,
+				UserId:       userId,
+				TimeSpentMin: chore.EstimatedTimeMin,
+			}
+			_, err = ui.storage.SaveWorkLog(wl)
+			if err != nil {
+				ui.logger.Error("failed to save work log", "error", err, "chore_id", choreId, "user_id", userId)
+				s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
+				return
+			}
+			r := simpleContainerizedInteractionResponse(fmt.Sprintf("Logged work for chore `id: %d`.", choreId), &ui.colors.GreenColor)
+			s.InteractionRespond(i.Interaction, r)
+			err = ui.updateChoreMessage(chore)
+			if err != nil {
+				ui.logger.Error("failed to update chore message", "error", err, "chore_id", chore.ID)
+				s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
+				return
+			}
+			return
+		} else {
+			ui.logger.Error("failed to get work log", "error", err, "chore_id", choreId, "user_id", userId)
+			s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
+			return
+		}
+	}
+	r := simpleContainerizedInteractionResponse(fmt.Sprintf("You already have work logged for chore `id: %d`.", choreId), &ui.colors.RedColor)
+	s.InteractionRespond(i.Interaction, r)
+}
+
+func (ui *Ui) doneChore(d string, s *discordgo.Session, i *discordgo.InteractionCreate) {
+	failedText := "Failed to complete chore."
+	choreId, err := getChoreIdFromButton(d)
+	if err != nil {
+		ui.logger.Error("failed to parse chore ID from button", "error", err, "custom_id", d)
+		s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
+		return
+	}
+	chore, err := ui.storage.GetChore(choreId)
+	if err != nil {
+		ui.logger.Error("failed to get chore", "error", err, "chore_id", choreId)
+		s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
+		return
+	}
+	if chore.Completed != nil {
+		r := simpleContainerizedInteractionResponse(fmt.Sprintf("Chore `id: %d` has already been completed.", choreId), &ui.colors.RedColor)
+		s.InteractionRespond(i.Interaction, r)
+		return
+	}
+	if chore.Cancelled != nil {
+		r := simpleContainerizedInteractionResponse(fmt.Sprintf("Chore `id: %d` has been cancelled.", choreId), &ui.colors.RedColor)
+		s.InteractionRespond(i.Interaction, r)
+		return
+	}
+	chore.Complete()
+	_, err = ui.storage.SaveChore(chore)
+	if err != nil {
+		ui.logger.Error("failed to save chore", "error", err, "chore_id", choreId)
+		s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
+		return
+	}
+	r := simpleContainerizedInteractionResponse(fmt.Sprintf("This chore `id: %d` has been completed.", choreId), &ui.colors.GreenColor)
+	r.Type = discordgo.InteractionResponseUpdateMessage
+	s.InteractionRespond(i.Interaction, r)
+
+	ass, err := ui.storage.GetChoreAssignments(choreId)
+	if err != nil {
+		ui.logger.Error("failed to get chore assignments", "error", err, "chore_id", choreId)
+		s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
+		return
+	}
+	for _, a := range ass {
+		if a.Refused != nil || a.Acked != nil {
+			continue
+		}
+		if a.Timeouted == nil {
+			a.Timeout()
+		}
+		_, err := ui.storage.SaveChoreAssignment(a)
+		if err != nil {
+			ui.logger.Error("failed to save chore assignment", "error", err, "chore_id", choreId)
+			s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
+			return
+		}
+	}
+
+	for _, a := range ass {
+		if a.Acked == nil {
+			continue
+		}
+		wl := storage.WorkLog{
+			ChoreId:      chore.ID,
+			UserId:       a.UserId,
+			TimeSpentMin: chore.EstimatedTimeMin,
+		}
+		_, err := ui.storage.SaveWorkLog(wl)
+		if err != nil {
+			ui.logger.Error("failed to save work log", "error", err, "chore_id", choreId, "user_id", a.UserId)
+		}
+		// TODO add select for time spent
+		err = ui.sendDM(a.UserId, &discordgo.MessageSend{
+			Content: fmt.Sprintf("Chore `id: %d` has been completed %s. Thank you for your work!", choreId, ui.getChoreMessageUrl(chore)),
+		})
+		if err != nil {
+			ui.logger.Error("failed to send DM", "error", err, "user_id", a.UserId)
+			s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
+			return
+		}
+	}
+
+	err = ui.sendDM(chore.CreatorId, &discordgo.MessageSend{
+		Content: fmt.Sprintf("Chore `id: %d` has been completed %s.", choreId, ui.getChoreMessageUrl(chore)),
+	})
+	if err != nil {
+		ui.logger.Error("failed to send DM", "error", err, "user_id", chore.CreatorId)
+		s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
+		return
+	}
+
+	err = ui.updateChoreMessage(chore)
+	if err != nil {
+		ui.logger.Error("failed to update chore message", "error", err, "chore_id", chore.ID)
+		s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
+		return
+	}
+
 }
