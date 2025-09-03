@@ -53,17 +53,19 @@ type WorkLog struct {
 	ChoreId      uint
 	Chore        Chore
 	TimeSpentMin uint
+	SelfReported bool
 }
 
 type ChoreAssignment struct {
-	ID        uint
-	UserId    string
-	ChoreId   uint
-	Chore     Chore
-	Created   time.Time
-	Acked     *time.Time
-	Refused   *time.Time
-	Timeouted *time.Time
+	ID          uint
+	UserId      string
+	ChoreId     uint
+	Chore       Chore
+	Created     time.Time
+	Acked       *time.Time
+	Refused     *time.Time
+	Timeouted   *time.Time
+	Volunteered bool
 }
 
 func (ca *ChoreAssignment) Ack() {

@@ -460,6 +460,13 @@ func (ui *Ui) ackChore(customID string, s *discordgo.Session, i *discordgo.Inter
 				s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
 				return
 			}
+			ass.Volunteered = true
+			_, err = ui.storage.SaveChoreAssignment(ass)
+			if err != nil {
+				ui.logger.Error("failed to save chore assignment", "error", err, "chore_id", choreId)
+				s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
+				return
+			}
 		} else {
 			ui.logger.Error("failed to get chore assignment", "error", err, "chore_id", choreId, "user_id", i.Member.User.ID)
 			s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
@@ -1394,6 +1401,7 @@ func (ui *Ui) helpedChore(d string, s *discordgo.Session, i *discordgo.Interacti
 				ChoreId:      chore.ID,
 				UserId:       userId,
 				TimeSpentMin: chore.EstimatedTimeMin,
+				SelfReported: true,
 			}
 			_, err = ui.storage.SaveWorkLog(wl)
 			if err != nil {
