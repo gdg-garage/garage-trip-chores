@@ -640,11 +640,13 @@ func (ui *Ui) choreCreate(i *discordgo.InteractionCreate) {
 		optionMap[opt.Name] = opt
 	}
 
+	defaultDeadline := time.Now().Add(24 * time.Hour) // Default deadline is 24 hours from creation
 	chore := storage.Chore{
 		Name:                 optionMap["name"].StringValue(),
 		NecessaryWorkers:     uint(1),
 		EstimatedTimeMin:     uint(10),
 		AssignmentTimeoutMin: uint(15),
+		Deadline:             &defaultDeadline,
 		CreatorId:            i.Member.User.ID, // Discord ID of the user who created the chore
 		Created:              time.Now(),       // Timestamp when the chore was created
 	}
@@ -938,13 +940,13 @@ func (ui *Ui) Commands(ctx context.Context, wg *sync.WaitGroup) error {
 				{
 					Type:        discordgo.ApplicationCommandOptionInteger,
 					Name:        "necessary_workers",
-					Description: "The number of workers required to complete the chore.",
+					Description: "The number of workers required to complete the chore. [1]",
 					Required:    false,
 				},
 				{
 					Type:        discordgo.ApplicationCommandOptionInteger,
 					Name:        "estimated_time_min",
-					Description: "The estimated time to complete the chore in minutes.",
+					Description: "The estimated time to complete the chore in minutes. [10]",
 					Required:    false,
 				},
 				{
@@ -957,7 +959,7 @@ func (ui *Ui) Commands(ctx context.Context, wg *sync.WaitGroup) error {
 				{
 					Type:        discordgo.ApplicationCommandOptionInteger,
 					Name:        "deadline",
-					Description: "The deadline for the chore in minutes from now. If not set, the chore will not have a deadline.",
+					Description: "The deadline for the chore in minutes from now. [24h]",
 					Required:    false,
 					Choices: []*discordgo.ApplicationCommandOptionChoice{
 						{
@@ -1005,7 +1007,7 @@ func (ui *Ui) Commands(ctx context.Context, wg *sync.WaitGroup) error {
 				{
 					Type:        discordgo.ApplicationCommandOptionInteger,
 					Name:        "assignment_timeout_min",
-					Description: "The time in minutes after which the chore will be unassigned if not acked.",
+					Description: "The time in minutes after which the chore will be unassigned if not acked (0 to disable). [15]",
 					Required:    false,
 				},
 
