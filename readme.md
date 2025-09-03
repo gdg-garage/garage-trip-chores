@@ -30,7 +30,7 @@ Additional features:
 - [x] fire emoji for urgent task (or peppers - 1-3 hotness) - no need to implement just document this and add the emoji to the task name
 - [ ] reminders in private message
   - [ ] is the task already done?
-  - [ ] how much time have you spent?
+  - [x] how much time have you spent?
   - [x] delete task?
 - [x] when someone is not present we need to take that to acccount (othewise they will get all the tasks)
 - [x] list all open tasks

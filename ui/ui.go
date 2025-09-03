@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"math"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -32,15 +33,19 @@ type Ui struct {
 }
 
 const (
-	buttonClickSuffix   = "_button_click:"
-	ackButtonClick      = "ack" + buttonClickSuffix
-	cancelButtonClick   = "cancel" + buttonClickSuffix
-	deleteButtonClick   = "delete" + buttonClickSuffix
-	doneButtonClick     = "done" + buttonClickSuffix
-	editButtonClick     = "edit" + buttonClickSuffix
-	rejectButtonClick   = "reject" + buttonClickSuffix
-	scheduleButtonClick = "schedule" + buttonClickSuffix
-	helpedButtonClick   = "helped" + buttonClickSuffix
+	buttonClickSuffix    = "_button_click:"
+	ackButtonClick       = "ack" + buttonClickSuffix
+	cancelButtonClick    = "cancel" + buttonClickSuffix
+	deleteButtonClick    = "delete" + buttonClickSuffix
+	doneButtonClick      = "done" + buttonClickSuffix
+	editButtonClick      = "edit" + buttonClickSuffix
+	rejectButtonClick    = "reject" + buttonClickSuffix
+	scheduleButtonClick  = "schedule" + buttonClickSuffix
+	helpedButtonClick    = "helped" + buttonClickSuffix
+	reportTimeSpentClick = "report_time_spent" + buttonClickSuffix
+
+	ModalSubmitSuffix    = "_modal_submit:"
+	reportTimeSpentModal = "report_time_spent" + ModalSubmitSuffix
 )
 
 func simpleInteractionResponse(content string) *discordgo.InteractionResponse {
@@ -183,30 +188,6 @@ func (ui *Ui) scheduleChore(buttonId string, s *discordgo.Session, i *discordgo.
 					},
 				},
 			},
-
-			// discordgo.ActionsRow{
-			// 	Components: []discordgo.MessageComponent{
-			// 		&discordgo.SelectMenu{
-			// 			CustomID:    "log_work_select_menu",
-			// 			Placeholder: "Log time spent on this chore",
-			// 			MaxValues:   1,
-			// 			Options: []discordgo.SelectMenuOption{
-			// 				{
-			// 					Label:       "5 min",
-			// 					Value:       "5",
-			// 					Description: "Log 5 minutes of work.",
-			// 					Default:     true, // Default option selected
-			// 				},
-			// 				{
-			// 					Label:       "10 min",
-			// 					Value:       "10",
-			// 					Description: "Log 10 minutes of work.",
-			// 				},
-			// 				// TODO add more
-			// 			},
-			// 		},
-			// 	},
-			// },
 		},
 		Embeds: embeds,
 	})
@@ -883,12 +864,11 @@ func (ui *Ui) Commands(ctx context.Context, wg *sync.WaitGroup) error {
 			case "stats":
 				ui.stats(i)
 			}
-
 		}
+
 		if i.Type == discordgo.InteractionMessageComponent {
 			data := i.MessageComponentData()
 			switch {
-
 			case strings.HasPrefix(data.CustomID, deleteButtonClick) || strings.HasPrefix(data.CustomID, cancelButtonClick):
 				ui.cancelChore(data.CustomID, s, i)
 			case strings.HasPrefix(data.CustomID, editButtonClick):
@@ -903,21 +883,16 @@ func (ui *Ui) Commands(ctx context.Context, wg *sync.WaitGroup) error {
 				ui.doneChore(data.CustomID, s, i)
 			case strings.HasPrefix(data.CustomID, helpedButtonClick):
 				ui.helpedChore(data.CustomID, s, i)
+			case strings.HasPrefix(data.CustomID, reportTimeSpentClick):
+				ui.reportTimeSpentButtonClick(data.CustomID, s, i)
 			}
 		}
-		// TODO unused
+
 		if i.Type == discordgo.InteractionModalSubmit {
 			data := i.ModalSubmitData()
-			if data.CustomID == "more_modal" {
-				// Handle the modal submission.
-				textInput := data.Components[0].(*discordgo.ActionsRow).Components[0].(*discordgo.TextInput)
-				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-					Type: discordgo.InteractionResponseChannelMessageWithSource,
-					Data: &discordgo.InteractionResponseData{
-						Content: fmt.Sprintf("You entered: %s", textInput.Value),
-						Flags:   discordgo.MessageFlagsEphemeral,
-					},
-				})
+			switch {
+			case strings.HasPrefix(data.CustomID, reportTimeSpentModal):
+				ui.reportTimeSpent(s, i)
 			}
 		}
 	})
@@ -1098,6 +1073,93 @@ func (ui *Ui) Commands(ctx context.Context, wg *sync.WaitGroup) error {
 	}
 	ui.logger.Info("Commands unregistered.")
 	return nil
+}
+
+func (ui *Ui) reportTimeSpentButtonClick(d string, s *discordgo.Session, i *discordgo.InteractionCreate) {
+	failedText := "Failed to report time spent."
+
+	choreId, err := getChoreIdFromButton(d)
+	if err != nil {
+		ui.logger.Error("failed to parse chore ID from button", "error", err, "custom_id", d)
+		s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
+		return
+	}
+	err = ui.discord.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseModal,
+		Data: &discordgo.InteractionResponseData{
+			CustomID: reportTimeSpentModal + fmt.Sprint(choreId),
+			Title:    fmt.Sprintf("Report time spent on chore %d", choreId),
+			Components: []discordgo.MessageComponent{
+				discordgo.ActionsRow{
+					Components: []discordgo.MessageComponent{
+						&discordgo.TextInput{
+							CustomID:    "time_spent_min",
+							Label:       "Time Spent (minutes)",
+							Style:       discordgo.TextInputShort,
+							MinLength:   1,
+							MaxLength:   4,
+							Placeholder: "Enter time spent on chore",
+							Required:    true,
+						},
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		ui.logger.Error("failed to send modal", "error", err)
+		s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
+		return
+	}
+}
+
+func (ui *Ui) reportTimeSpent(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	failedText := "Failed to report time spent."
+	ui.logger.Debug("Reporting time spent", "custom_id", i.ModalSubmitData().CustomID)
+	data := i.Interaction.ModalSubmitData()
+
+	choreId, err := getChoreIdFromButton(data.CustomID)
+	if err != nil {
+		ui.logger.Error("failed to parse chore ID from modal", "error", err, "custom_id", data.CustomID)
+		s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
+		return
+	}
+	ui.logger.Debug("Reporting time spent", "chore_id", choreId)
+
+	timeSpentStr := data.Components[0].(*discordgo.ActionsRow).Components[0].(*discordgo.TextInput).Value
+	timeSpent, err := strconv.Atoi(timeSpentStr)
+	if err != nil {
+		ui.logger.Error("failed to parse time spent", "error", err, "input", timeSpentStr)
+		s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
+		return
+	}
+	ui.logger.Debug("Reporting time spent", "chore_id", choreId, "time_spent", timeSpent)
+
+	userId := i.Interaction.User.ID
+
+	ui.logger.Debug("Reporting time spent", "chore_id", choreId, "user_id", userId, "time_spent", timeSpent)
+	wl, err := ui.storage.GetWorkLogForChoreAndUser(choreId, userId)
+	if err != nil {
+		ui.logger.Error("failed to get work log", "error", err, "chore_id", choreId, "user_id", userId)
+		s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
+		return
+	}
+	wl.TimeSpentMin = uint(timeSpent)
+	_, err = ui.storage.SaveWorkLog(wl)
+	if err != nil {
+		ui.logger.Error("failed to save work log", "error", err, "chore_id", choreId, "user_id", userId)
+		s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
+		return
+	}
+	r := simpleContainerizedInteractionResponse(fmt.Sprintf("Updated time spent on chore `id: %d` to `%d` min.", choreId, timeSpent), &ui.colors.GreenColor)
+	s.InteractionRespond(i.Interaction, r)
+	chore, err := ui.storage.GetChore(choreId)
+	if err != nil {
+		ui.logger.Error("failed to get chore", "error", err, "chore_id", choreId)
+		s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
+		return
+	}
+	ui.updateChoreMessage(chore)
 }
 
 func (ui *Ui) stats(i *discordgo.InteractionCreate) {
@@ -1497,9 +1559,19 @@ func (ui *Ui) doneChore(d string, s *discordgo.Session, i *discordgo.Interaction
 		if err != nil {
 			ui.logger.Error("failed to save work log", "error", err, "chore_id", choreId, "user_id", a.UserId)
 		}
-		// TODO add select for time spent
 		err = ui.sendDM(a.UserId, &discordgo.MessageSend{
-			Content: fmt.Sprintf("Chore `id: %d` has been completed %s. Thank you for your work!", choreId, ui.getChoreMessageUrl(chore)),
+			Content: fmt.Sprintf("Chore `id: %d` has been completed %s. Thank you for your work!\nYou spent `%d` minutes on this chore (which was the estimate of the chore creator).", choreId, ui.getChoreMessageUrl(chore), wl.TimeSpentMin),
+			Components: []discordgo.MessageComponent{
+				discordgo.ActionsRow{
+					Components: []discordgo.MessageComponent{
+						&discordgo.Button{
+							Style:    discordgo.SuccessButton,
+							Label:    "Change Time Spent",
+							CustomID: reportTimeSpentClick + fmt.Sprint(chore.ID),
+						},
+					},
+				},
+			},
 		})
 		if err != nil {
 			ui.logger.Error("failed to send DM", "error", err, "user_id", a.UserId)
@@ -1523,5 +1595,4 @@ func (ui *Ui) doneChore(d string, s *discordgo.Session, i *discordgo.Interaction
 		s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
 		return
 	}
-
 }
