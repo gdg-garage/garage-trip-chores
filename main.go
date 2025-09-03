@@ -23,10 +23,7 @@ func main() {
 		os.Exit(1)
 	}
 	logger := logger.New(conf.Logger)
-
 	logger.Debug("Config loaded", "conf", conf)
-
-	logger.Info("Chores!")
 
 	logger.Debug("Initializing storage")
 
