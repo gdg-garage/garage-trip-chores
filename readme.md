@@ -37,4 +37,5 @@ Additional features:
 - [x] list my tasks
 - [x] list users stats (work log, assign stats, presence stats, total)
 - [ ] How to create a delayed task?
-- [ ] Task scheduler
+- [ ] Task scheduler (config based)
+- [ ] Proactive stats sharing with LLM integration
