@@ -28,9 +28,9 @@ Additional features:
 
 ### TODO
 - [x] fire emoji for urgent task (or peppers - 1-3 hotness) - no need to implement just document this and add the emoji to the task name
-- [ ] reminders in private message
-  - [ ] ping before timeout
-  - [ ] is the task already done (after deadline)? 
+- [x] reminders in private message
+  - [x] ping before timeout
+  - [x] is the task already done (after deadline)? 
     * for users who acked the task
     * for the creator of the task
   - [x] how much time have you spent?
@@ -41,7 +41,9 @@ Additional features:
 - [x] list users stats (work log, assign stats, presence stats, total)
 - [x] How to create a delayed task?
   * we do not need this - added default deadline (task without deadline is useless), assignment timeout can be disabled.
+- [x] Assignment timeouts (0 for disable)
+- [ ] Edit created task
 - [ ] Task scheduler (config based)
 - [ ] Proactive stats sharing with LLM integration
-- [ ] Edit created task
-- [ ] Assignment timeouts (0 for disable)
+
+

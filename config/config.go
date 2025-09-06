@@ -7,17 +7,19 @@ import (
 	"github.com/gdg-garage/garage-trip-chores/chores"
 	"github.com/gdg-garage/garage-trip-chores/logger"
 	presencetracker "github.com/gdg-garage/garage-trip-chores/presence_tracker"
+	"github.com/gdg-garage/garage-trip-chores/reminders"
 	"github.com/gdg-garage/garage-trip-chores/storage"
 	"github.com/gdg-garage/garage-trip-chores/ui"
 	"github.com/spf13/viper"
 )
 
 type Config struct {
-	Logger  logger.Config
-	Db      storage.Config
-	Chores  chores.Config
-	Ui      ui.Config
-	Tracker presencetracker.Config
+	Logger   logger.Config
+	Db       storage.Config
+	Chores   chores.Config
+	Ui       ui.Config
+	Tracker  presencetracker.Config
+	Reminder reminders.Config
 }
 
 func New() (*Config, error) {
@@ -35,6 +37,9 @@ func New() (*Config, error) {
 	viper.SetDefault("ui.discordchannelid", "???")
 
 	viper.SetDefault("tracker.sampleperiodmin", 10)
+
+	viper.SetDefault("reminder.checkperiodseconds", 2)
+	viper.SetDefault("reminder.reminderatio", 0.1)
 
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")

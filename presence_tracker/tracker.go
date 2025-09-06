@@ -37,6 +37,7 @@ func (t *Tracker) track() {
 }
 
 func (t *Tracker) RunTracker(ctx context.Context, wg *sync.WaitGroup) {
+	wg.Add(1)
 	defer wg.Done()
 	t.track()
 	for {

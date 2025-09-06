@@ -12,6 +12,7 @@ import (
 	"github.com/gdg-garage/garage-trip-chores/config"
 	"github.com/gdg-garage/garage-trip-chores/logger"
 	presencetracker "github.com/gdg-garage/garage-trip-chores/presence_tracker"
+	"github.com/gdg-garage/garage-trip-chores/reminders"
 	"github.com/gdg-garage/garage-trip-chores/storage"
 	"github.com/gdg-garage/garage-trip-chores/ui"
 )
@@ -42,12 +43,13 @@ func main() {
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, syscall.SIGALRM, os.Interrupt)
 
 	ui := ui.NewUi(s, logger, &cl, s.GetDiscord(), conf.Ui)
-	wg.Add(1)
 	go ui.Commands(ctx, &wg)
 
 	tracker := presencetracker.NewTracker(s, logger, conf.Tracker)
-	wg.Add(1)
 	go tracker.RunTracker(ctx, &wg)
+
+	reminder := reminders.NewReminder(s, ui, &cl, logger, &conf.Reminder)
+	go reminder.RunReminder(ctx, &wg)
 
 	<-sc
 

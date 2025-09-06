@@ -25,6 +25,7 @@ type Chore struct {
 	Cancelled             *time.Time
 	Deadline              *time.Time
 	necessaryCapabilities []string
+	AfterDeadlineReminded bool
 }
 
 func (c *Chore) GetCapabilities() []string {
@@ -57,15 +58,18 @@ type WorkLog struct {
 }
 
 type ChoreAssignment struct {
-	ID          uint
-	UserId      string
-	ChoreId     uint
-	Chore       Chore
-	Created     time.Time
-	Acked       *time.Time
-	Refused     *time.Time
-	Timeouted   *time.Time
-	Volunteered bool
+	ID                    uint
+	UserId                string
+	ChoreId               uint
+	Chore                 Chore
+	Created               time.Time
+	Acked                 *time.Time
+	Refused               *time.Time
+	Timeouted             *time.Time
+	Volunteered           bool
+	DeadlineReminded      bool
+	AfterDeadlineReminded bool
+	Reminded              bool
 }
 
 func (ca *ChoreAssignment) Ack() {
