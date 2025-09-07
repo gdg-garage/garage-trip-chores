@@ -9,14 +9,15 @@ Discord bot which:
 
 Additional features:
 * Temporarily disable members for scheduling (implemented using Discord role membership)
-  * Track presence of the users
+  * **Track presence** of the users
 * Chores are marked as done (also may be explicitly rejected)
   * Support editing the chore length
-* Manually add finished chores (create chore, assign yourself and mark as done)
+* Manually add finished chores
 * Display the track record
 * Display the global statistics
 * Use LLM to make the messages funny
 * Users have **capabilities** and some chores needs expertise - use Discord roles to assign 
+* Tries to find new asignees when not acknowledged by the original ones
 
 ### Slash commands
 * Documeted in the sever commands itself including all the params
@@ -24,6 +25,7 @@ Additional features:
 ### Use cases
 * Urgent tasks - use 🌶️🌶️🌶️ (1-3) in the chore name
 * Delayed tasks (I need something done tonight) - Adjust the deadline accordingly, set the assignment timeout to 0 (disabled)
+* Manually add finished chore - create chore, ACK yourself (=volunteer) and mark as done
 
 ### Tech stack
 * Golang
