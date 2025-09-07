@@ -42,7 +42,7 @@ Additional features:
 - [x] How to create a delayed task?
   * we do not need this - added default deadline (task without deadline is useless), assignment timeout can be disabled.
 - [x] Assignment timeouts (0 for disable)
-- [ ] Edit created task
+- [x] Edit created task
 - [ ] Task scheduler (config based)
 - [ ] Proactive stats sharing with LLM integration
 
