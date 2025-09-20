@@ -1663,14 +1663,14 @@ func (ui *Ui) helpedChore(d string, s *discordgo.Session, i *discordgo.Interacti
 							&discordgo.Button{
 								Style:    discordgo.SuccessButton,
 								Label:    "Change Time Spent",
-								CustomID: ReportTimeSpentClick + fmt.Sprint(c.ID),
+								CustomID: ReportTimeSpentClick + fmt.Sprint(chore.ID),
 							},
 						},
 					},
 				},
 			})
 			if err != nil {
-				ui.logger.Error("failed to send DM", "error", err, "user_id", a.UserId)
+				ui.logger.Error("failed to send DM", "error", err, "user_id", userId)
 				s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
 				return
 			}
