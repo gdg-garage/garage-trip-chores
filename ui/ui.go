@@ -502,11 +502,12 @@ func (ui *Ui) ackChore(customID string, s *discordgo.Session, i *discordgo.Inter
 		return
 	}
 
-	ass, err = ui.storage.GetChoreAssignment(choreId, i.Member.User.ID)
+	userId := i.Member.User.ID
+	ass, err = ui.storage.GetChoreAssignment(choreId, userId)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			// Create new assignment
-			ass, err = ui.storage.AssignChore(c, i.Member.User.ID)
+			ass, err = ui.storage.AssignChore(c, userId)
 			if err != nil {
 				ui.logger.Error("failed to assign chore", "error", err, "chore_id", choreId, "user_id", i.Member.User.ID)
 				s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
@@ -520,7 +521,7 @@ func (ui *Ui) ackChore(customID string, s *discordgo.Session, i *discordgo.Inter
 				return
 			}
 		} else {
-			ui.logger.Error("failed to get chore assignment", "error", err, "chore_id", choreId, "user_id", i.Member.User.ID)
+			ui.logger.Error("failed to get chore assignment", "error", err, "chore_id", choreId, "user_id", userId)
 			s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
 			return
 		}
@@ -536,6 +537,27 @@ func (ui *Ui) ackChore(customID string, s *discordgo.Session, i *discordgo.Inter
 	}
 
 	s.InteractionRespond(i.Interaction, simpleInteractionResponse(fmt.Sprintf("Chore `%s` (id: `%d`) acknowledged.", c.Name, c.ID)))
+
+	err = ui.SendDM(userId, &discordgo.MessageSend{
+		Content: fmt.Sprintf("Your acknowleged chore `id: %d` `%s` %s.", c.ID, c.Name, ui.GetChoreMessageUrl(c)),
+		Components: []discordgo.MessageComponent{
+			discordgo.ActionsRow{
+				Components: []discordgo.MessageComponent{
+					&discordgo.Button{
+						Style:    discordgo.SuccessButton,
+						Label:    "Done!",
+						CustomID: DoneButtonClick + fmt.Sprint(c.ID),
+					},
+				},
+			},
+		},
+	})
+
+	if err != nil {
+		ui.logger.Warn("failed to send DM to user", "error", err, "chore_id", choreId, "user_id", userId)
+		s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
+		return
+	}
 
 	ui.UpdateChoreMessage(c)
 }
@@ -1632,6 +1654,27 @@ func (ui *Ui) helpedChore(d string, s *discordgo.Session, i *discordgo.Interacti
 				s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
 				return
 			}
+
+			err = ui.SendDM(userId, &discordgo.MessageSend{
+				Content: fmt.Sprintf("Chore `id: %d` `%s` has been completed %s. Thank you for your work!\nYou spent `%d` minutes on this chore (which was the estimate of the chore creator).", choreId, chore.Name, ui.GetChoreMessageUrl(chore), wl.TimeSpentMin),
+				Components: []discordgo.MessageComponent{
+					discordgo.ActionsRow{
+						Components: []discordgo.MessageComponent{
+							&discordgo.Button{
+								Style:    discordgo.SuccessButton,
+								Label:    "Change Time Spent",
+								CustomID: ReportTimeSpentClick + fmt.Sprint(c.ID),
+							},
+						},
+					},
+				},
+			})
+			if err != nil {
+				ui.logger.Error("failed to send DM", "error", err, "user_id", a.UserId)
+				s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
+				return
+			}
+
 			return
 		} else {
 			ui.logger.Error("failed to get work log", "error", err, "chore_id", choreId, "user_id", userId)
@@ -1640,6 +1683,7 @@ func (ui *Ui) helpedChore(d string, s *discordgo.Session, i *discordgo.Interacti
 		}
 	}
 	r := simpleContainerizedInteractionResponse(fmt.Sprintf("You already have work logged for chore `id: %d`.", choreId), &ui.colors.RedColor)
+
 	s.InteractionRespond(i.Interaction, r)
 }
 
@@ -1674,7 +1718,7 @@ func (ui *Ui) doneChore(d string, s *discordgo.Session, i *discordgo.Interaction
 		s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
 		return
 	}
-	r := simpleContainerizedInteractionResponse(fmt.Sprintf("This chore `id: %d` has been completed.", choreId), &ui.colors.GreenColor)
+	r := simpleContainerizedInteractionResponse(fmt.Sprintf("This chore `id: %d` `%s` has been completed.", choreId, chore.Name), &ui.colors.GreenColor)
 	r.Type = discordgo.InteractionResponseUpdateMessage
 	s.InteractionRespond(i.Interaction, r)
 
@@ -1713,7 +1757,7 @@ func (ui *Ui) doneChore(d string, s *discordgo.Session, i *discordgo.Interaction
 			ui.logger.Error("failed to save work log", "error", err, "chore_id", choreId, "user_id", a.UserId)
 		}
 		err = ui.SendDM(a.UserId, &discordgo.MessageSend{
-			Content: fmt.Sprintf("Chore `id: %d` has been completed %s. Thank you for your work!\nYou spent `%d` minutes on this chore (which was the estimate of the chore creator).", choreId, ui.GetChoreMessageUrl(chore), wl.TimeSpentMin),
+			Content: fmt.Sprintf("Chore `id: %d` `%s` has been completed %s. Thank you for your work!\nYou spent `%d` minutes on this chore (which was the estimate of the chore creator).", choreId, chore.Name, ui.GetChoreMessageUrl(chore), wl.TimeSpentMin),
 			Components: []discordgo.MessageComponent{
 				discordgo.ActionsRow{
 					Components: []discordgo.MessageComponent{
@@ -1734,7 +1778,7 @@ func (ui *Ui) doneChore(d string, s *discordgo.Session, i *discordgo.Interaction
 	}
 
 	err = ui.SendDM(chore.CreatorId, &discordgo.MessageSend{
-		Content: fmt.Sprintf("Chore `id: %d` has been completed %s.", choreId, ui.GetChoreMessageUrl(chore)),
+		Content: fmt.Sprintf("Chore `id: %d`. `%s` has been completed %s.", choreId, chore.Name, ui.GetChoreMessageUrl(chore)),
 	})
 	if err != nil {
 		ui.logger.Error("failed to send DM", "error", err, "user_id", chore.CreatorId)
