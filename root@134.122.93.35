@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  chores-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: chores-bot
+    restart: unless-stopped
+    volumes:
+      # Mount the local data directory to persist the SQLite database
+      - ./data:/app/data
+      # Mount the configuration file as read-only
+      - ./config.yaml:/app/config.yaml:ro
+    # Load environment variables from a .env file in the same directory
+    env_file:
+      - .env

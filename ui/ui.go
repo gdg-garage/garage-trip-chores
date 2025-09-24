@@ -1466,7 +1466,7 @@ func (ui *Ui) stats(i *discordgo.InteractionCreate) {
 		k := v.Key
 		c := v.Value
 		statsMd += fmt.Sprintf("<@%s>\n", k)
-		statsMd += fmt.Sprintf("```%0.f\t%0.f\t%0.f\t%0.f\t%0.f\t%0.f\t%d\t%.2f```\n",
+		statsMd += fmt.Sprintf("```%0.f\t%0.f\t%0.f\t%0.f\t%0.f\t%0.f\t%d\t%.6f```\n",
 			c.workedCount, c.WorkedMin, c.assignedCount, c.AssignedMin, c.TotalCount, c.TotalMin, c.PresentTicks, c.NormalizedTotal)
 	}
 	embed := discordgo.MessageEmbed{
