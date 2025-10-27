@@ -39,5 +39,5 @@ Additional features:
 ### TODO
 - [ ] Task scheduler (config based)
 - [ ] Proactive stats sharing with LLM integration
-
-
+- [ ] JSON REST API
+- [ ] refuse ACK if someone worked too much compared to others
