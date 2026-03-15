@@ -1110,6 +1110,37 @@ func (ui *Ui) Commands(ctx context.Context, wg *sync.WaitGroup) error {
 
 	// 6. Keep the bot running until an interrupt signal is received.
 
+	// 6.a Start Event Listener loop
+	go func() {
+		sub := ui.storage.Events.Subscribe()
+		defer ui.storage.Events.Unsubscribe(sub)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case event := <-sub:
+				if event.Type == storage.TaskUpdated || event.Type == storage.TaskDone || event.Type == storage.TaskAssigned || event.Type == storage.TaskAcked || event.Type == storage.TaskRefused || event.Type == storage.TaskTimeout {
+					var choreToUpdate *storage.Chore
+					if event.Chore != nil {
+						choreToUpdate = event.Chore
+					} else if event.Assignment != nil {
+						chore, err := ui.storage.GetChore(event.Assignment.ChoreId)
+						if err == nil {
+							choreToUpdate = &chore
+						}
+					}
+					
+					if choreToUpdate != nil && choreToUpdate.MessageId != "" {
+						err := ui.UpdateChoreMessage(*choreToUpdate)
+						if err != nil {
+							ui.logger.Error("failed to remotely update chore message from bus event", "error", err, "chore_id", choreToUpdate.ID)
+						}
+					}
+				}
+			}
+		}
+	}()
+
 	<-ctx.Done()
 
 	// 7. Cleanly close the Discord session.
@@ -1341,106 +1372,17 @@ func (ui *Ui) stats(i *discordgo.InteractionCreate) {
 	failedText := "Failed to get stats."
 	embeds := []*discordgo.MessageEmbed{}
 
-	type UserStats struct {
-		workedCount     float64
-		WorkedMin       float64
-		AssignedMin     float64
-		assignedCount   float64
-		TotalMin        float64
-		TotalCount      float64
-		PresentTicks    int
-		NormalizedTotal float64
-	}
-
-	usersStats := map[string]UserStats{}
-
-	userStats, err := ui.storage.GetUserStats()
+	usersStats, err := ui.storage.GetAggregatedStats()
 	if err != nil {
-		ui.logger.Error("failed to get user stats", "error", err)
+		ui.logger.Error("failed to get aggregated stats", "error", err)
 		ui.discord.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
 		return
-	}
-	for k, v := range userStats {
-		_, ok := usersStats[k]
-		if !ok {
-			usersStats[k] = UserStats{}
-		}
-		s := usersStats[k]
-		s.workedCount = v.Count
-		s.WorkedMin = v.TotalMin
-		usersStats[k] = s
-	}
-
-	assignedStats, err := ui.storage.GetAssignedStats()
-	if err != nil {
-		ui.logger.Error("failed to get assigned stats", "error", err)
-		ui.discord.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
-		return
-	}
-	for k, v := range assignedStats {
-		_, ok := usersStats[k]
-		if !ok {
-			usersStats[k] = UserStats{}
-		}
-		s := usersStats[k]
-		s.AssignedMin = v.TotalMin
-		s.assignedCount = v.Count
-		usersStats[k] = s
-	}
-
-	totalStats, err := ui.storage.GetTotalChoreStats()
-	if err != nil {
-		ui.logger.Error("failed to get total chore stats", "error", err)
-		ui.discord.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
-		return
-	}
-	for k, v := range totalStats {
-		_, ok := usersStats[k]
-		if !ok {
-			usersStats[k] = UserStats{}
-		}
-		s := usersStats[k]
-		s.TotalMin = v.TotalMin
-		s.TotalCount = v.Count
-		usersStats[k] = s
-	}
-
-	usersPresenceCounts, err := ui.storage.GetUsersPresenceCounts()
-	if err != nil {
-		ui.logger.Error("failed to get users presence counts", "error", err)
-		ui.discord.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
-		return
-	}
-	for k, v := range usersPresenceCounts {
-		_, ok := usersStats[k]
-		if !ok {
-			usersStats[k] = UserStats{}
-		}
-		s := usersStats[k]
-		s.PresentTicks = v
-		usersStats[k] = s
-	}
-
-	normalizedStats, err := ui.storage.GetTotalNormalizedChoreStats()
-	if err != nil {
-		ui.logger.Error("failed to get normalized chore stats", "error", err)
-		ui.discord.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
-		return
-	}
-	for k, v := range normalizedStats {
-		_, ok := usersStats[k]
-		if !ok {
-			usersStats[k] = UserStats{}
-		}
-		s := usersStats[k]
-		s.NormalizedTotal = v.TotalMin
-		usersStats[k] = s
 	}
 
 	// Convert map to slice for sorting
 	type kv struct {
 		Key   string
-		Value UserStats
+		Value storage.AggregatedUserStats
 	}
 	var ss []kv
 	for k, v := range usersStats {
@@ -1467,7 +1409,7 @@ func (ui *Ui) stats(i *discordgo.InteractionCreate) {
 		c := v.Value
 		statsMd += fmt.Sprintf("<@%s>\n", k)
 		statsMd += fmt.Sprintf("```%0.f\t%0.f\t%0.f\t%0.f\t%0.f\t%0.f\t%d\t%.6f```\n",
-			c.workedCount, c.WorkedMin, c.assignedCount, c.AssignedMin, c.TotalCount, c.TotalMin, c.PresentTicks, c.NormalizedTotal)
+			c.WorkedCount, c.WorkedMin, c.AssignedCount, c.AssignedMin, c.TotalCount, c.TotalMin, c.PresentTicks, c.NormalizedTotal)
 	}
 	embed := discordgo.MessageEmbed{
 		Title:       "User stats:",

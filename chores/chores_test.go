@@ -45,7 +45,7 @@ func TestUserOrderBasedOnStats(t *testing.T) {
 		},
 	}
 
-	expectedOrder := []string{"user5", "user4", "user1", "user3", "user2"}
+	expectedOrder := []string{"user2", "user4", "user1", "user3", "user5"}
 
 	sortedUsers := SortUsersBasedOnChoreStats(statistics)
 

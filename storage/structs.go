@@ -29,6 +29,9 @@ type Chore struct {
 }
 
 func (c *Chore) GetCapabilities() []string {
+	if c.NecessaryCapabilities == "" {
+		return []string{}
+	}
 	c.necessaryCapabilities = strings.Split(c.NecessaryCapabilities, ",")
 	return c.necessaryCapabilities
 }

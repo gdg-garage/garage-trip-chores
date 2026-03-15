@@ -184,7 +184,24 @@ func (s *Storage) AssignChore(chore Chore, userId string) (ChoreAssignment, erro
 }
 
 func (s *Storage) SaveChoreAssignment(ca ChoreAssignment) (ChoreAssignment, error) {
+	isNew := ca.ID == 0
 	r := s.db.Save(&ca)
+	if r.Error == nil && s.Events != nil {
+		eventType := TaskUpdated
+		if isNew {
+			eventType = TaskAssigned
+		} else if ca.Acked != nil {
+			eventType = TaskAcked
+		} else if ca.Refused != nil {
+			eventType = TaskRefused
+		} else if ca.Timeouted != nil {
+			eventType = TaskTimeout
+		}
+		s.Events.Publish(Event{
+			Type:       eventType,
+			Assignment: &ca,
+		})
+	}
 	return ca, r.Error
 }
 
@@ -193,6 +210,14 @@ func (s *Storage) SaveChoreAssignments(assignments []ChoreAssignment) ([]ChoreAs
 		return assignments, nil
 	}
 	r := s.db.Create(&assignments)
+	if r.Error == nil && s.Events != nil {
+		for i := range assignments {
+			s.Events.Publish(Event{
+				Type:       TaskAssigned,
+				Assignment: &assignments[i],
+			})
+		}
+	}
 	return assignments, r.Error
 }
 

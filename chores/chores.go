@@ -33,7 +33,7 @@ func SortUsersBasedOnChoreStats(stats map[string]storage.ChoreStatsWithCapabilit
 	}
 	sort.Slice(sortedUsers, func(i, j int) bool {
 		if stats[sortedUsers[i]].CapabilitiesMatched != stats[sortedUsers[j]].CapabilitiesMatched {
-			return stats[sortedUsers[i]].CapabilitiesMatched < stats[sortedUsers[j]].CapabilitiesMatched
+			return stats[sortedUsers[i]].CapabilitiesMatched > stats[sortedUsers[j]].CapabilitiesMatched
 		}
 		if stats[sortedUsers[i]].TotalMin != stats[sortedUsers[j]].TotalMin {
 			return stats[sortedUsers[i]].TotalMin < stats[sortedUsers[j]].TotalMin
@@ -56,13 +56,19 @@ func OversampleCnt(needed uint, ratio float64) uint {
 	return uint(math.Ceil(float64(needed) * ratio))
 }
 
+type StorageAccess interface {
+	GetTotalNormalizedChoreStats() (storage.UserChoreStats, error)
+	GetChoreAssignments(choreId uint) ([]storage.ChoreAssignment, error)
+	SaveChoreAssignments(assignments []storage.ChoreAssignment) ([]storage.ChoreAssignment, error)
+}
+
 type ChoresLogic struct {
-	storage *storage.Storage
+	storage StorageAccess
 	logger  *slog.Logger
 	config  Config
 }
 
-func NewChoresLogic(storage *storage.Storage, logger *slog.Logger, config Config) ChoresLogic {
+func NewChoresLogic(storage StorageAccess, logger *slog.Logger, config Config) ChoresLogic {
 	return ChoresLogic{
 		storage: storage,
 		logger:  logger,
@@ -104,11 +110,8 @@ func (cl ChoresLogic) AssignChoresToUsers(users []storage.User, chore storage.Ch
 		return nil, err
 	}
 	for _, a := range ass {
-		if a.Refused != nil {
-			delete(userStatsWithCap, a.UserId)
-		} else if a.Timeouted != nil {
-			delete(userStatsWithCap, a.UserId)
-		} else {
+		delete(userStatsWithCap, a.UserId)
+		if a.Refused == nil && a.Timeouted == nil {
 			alreadyAssignedCnt++
 		}
 	}

@@ -15,6 +15,7 @@ type Storage struct {
 	logger  *slog.Logger
 	discord *discordgo.Session
 	conf    Config
+	Events  *EventBus
 }
 
 func dbConnect(conf Config, logger *slog.Logger) (*gorm.DB, error) {
@@ -60,6 +61,7 @@ func New(conf Config, logger *slog.Logger) (*Storage, error) {
 		logger:  logger,
 		discord: dg,
 		conf:    conf,
+		Events:  NewEventBus(),
 	}, nil
 }
 
