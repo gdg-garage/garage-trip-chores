@@ -11,6 +11,7 @@ import (
 	"github.com/gdg-garage/garage-trip-chores/storage"
 	"github.com/gdg-garage/garage-trip-chores/ui"
 	"github.com/spf13/viper"
+	"github.com/gdg-garage/garage-trip-chores/api"
 )
 
 type Config struct {
@@ -20,6 +21,7 @@ type Config struct {
 	Ui       ui.Config
 	Tracker  presencetracker.Config
 	Reminder reminders.Config
+	Api      api.Config
 }
 
 func New() (*Config, error) {
@@ -40,6 +42,9 @@ func New() (*Config, error) {
 
 	viper.SetDefault("reminder.checkperiodseconds", 2)
 	viper.SetDefault("reminder.reminderatio", 0.1)
+
+	viper.SetDefault("api.port", 8080)
+	viper.SetDefault("api.apikey", "secret-api-key")
 
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")

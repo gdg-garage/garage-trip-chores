@@ -3,7 +3,20 @@ package storage
 import "gorm.io/gorm/clause"
 
 func (s *Storage) SaveChore(chore Chore) (Chore, error) {
+	isNew := chore.ID == 0
 	r := s.db.Save(&chore)
+	if r.Error == nil && s.Events != nil {
+		eventType := TaskUpdated
+		if isNew {
+			eventType = TaskCreated
+		} else if chore.Completed != nil {
+			eventType = TaskDone
+		}
+		s.Events.Publish(Event{
+			Type:  eventType,
+			Chore: &chore,
+		})
+	}
 	return chore, r.Error
 }
 

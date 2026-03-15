@@ -26,6 +26,7 @@ Additional features:
 * Urgent tasks - use 🌶️🌶️🌶️ (1-3) in the chore name
 * Delayed tasks (I need something done tonight) - Adjust the deadline accordingly, set the assignment timeout to 0 (disabled)
 * Manually add finished chore - create chore, ACK yourself (=volunteer) and mark as done
+* Scheduled tasks may be created via API (e.g. from a local script or LLM)
 
 ### Tech stack
 * Golang
@@ -33,11 +34,14 @@ Additional features:
   * [gorm](https://github.com/go-gorm/gorm)
   * [discordgo](https://github.com/bwmarrin/discordgo)
   * [viper](https://github.com/spf13/viper)
+  * [chi](https://github.com/go-chi/chi)
+  * [huma](https://github.com/danielgtaylor/huma)
+  * [gorilla/websocket](https://github.com/gorilla/websocket)
 * SQLite
 * [JJ](https://github.com/jj-vcs/jj) (VCS)
 
 ### TODO
-- [ ] Task scheduler (config based)
 - [ ] Proactive stats sharing with LLM integration
-- [ ] JSON REST API
+  - Solved via dashboard.
 - [ ] refuse ACK if someone worked too much compared to others
+  - Not the best idea - people should check stats and communicate.
