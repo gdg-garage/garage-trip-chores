@@ -44,7 +44,7 @@ func New() (*Config, error) {
 	viper.SetDefault("reminder.reminderatio", 0.1)
 
 	viper.SetDefault("api.port", 8080)
-	viper.SetDefault("api.apikey", "secret-api-key")
+	viper.SetDefault("api.apikeys", []string{"secret-api-key"})
 
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")

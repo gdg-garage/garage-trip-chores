@@ -17,27 +17,34 @@ import (
 )
 
 type Config struct {
-	Port   int
-	ApiKey string
+	Port    int
+	ApiKeys []string
 }
 
 type Api struct {
-	storage *storage.Storage
-	logger  *slog.Logger
-	chores  *chores.ChoresLogic
-	ui      *ui.Ui
-	conf    Config
-	hub     *WsHub
+	storage        *storage.Storage
+	logger         *slog.Logger
+	chores         *chores.ChoresLogic
+	ui             *ui.Ui
+	conf           Config
+	hub            *WsHub
+	authorizedKeys map[string]struct{}
 }
 
 func NewApi(s *storage.Storage, logger *slog.Logger, c *chores.ChoresLogic, ui *ui.Ui, conf Config) *Api {
+	auth := make(map[string]struct{})
+	for _, k := range conf.ApiKeys {
+		auth[k] = struct{}{}
+	}
+
 	api := &Api{
-		storage: s,
-		logger:  logger,
-		chores:  c,
-		ui:      ui,
-		conf:    conf,
-		hub:     NewWsHub(logger),
+		storage:        s,
+		logger:         logger,
+		chores:         c,
+		ui:             ui,
+		conf:           conf,
+		hub:            NewWsHub(logger),
+		authorizedKeys: auth,
 	}
 
 	go api.hub.Run()
@@ -65,7 +72,11 @@ func (a *Api) SetupRoutes() *chi.Mux {
 				return
 			}
 			authHeader := r.Header.Get("Authorization")
-			if authHeader != "Bearer "+a.conf.ApiKey {
+			token := ""
+			if len(authHeader) > 7 && authHeader[:7] == "Bearer " {
+				token = authHeader[7:]
+			}
+			if _, ok := a.authorizedKeys[token]; !ok {
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return
 			}

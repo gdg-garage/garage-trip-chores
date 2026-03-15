@@ -83,7 +83,7 @@ func (api *Api) ServeWs(w http.ResponseWriter, r *http.Request) {
 			ApiKey string `json:"api_key"`
 		}
 		err = conn.ReadJSON(&authMsg)
-		if err != nil || authMsg.ApiKey != api.conf.ApiKey {
+		if _, ok := api.authorizedKeys[authMsg.ApiKey]; err != nil || !ok {
 			api.logger.Warn("websocket auth failed", "error", err)
 			conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.ClosePolicyViolation, "Unauthorized"))
 			conn.Close()
