@@ -33,6 +33,7 @@ WORKDIR /app
 
 # Copy the built binary from the builder stage
 COPY --from=builder /app/main .
+COPY --from=builder /app/docs ./docs
 
 # The application creates a sqlite database in the 'data' directory.
 RUN mkdir data

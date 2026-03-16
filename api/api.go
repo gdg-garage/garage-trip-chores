@@ -88,6 +88,18 @@ func (a *Api) SetupRoutes() *chi.Mux {
 
 	// Setup Huma
 	config := huma.DefaultConfig("Garage Trip Chores API", "1.0.0")
+	config.Components.SecuritySchemes = map[string]*huma.SecurityScheme{
+		"bearerAuth": {
+			Type:         "http",
+			Scheme:       "bearer",
+			BearerFormat: "API Key",
+			Description:  "Enter your API key provided in the configuration",
+		},
+	}
+	// Apply global security to all operations by default
+	config.Security = []map[string][]string{
+		{"bearerAuth": {}},
+	}
 	api := humachi.New(router, config)
 
 	// Websocket endpoint doesn't need Huma (it's standard HTTP upgrade)
@@ -120,6 +132,7 @@ func (a *Api) SetupRoutes() *chi.Mux {
 		Method:      http.MethodGet,
 		Path:        "/health",
 		Summary:     "Health check endpoint",
+		Security:    []map[string][]string{}, // No security for health check in docs
 	}, func(ctx context.Context, input *struct{}) (*HealthResponse, error) {
 		return &HealthResponse{Body: HealthData{Status: "ok"}}, nil
 	})
