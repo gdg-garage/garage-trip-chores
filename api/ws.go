@@ -78,19 +78,21 @@ func (api *Api) ServeWs(w http.ResponseWriter, r *http.Request) {
 			api.hub.unregister <- conn
 		}()
 
-		conn.SetReadDeadline(time.Now().Add(10 * time.Second))
-		var authMsg struct {
-			ApiKey string `json:"api_key"`
-		}
-		err = conn.ReadJSON(&authMsg)
-		if _, ok := api.authorizedKeys[authMsg.ApiKey]; err != nil || !ok {
-			api.logger.Warn("websocket auth failed", "error", err)
-			conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.ClosePolicyViolation, "Unauthorized"))
-			conn.Close()
-			return
+		if len(api.authorizedKeys) > 0 {
+			conn.SetReadDeadline(time.Now().Add(10 * time.Second))
+			var authMsg struct {
+				ApiKey string `json:"api_key"`
+			}
+			err = conn.ReadJSON(&authMsg)
+			if _, ok := api.authorizedKeys[authMsg.ApiKey]; err != nil || !ok {
+				api.logger.Warn("websocket auth failed", "error", err)
+				conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.ClosePolicyViolation, "Unauthorized"))
+				conn.Close()
+				return
+			}
+			conn.SetReadDeadline(time.Time{})
 		}
 
-		conn.SetReadDeadline(time.Time{})
 		api.hub.register <- conn
 
 		for {

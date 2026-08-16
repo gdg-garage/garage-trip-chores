@@ -154,6 +154,7 @@ func (r *Reminder) CheckChores() {
 					return
 				}
 				r.ui.UpdateChoreMessage(chore)
+				r.ui.EmitChoreEvent("chore_reassigned", chore)
 				continue
 			}
 

@@ -9,6 +9,9 @@ import (
 )
 
 func (s *Storage) getGuildRolesMap() (map[string]*discordgo.Role, error) {
+	if s.discord == nil || s.discord.State == nil {
+		return make(map[string]*discordgo.Role), nil
+	}
 	guild, err := s.discord.State.Guild(s.conf.DiscordGuildId)
 	if err != nil {
 		return nil, err
@@ -44,6 +47,10 @@ func (s *Storage) GetSkills() ([]string, error) {
 }
 
 func (s *Storage) GetPresentUsers() ([]User, error) {
+	if s.discord == nil {
+		return []User{}, nil
+	}
+
 	guildRolesMap, err := s.getGuildRolesMap()
 	if err != nil {
 		return nil, err
@@ -82,6 +89,9 @@ func (s *Storage) GetPresentUsers() ([]User, error) {
 }
 
 func (s *Storage) GetUserHandleByDiscordId(discordId string) (string, error) {
+	if s.discord == nil {
+		return "", nil
+	}
 	member, err := s.discord.GuildMember(s.conf.DiscordGuildId, discordId)
 	if err != nil {
 		return "", err

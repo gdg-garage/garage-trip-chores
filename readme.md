@@ -17,6 +17,7 @@ The production API is hosted at: **[chores.garage-trip.cz](https://chores.garage
 *   **Presence Tracking**: Uses Discord roles (default: `chores::present`) to determine who is currently available for chores.
 *   **Capabilities & Skills**: Supports role-based expertise. Some chores require specific roles prefixed with `skill::` (e.g., `skill::cooking`).
 *   **Live Updates**: Event-driven architecture ensures Discord messages and external dashboards update instantly via WebSockets.
+*   **Bidirectional Sync**: Creating or updating tasks via the REST API automatically creates and updates Discord messages and notifies assignees.
 *   **Urgency & Deadlines**: Supports priority tasks (🌶️) and deadline-based scheduling.
 *   **Funny Messages**: Integration with LLMs to keep chore notifications entertaining.
 
@@ -38,10 +39,10 @@ Chore assignments respect user "Capabilities":
 *   When a chore is created with "Necessary Capabilities", the assignment logic filters the candidate pool to only include users matching those skills.
 *   If multiple users match, it defaults to the one with the lowest normalized workload.
 
-### Event-Driven Sync
-Every state change (Task Created, Assigned, Acked, Done) is broadcasted via an internal Event Bus.
-*   **Discord UI**: Listens to the bus to live-edit messages when a task is completed via the API.
-*   **WebSocket API**: Streams these events to dashboards for real-time visualization.
+### Event-Driven & Bidirectional Sync
+Every state change (Task Created, Assigned, Acked, Done, Cancelled) is broadcasted via an internal Event Bus and WebSocket Hub:
+*   **Discord UI**: Updates interactive embeds, buttons, and send DMs when tasks are created, claimed, or completed via the REST API or Discord.
+*   **WebSocket API**: Streams real-time events to connected clients and dashboards (`/ws` and `/api/ws`).
 
 ---
 
@@ -61,11 +62,13 @@ Commands are documented natively in Discord. Key commands include:
 ---
 
 ### Tech Stack
-*   **Core**: Golang ([slog](https://pkg.go.dev/log/slog), [gorm](https://github.com/go-gorm/gorm))
+*   **Core**: Golang ([slog](https://pkg.go.dev/log/slog), [gorm](https://github.com/go-gorm/gorm), [discordgo](https://github.com/bwmarrin/discordgo), [viper](https://github.com/spf13/viper))
 *   **API**: [chi](https://github.com/go-chi/chi), [huma](https://github.com/danielgtaylor/huma) (OpenAPI 3.1)
 *   **Real-time**: [gorilla/websocket](https://github.com/gorilla/websocket)
 *   **Persistence**: SQLite
 *   **VCS**: [JJ](https://github.com/jj-vcs/jj)
+
+---
 
 ### TODO
 - [ ] Proactive stats sharing with LLM integration

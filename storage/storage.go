@@ -39,21 +39,26 @@ func New(conf Config, logger *slog.Logger) (*Storage, error) {
 		return nil, err
 	}
 
-	dg, err := discordConnect(conf.DiscordToken)
-	if err != nil {
-		return nil, err
-	}
-	dg.ShouldReconnectOnError = true
-	dg.ShouldRetryOnRateLimit = true
-	dg.StateEnabled = true
-
-	for {
-		// Wait for the Discord session to become ready
-		g, err := dg.State.Guild(conf.DiscordGuildId)
-		if err == nil && g != nil && len(g.Roles) > 0 {
-			break
+	var dg *discordgo.Session
+	if conf.DiscordToken != "" && conf.DiscordToken != "???" {
+		dg, err = discordConnect(conf.DiscordToken)
+		if err != nil {
+			return nil, err
 		}
-		time.Sleep(500 * time.Millisecond)
+		dg.ShouldReconnectOnError = true
+		dg.ShouldRetryOnRateLimit = true
+		dg.StateEnabled = true
+
+		for {
+			// Wait for the Discord session to become ready
+			g, err := dg.State.Guild(conf.DiscordGuildId)
+			if err == nil && g != nil && len(g.Roles) > 0 {
+				break
+			}
+			time.Sleep(500 * time.Millisecond)
+		}
+	} else {
+		logger.Warn("Discord token is not set, running in offline/headless mode")
 	}
 
 	return &Storage{

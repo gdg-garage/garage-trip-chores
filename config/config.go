@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/gdg-garage/garage-trip-chores/api"
 	"github.com/gdg-garage/garage-trip-chores/chores"
 	"github.com/gdg-garage/garage-trip-chores/logger"
 	presencetracker "github.com/gdg-garage/garage-trip-chores/presence_tracker"
@@ -11,7 +12,6 @@ import (
 	"github.com/gdg-garage/garage-trip-chores/storage"
 	"github.com/gdg-garage/garage-trip-chores/ui"
 	"github.com/spf13/viper"
-	"github.com/gdg-garage/garage-trip-chores/api"
 )
 
 type Config struct {
@@ -44,7 +44,9 @@ func New() (*Config, error) {
 	viper.SetDefault("reminder.reminderatio", 0.1)
 
 	viper.SetDefault("api.port", 8080)
-	viper.SetDefault("api.apikeys", []string{"secret-api-key"})
+	viper.SetDefault("api.host", "0.0.0.0")
+	viper.SetDefault("api.cors", true)
+	viper.SetDefault("api.apikeys", []string{})
 
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")

@@ -17,8 +17,10 @@ import (
 )
 
 type Config struct {
-	Port    int
-	ApiKeys []string
+	Port    int      `json:"port"`
+	Host    string   `json:"host"`
+	Cors    bool     `json:"cors"`
+	ApiKeys []string `json:"apikeys"`
 }
 
 type Api struct {
@@ -63,9 +65,28 @@ func NewApi(s *storage.Storage, logger *slog.Logger, c *chores.ChoresLogic, ui *
 func (a *Api) SetupRoutes() *chi.Mux {
 	router := chi.NewRouter()
 
+	// CORS middleware
+	router.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
+			if r.Method == http.MethodOptions {
+				w.WriteHeader(http.StatusOK)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	})
+
 	// API Auth middleware
 	authMiddleware := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if len(a.authorizedKeys) == 0 {
+				next.ServeHTTP(w, r)
+				return
+			}
+
 			// Skip auth for OpenAPI, AsyncAPI docs, and health checks
 			if r.URL.Path == "/openapi.json" || r.URL.Path == "/openapi.yaml" || r.URL.Path == "/docs" || r.URL.Path == "/ws/docs" || r.URL.Path == "/ws/asyncapi.yaml" || r.URL.Path == "/health" {
 				next.ServeHTTP(w, r)
@@ -88,22 +109,26 @@ func (a *Api) SetupRoutes() *chi.Mux {
 
 	// Setup Huma
 	config := huma.DefaultConfig("Garage Trip Chores API", "1.0.0")
-	config.Components.SecuritySchemes = map[string]*huma.SecurityScheme{
-		"bearerAuth": {
-			Type:         "http",
-			Scheme:       "bearer",
-			BearerFormat: "API Key",
-			Description:  "Enter your API key provided in the configuration",
-		},
-	}
-	// Apply global security to all operations by default
-	config.Security = []map[string][]string{
-		{"bearerAuth": {}},
+	if len(a.authorizedKeys) > 0 {
+		config.Components.SecuritySchemes = map[string]*huma.SecurityScheme{
+			"bearerAuth": {
+				Type:         "http",
+				Scheme:       "bearer",
+				BearerFormat: "API Key",
+				Description:  "Enter your API key provided in the configuration",
+			},
+		}
+		config.Security = []map[string][]string{
+			{"bearerAuth": {}},
+		}
 	}
 	api := humachi.New(router, config)
 
 	// Websocket endpoint doesn't need Huma (it's standard HTTP upgrade)
 	router.Get("/ws", func(w http.ResponseWriter, r *http.Request) {
+		a.ServeWs(w, r)
+	})
+	router.Get("/api/ws", func(w http.ResponseWriter, r *http.Request) {
 		a.ServeWs(w, r)
 	})
 
@@ -132,7 +157,7 @@ func (a *Api) SetupRoutes() *chi.Mux {
 		Method:      http.MethodGet,
 		Path:        "/health",
 		Summary:     "Health check endpoint",
-		Security:    []map[string][]string{}, // No security for health check in docs
+		Security:    []map[string][]string{},
 	}, func(ctx context.Context, input *struct{}) (*HealthResponse, error) {
 		return &HealthResponse{Body: HealthData{Status: "ok"}}, nil
 	})
@@ -155,35 +180,152 @@ func (a *Api) SetupRoutes() *chi.Mux {
 		return &TasksResponse{Body: resp}, nil
 	})
 
-	// Create Task
+	// Get single task
+	huma.Register(api, huma.Operation{
+		OperationID: "get-task",
+		Method:      http.MethodGet,
+		Path:        "/tasks/{id}",
+		Summary:     "Get a single task by ID",
+	}, func(ctx context.Context, input *TaskActionInput) (*TaskCreateResponse, error) {
+		chore, err := a.storage.GetChore(uint(input.ID))
+		if err != nil {
+			return nil, err
+		}
+		return &TaskCreateResponse{Body: toTaskData(chore)}, nil
+	})
+
+	// Create Task (with bidirectional Discord sync)
 	huma.Register(api, huma.Operation{
 		OperationID: "create-task",
 		Method:      http.MethodPost,
 		Path:        "/tasks",
-		Summary:     "Create a new task",
+		Summary:     "Create a new task and publish to Discord",
 	}, func(ctx context.Context, input *CreateTaskInput) (*TaskCreateResponse, error) {
-		chore := storage.Chore{
-			Name:                  input.Body.Name,
-			NecessaryWorkers:      input.Body.NecessaryWorkers,
-			EstimatedTimeMin:      input.Body.EstimatedTimeMin,
-			AssignmentTimeoutMin:  input.Body.AssignmentTimeoutMin,
-			CreatorId:             "API",
-			Created:               time.Now(),
+		workers := input.Body.NecessaryWorkers
+		if workers == 0 {
+			workers = 1
 		}
-		if input.Body.Deadline != nil {
-			chore.Deadline = input.Body.Deadline
+		estTime := input.Body.EstimatedTimeMin
+		if estTime == 0 {
+			estTime = 10
+		}
+		timeoutMin := input.Body.AssignmentTimeoutMin
+		if timeoutMin == 0 {
+			timeoutMin = 15
+		}
+		deadline := input.Body.Deadline
+		if deadline == nil {
+			d := time.Now().Add(24 * time.Hour)
+			deadline = &d
+		}
+
+		chore := storage.Chore{
+			Name:                 input.Body.Name,
+			NecessaryWorkers:     workers,
+			EstimatedTimeMin:     estTime,
+			AssignmentTimeoutMin: timeoutMin,
+			Deadline:             deadline,
+			CreatorId:            "API",
+			Created:              time.Now(),
 		}
 		if len(input.Body.NecessaryCapabilities) > 0 {
 			chore.SetCapabilities(input.Body.NecessaryCapabilities)
 		}
 
-		saved, err := a.storage.SaveChore(chore)
+		saved, _, err := a.ui.PublishChore(chore)
+		if err != nil {
+			a.logger.Warn("Failed to publish chore to Discord", "error", err)
+			saved, err = a.storage.SaveChore(chore)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		return &TaskCreateResponse{Body: toTaskData(saved)}, nil
+	})
+
+	// Edit / Update Task
+	huma.Register(api, huma.Operation{
+		OperationID: "update-task",
+		Method:      http.MethodPut,
+		Path:        "/tasks/{id}",
+		Summary:     "Update task details",
+	}, func(ctx context.Context, input *UpdateTaskInput) (*TaskCreateResponse, error) {
+		updated, err := a.ui.EditChoreDetails(uint(input.ID), input.Body.Name, input.Body.NecessaryWorkers, input.Body.EstimatedTimeMin, input.Body.AssignmentTimeoutMin, input.Body.Deadline, input.Body.NecessaryCapabilities)
 		if err != nil {
 			return nil, err
 		}
-		// Notify discord channel via ui somehow? Actually, Discord commands post to discord directly. Let's just create it via REST. If a dashboard wants it visible in discord it can trigger UI method, but wait! The user doesn't require tasks created in API to be posted to Discord, maybe yes. We will use a.ui.UpdateChoreMessage(saved) if it needs to be updated. Wait, for creation there is no MessageId yet, so UpdateChoreMessage won't work. The web UI will handle display.
+		return &TaskCreateResponse{Body: toTaskData(updated)}, nil
+	})
 
-		return &TaskCreateResponse{Body: toTaskData(saved)}, nil
+	// Schedule Task
+	huma.Register(api, huma.Operation{
+		OperationID: "schedule-task",
+		Method:      http.MethodPost,
+		Path:        "/tasks/{id}/schedule",
+		Summary:     "Schedule a task (assign to users and publish to Discord)",
+	}, func(ctx context.Context, input *TaskActionInput) (*struct{}, error) {
+		chore, err := a.storage.GetChore(uint(input.ID))
+		if err != nil {
+			return nil, err
+		}
+		_, _, err = a.ui.PublishChore(chore)
+		return nil, err
+	})
+
+	// Delete/Cancel task
+	huma.Register(api, huma.Operation{
+		OperationID: "delete-task",
+		Method:      http.MethodDelete,
+		Path:        "/tasks/{id}",
+		Summary:     "Cancel/Delete a task",
+	}, func(ctx context.Context, input *TaskActionInput) (*struct{}, error) {
+		_, err := a.ui.CancelChore(uint(input.ID))
+		return nil, err
+	})
+
+	// Complete task
+	huma.Register(api, huma.Operation{
+		OperationID: "complete-task",
+		Method:      http.MethodPost,
+		Path:        "/tasks/{id}/done",
+		Summary:     "Mark a task as completed",
+	}, func(ctx context.Context, input *TaskActionInput) (*struct{}, error) {
+		_, err := a.ui.CompleteChore(uint(input.ID))
+		return nil, err
+	})
+
+	// Ack / Claim Task
+	huma.Register(api, huma.Operation{
+		OperationID: "ack-task",
+		Method:      http.MethodPost,
+		Path:        "/tasks/{id}/ack",
+		Summary:     "Acknowledge / claim a task for a user",
+	}, func(ctx context.Context, input *TaskUserActionInput) (*struct{}, error) {
+		_, _, err := a.ui.AckChore(uint(input.ID), input.Body.UserId)
+		return nil, err
+	})
+
+	// Reject Task
+	huma.Register(api, huma.Operation{
+		OperationID: "reject-task",
+		Method:      http.MethodPost,
+		Path:        "/tasks/{id}/reject",
+		Summary:     "Reject a task assignment for a user",
+	}, func(ctx context.Context, input *TaskUserActionInput) (*struct{}, error) {
+		_, err := a.ui.RejectChore(uint(input.ID), input.Body.UserId)
+		return nil, err
+	})
+
+	// Help on Task
+	huma.Register(api, huma.Operation{
+		OperationID: "help-task",
+		Method:      http.MethodPost,
+		Path:        "/tasks/{id}/help",
+		Summary:     "Log work on a completed task",
+	}, func(ctx context.Context, input *TaskUserActionInput) (*struct{}, error) {
+		_, err := a.ui.HelpedChore(uint(input.ID), input.Body.UserId)
+		return nil, err
 	})
 
 	// Stats Endpoint
@@ -214,63 +356,6 @@ func (a *Api) SetupRoutes() *chi.Mux {
 
 		return &StatsResponse{Body: usersStats}, nil
 	})
-
-	// Action endpoints
-	huma.Register(api, huma.Operation{
-		OperationID: "schedule-task",
-		Method:      http.MethodPost,
-		Path:        "/tasks/{id}/schedule",
-		Summary:     "Schedule a task (assign to users)",
-	}, func(ctx context.Context, input *TaskActionInput) (*struct{}, error) {
-		chore, err := a.storage.GetChore(uint(input.ID))
-		if err != nil {
-			return nil, err
-		}
-		users, err := a.storage.GetPresentUsers()
-		if err != nil {
-			return nil, err
-		}
-		
-		_, err = a.chores.AssignChoresToUsers(users, chore)
-		if err != nil {
-			return nil, err
-		}
-		return nil, nil
-	})
-
-	// Delete task
-	huma.Register(api, huma.Operation{
-		OperationID: "delete-task",
-		Method:      http.MethodDelete,
-		Path:        "/tasks/{id}",
-		Summary:     "Cancel/Delete a task",
-	}, func(ctx context.Context, input *TaskActionInput) (*struct{}, error) {
-		chore, err := a.storage.GetChore(uint(input.ID))
-		if err != nil {
-			return nil, err
-		}
-		chore.Cancel()
-		_, err = a.storage.SaveChore(chore)
-		return nil, err
-	})
-
-	// Complete task
-	huma.Register(api, huma.Operation{
-		OperationID: "complete-task",
-		Method:      http.MethodPost,
-		Path:        "/tasks/{id}/done",
-		Summary:     "Mark a task as completed",
-	}, func(ctx context.Context, input *TaskActionInput) (*struct{}, error) {
-		chore, err := a.storage.GetChore(uint(input.ID))
-		if err != nil {
-			return nil, err
-		}
-		chore.Complete()
-		_, err = a.storage.SaveChore(chore)
-		return nil, err
-	})
-
-
 
 	// Get Users
 	huma.Register(api, huma.Operation{
@@ -305,7 +390,7 @@ func (a *Api) SetupRoutes() *chi.Mux {
 		if err != nil {
 			return nil, err
 		}
-		
+
 		var totalTime uint
 		workerIdMap := make(map[string]struct{})
 		for _, log := range worklogs {
@@ -326,8 +411,12 @@ func (a *Api) SetupRoutes() *chi.Mux {
 
 func (a *Api) Run(ctx context.Context) error {
 	router := a.SetupRoutes()
+	addr := fmt.Sprintf("%s:%d", a.conf.Host, a.conf.Port)
+	if a.conf.Host == "" {
+		addr = fmt.Sprintf(":%d", a.conf.Port)
+	}
 	srv := &http.Server{
-		Addr:    fmt.Sprintf(":%d", a.conf.Port),
+		Addr:    addr,
 		Handler: router,
 	}
 
@@ -336,7 +425,7 @@ func (a *Api) Run(ctx context.Context) error {
 		srv.Shutdown(context.Background())
 	}()
 
-	a.logger.Info("Starting REST API", "port", a.conf.Port)
+	a.logger.Info("Starting REST API", "addr", addr)
 	return srv.ListenAndServe()
 }
 
@@ -381,12 +470,35 @@ type CreateTaskInput struct {
 	Body TaskCreateInputBody
 }
 
+type UpdateTaskInputBody struct {
+	Name                  string     `json:"name,omitempty" doc:"Updated name"`
+	NecessaryWorkers      uint       `json:"necessary_workers,omitempty"`
+	EstimatedTimeMin      uint       `json:"estimated_time_min,omitempty"`
+	AssignmentTimeoutMin  uint       `json:"assignment_timeout_min,omitempty"`
+	Deadline              *time.Time `json:"deadline,omitempty"`
+	NecessaryCapabilities []string   `json:"necessary_capabilities,omitempty"`
+}
+
+type UpdateTaskInput struct {
+	ID   int                 `path:"id"`
+	Body UpdateTaskInputBody
+}
+
 type TaskCreateResponse struct {
 	Body TaskData
 }
 
 type TaskActionInput struct {
 	ID int `path:"id"`
+}
+
+type TaskUserActionBody struct {
+	UserId string `json:"user_id"`
+}
+
+type TaskUserActionInput struct {
+	ID   int                `path:"id"`
+	Body TaskUserActionBody
 }
 
 type UserStats struct {

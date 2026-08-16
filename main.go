@@ -8,13 +8,13 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/gdg-garage/garage-trip-chores/api"
 	"github.com/gdg-garage/garage-trip-chores/chores"
 	"github.com/gdg-garage/garage-trip-chores/config"
 	"github.com/gdg-garage/garage-trip-chores/logger"
 	presencetracker "github.com/gdg-garage/garage-trip-chores/presence_tracker"
 	"github.com/gdg-garage/garage-trip-chores/reminders"
 	"github.com/gdg-garage/garage-trip-chores/storage"
-	"github.com/gdg-garage/garage-trip-chores/api"
 	"github.com/gdg-garage/garage-trip-chores/ui"
 )
 

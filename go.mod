@@ -4,6 +4,7 @@ go 1.25.0
 
 require (
 	github.com/bwmarrin/discordgo v0.29.0
+	github.com/gorilla/websocket v1.5.3
 	github.com/orandin/slog-gorm v1.4.0
 	github.com/spf13/viper v1.20.1
 	gorm.io/driver/sqlite v1.6.0
@@ -15,7 +16,6 @@ require (
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/go-chi/chi/v5 v5.2.5 // indirect
 	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
-	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/mattn/go-sqlite3 v1.14.32 // indirect
