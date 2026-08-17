@@ -53,6 +53,7 @@ func New() (*Config, error) {
 	viper.SetDefault("llm.apikey", "")
 	viper.SetDefault("llm.model", "gemini-3.7-flash")
 	viper.SetDefault("llm.discordchannelid", "")
+	viper.SetDefault("llm.servicetier", "flex")
 
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")

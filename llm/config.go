@@ -5,4 +5,6 @@ type Config struct {
 	Model            string `mapstructure:"model"`
 	DiscordChannelId string `mapstructure:"discordchannelid"`
 	ApiBaseUrl       string `mapstructure:"apibaseurl"`
+	ServiceTier      string `mapstructure:"servicetier"`
 }
+

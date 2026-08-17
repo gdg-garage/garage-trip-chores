@@ -88,6 +88,63 @@ func TestGeminiClient_GenerateContent(t *testing.T) {
 	}
 }
 
+func TestGeminiClient_ServiceTier(t *testing.T) {
+	var receivedRequest GenerateContentRequest
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewDecoder(r.Body).Decode(&receivedRequest)
+
+		resp := GenerateContentResponse{
+			Candidates: []struct {
+				Content struct {
+					Parts []struct {
+						Text string `json:"text"`
+					} `json:"parts"`
+					Role string `json:"role"`
+				} `json:"content"`
+				FinishReason string `json:"finishReason"`
+			}{
+				{
+					Content: struct {
+						Parts []struct {
+							Text string `json:"text"`
+						} `json:"parts"`
+						Role string `json:"role"`
+					}{
+						Parts: []struct {
+							Text string `json:"text"`
+						}{
+							{Text: "Flex response!"},
+						},
+						Role: "model",
+					},
+					FinishReason: "STOP",
+				},
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer ts.Close()
+
+	client := NewGeminiClient(Config{
+		ApiKey:      "test-api-key",
+		Model:       "gemini-3.7-flash",
+		ServiceTier: "flex",
+		ApiBaseUrl:  ts.URL,
+	})
+
+	output, err := client.GenerateContent(context.Background(), "Prompt")
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if output != "Flex response!" {
+		t.Errorf("Expected 'Flex response!', got %s", output)
+	}
+	if receivedRequest.ServiceTier != "flex" {
+		t.Errorf("Expected request service_tier 'flex', got %q", receivedRequest.ServiceTier)
+	}
+}
+
 func TestGeminiClient_EmptyApiKey(t *testing.T) {
 	client := NewGeminiClient(Config{
 		ApiKey: "",
@@ -98,3 +155,4 @@ func TestGeminiClient_EmptyApiKey(t *testing.T) {
 		t.Error("Expected error for empty API key, got nil")
 	}
 }
+
