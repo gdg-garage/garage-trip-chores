@@ -71,7 +71,6 @@ Commands are documented natively in Discord. Key commands include:
 ---
 
 ### TODO
-- [ ] Proactive stats sharing with LLM integration
-  - *Solved via dashboard.*
+- [x] Proactive stats sharing with LLM integration (runs at 13:00 and 19:00 CET using Gemini 3.7 Flash)
 - [ ] Refuse ACK if someone worked too much compared to others
   - *Note: Better handled via communication/UI visibility than hard-coded blocks.*

@@ -6,6 +6,7 @@ import (
 
 	"github.com/gdg-garage/garage-trip-chores/api"
 	"github.com/gdg-garage/garage-trip-chores/chores"
+	"github.com/gdg-garage/garage-trip-chores/llm"
 	"github.com/gdg-garage/garage-trip-chores/logger"
 	presencetracker "github.com/gdg-garage/garage-trip-chores/presence_tracker"
 	"github.com/gdg-garage/garage-trip-chores/reminders"
@@ -22,6 +23,7 @@ type Config struct {
 	Tracker  presencetracker.Config
 	Reminder reminders.Config
 	Api      api.Config
+	LLM      llm.Config
 }
 
 func New() (*Config, error) {
@@ -47,6 +49,10 @@ func New() (*Config, error) {
 	viper.SetDefault("api.host", "0.0.0.0")
 	viper.SetDefault("api.cors", true)
 	viper.SetDefault("api.apikeys", []string{})
+
+	viper.SetDefault("llm.apikey", "")
+	viper.SetDefault("llm.model", "gemini-3.7-flash")
+	viper.SetDefault("llm.discordchannelid", "")
 
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")

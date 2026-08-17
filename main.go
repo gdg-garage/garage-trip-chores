@@ -11,11 +11,13 @@ import (
 	"github.com/gdg-garage/garage-trip-chores/api"
 	"github.com/gdg-garage/garage-trip-chores/chores"
 	"github.com/gdg-garage/garage-trip-chores/config"
+	"github.com/gdg-garage/garage-trip-chores/llm"
 	"github.com/gdg-garage/garage-trip-chores/logger"
 	presencetracker "github.com/gdg-garage/garage-trip-chores/presence_tracker"
 	"github.com/gdg-garage/garage-trip-chores/reminders"
 	"github.com/gdg-garage/garage-trip-chores/storage"
 	"github.com/gdg-garage/garage-trip-chores/ui"
+	_ "time/tzdata"
 )
 
 func main() {
@@ -51,6 +53,10 @@ func main() {
 
 	reminder := reminders.NewReminder(s, uiServer, &cl, logger, &conf.Reminder)
 	go reminder.RunReminder(ctx, &wg)
+
+	llmSummarizer := llm.NewSummarizer(s, s.GetDiscord(), logger, conf.LLM, conf.Ui.DiscordChannelId)
+	llmScheduler := llm.NewScheduler(llmSummarizer, logger, conf.LLM)
+	go llmScheduler.Run(ctx, &wg)
 
 	apiServer := api.NewApi(s, logger, &cl, uiServer, conf.Api)
 	go apiServer.Run(ctx)

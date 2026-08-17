@@ -136,3 +136,39 @@ type PresenceLog struct {
 	UserId    string
 	Timestamp time.Time
 }
+
+type LLMSummaryLog struct {
+	ID         uint      `gorm:"primaryKey"`
+	RunAt      time.Time `gorm:"index"`
+	StatsJSON  string    `gorm:"type:text"`
+	Summary    string    `gorm:"type:text"`
+	TasksCount int
+	Status     string
+}
+
+type TasksActivity struct {
+	CreatedChores      []Chore
+	CompletedChores    []Chore
+	CancelledChores    []Chore
+	UpdatedAssignments []ChoreAssignment
+	ActiveChores       []Chore
+	WorkLogs           []WorkLog
+}
+
+func (a *TasksActivity) HasActivity() bool {
+	if a == nil {
+		return false
+	}
+	return len(a.CreatedChores) > 0 ||
+		len(a.CompletedChores) > 0 ||
+		len(a.CancelledChores) > 0 ||
+		len(a.UpdatedAssignments) > 0 ||
+		len(a.WorkLogs) > 0
+}
+
+func (a *TasksActivity) TotalActivityCount() int {
+	if a == nil {
+		return 0
+	}
+	return len(a.CreatedChores) + len(a.CompletedChores) + len(a.CancelledChores) + len(a.UpdatedAssignments) + len(a.WorkLogs)
+}
