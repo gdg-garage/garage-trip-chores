@@ -76,13 +76,13 @@ func TestGetTasksEmpty(t *testing.T) {
 		t.Fatalf("Expected status 200, got %d", w.Code)
 	}
 
-	var res TasksResponse
+	var res []TaskData
 	if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil {
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 
-	if len(res.Body) != 0 {
-		t.Fatalf("Expected 0 tasks, got %d", len(res.Body))
+	if len(res) != 0 {
+		t.Fatalf("Expected 0 tasks, got %d", len(res))
 	}
 }
 
@@ -381,6 +381,223 @@ func TestWebSocketRealtimeEvents(t *testing.T) {
 
 	if event.Chore == nil || event.Chore.Name != "Realtime WS Task" {
 		t.Fatalf("Expected chore 'Realtime WS Task' in event, got %+v", event.Chore)
+	}
+}
+
+func TestTaskAssignmentStatusesInREST(t *testing.T) {
+	api, stor, _, cleanup := setupTestApi(t)
+	defer cleanup()
+
+	handler := api.SetupRoutes()
+
+	// 1. Create a chore
+	chore, err := stor.SaveChore(storage.Chore{
+		Name:             "Clean Room",
+		EstimatedTimeMin: 15,
+		CreatorId:        "user-creator",
+	})
+	if err != nil {
+		t.Fatalf("Failed to create chore: %v", err)
+	}
+
+	// 2. Add assignments in various states
+	// Pending assignment (assigned)
+	_, err = stor.SaveChoreAssignment(storage.ChoreAssignment{
+		ChoreId: chore.ID,
+		UserId:  "user-assigned",
+	})
+	if err != nil {
+		t.Fatalf("Failed to save assignment: %v", err)
+	}
+
+	// Acked assignment
+	now := time.Now()
+	_, err = stor.SaveChoreAssignment(storage.ChoreAssignment{
+		ChoreId: chore.ID,
+		UserId:  "user-acked",
+		Acked:   &now,
+	})
+	if err != nil {
+		t.Fatalf("Failed to save assignment: %v", err)
+	}
+
+	// Declined / Refused assignment
+	_, err = stor.SaveChoreAssignment(storage.ChoreAssignment{
+		ChoreId: chore.ID,
+		UserId:  "user-declined",
+		Refused: &now,
+	})
+	if err != nil {
+		t.Fatalf("Failed to save assignment: %v", err)
+	}
+
+	// Timeouted assignment
+	_, err = stor.SaveChoreAssignment(storage.ChoreAssignment{
+		ChoreId:   chore.ID,
+		UserId:    "user-timeouted",
+		Timeouted: &now,
+	})
+	if err != nil {
+		t.Fatalf("Failed to save assignment: %v", err)
+	}
+
+	// 3. Test GET /tasks/{id}
+	reqGet := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/tasks/%d", chore.ID), nil)
+	wGet := httptest.NewRecorder()
+	handler.ServeHTTP(wGet, reqGet)
+
+	if wGet.Code != http.StatusOK {
+		t.Fatalf("GET /tasks/%d failed: %d", chore.ID, wGet.Code)
+	}
+
+	var taskData TaskData
+	if err := json.Unmarshal(wGet.Body.Bytes(), &taskData); err != nil {
+		t.Fatalf("Failed to unmarshal GET /tasks/%d response: %v", chore.ID, err)
+	}
+
+	if len(taskData.Assigned) != 1 || taskData.Assigned[0] != "user-assigned" {
+		t.Fatalf("Expected Assigned ['user-assigned'], got: %+v", taskData.Assigned)
+	}
+	if len(taskData.Acked) != 1 || taskData.Acked[0] != "user-acked" {
+		t.Fatalf("Expected Acked ['user-acked'], got: %+v", taskData.Acked)
+	}
+	if len(taskData.Declined) != 1 || taskData.Declined[0] != "user-declined" {
+		t.Fatalf("Expected Declined ['user-declined'], got: %+v", taskData.Declined)
+	}
+	if len(taskData.Timeouted) != 1 || taskData.Timeouted[0] != "user-timeouted" {
+		t.Fatalf("Expected Timeouted ['user-timeouted'], got: %+v", taskData.Timeouted)
+	}
+
+	// 4. Test GET /tasks
+	reqGetAll := httptest.NewRequest(http.MethodGet, "/tasks", nil)
+	wGetAll := httptest.NewRecorder()
+	handler.ServeHTTP(wGetAll, reqGetAll)
+
+	if wGetAll.Code != http.StatusOK {
+		t.Fatalf("GET /tasks failed: %d", wGetAll.Code)
+	}
+
+	var tasksResp []TaskData
+	if err := json.Unmarshal(wGetAll.Body.Bytes(), &tasksResp); err != nil {
+		t.Fatalf("Failed to unmarshal GET /tasks response: %v", err)
+	}
+
+	if len(tasksResp) != 1 {
+		t.Fatalf("Expected 1 task in /tasks, got %d", len(tasksResp))
+	}
+	task := tasksResp[0]
+	if len(task.Assigned) != 1 || task.Assigned[0] != "user-assigned" {
+		t.Fatalf("Expected task in /tasks Assigned ['user-assigned'], got: %+v", task.Assigned)
+	}
+	if len(task.Acked) != 1 || task.Acked[0] != "user-acked" {
+		t.Fatalf("Expected task in /tasks Acked ['user-acked'], got: %+v", task.Acked)
+	}
+	if len(task.Declined) != 1 || task.Declined[0] != "user-declined" {
+		t.Fatalf("Expected task in /tasks Declined ['user-declined'], got: %+v", task.Declined)
+	}
+	if len(task.Timeouted) != 1 || task.Timeouted[0] != "user-timeouted" {
+		t.Fatalf("Expected task in /tasks Timeouted ['user-timeouted'], got: %+v", task.Timeouted)
+	}
+}
+
+func TestWebSocketAllRealtimeEvents(t *testing.T) {
+	api, stor, _, cleanup := setupTestApi(t)
+	defer cleanup()
+
+	ts := httptest.NewServer(api.SetupRoutes())
+	defer ts.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws"
+	wsConn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("WebSocket connection failed: %v", err)
+	}
+	defer wsConn.Close()
+
+	readNextEvent := func(timeout time.Duration) storage.Event {
+		wsConn.SetReadDeadline(time.Now().Add(timeout))
+		_, msg, err := wsConn.ReadMessage()
+		if err != nil {
+			t.Fatalf("Failed to read WebSocket message: %v", err)
+		}
+		var event storage.Event
+		if err := json.Unmarshal(msg, &event); err != nil {
+			t.Fatalf("Failed to unmarshal WS event: %v, raw: %s", err, string(msg))
+		}
+		return event
+	}
+
+	// 1. TaskCreated event via SaveChore
+	chore, err := stor.SaveChore(storage.Chore{Name: "WS Event Test", EstimatedTimeMin: 10})
+	if err != nil {
+		t.Fatalf("Failed to save chore: %v", err)
+	}
+	e1 := readNextEvent(2 * time.Second)
+	if e1.Type != storage.TaskCreated || e1.Chore == nil || e1.Chore.ID != chore.ID {
+		t.Fatalf("Expected TaskCreated event, got: %+v", e1)
+	}
+
+	// 2. TaskAssigned event via SaveChoreAssignment
+	ass, err := stor.SaveChoreAssignment(storage.ChoreAssignment{
+		ChoreId: chore.ID,
+		UserId:  "user-ws-1",
+	})
+	if err != nil {
+		t.Fatalf("Failed to save chore assignment: %v", err)
+	}
+	e2 := readNextEvent(2 * time.Second)
+	if e2.Type != storage.TaskAssigned || e2.Assignment == nil || e2.Assignment.UserId != "user-ws-1" {
+		t.Fatalf("Expected TaskAssigned event, got: %+v", e2)
+	}
+
+	// 3. TaskAcked event
+	ass.Ack()
+	ass, err = stor.SaveChoreAssignment(ass)
+	if err != nil {
+		t.Fatalf("Failed to ack chore assignment: %v", err)
+	}
+	e3 := readNextEvent(2 * time.Second)
+	if e3.Type != storage.TaskAcked || e3.Assignment == nil || e3.Assignment.Acked == nil {
+		t.Fatalf("Expected TaskAcked event, got: %+v", e3)
+	}
+
+	// 4. TaskRefused event
+	ass.Refuse()
+	ass, err = stor.SaveChoreAssignment(ass)
+	if err != nil {
+		t.Fatalf("Failed to refuse chore assignment: %v", err)
+	}
+	e4 := readNextEvent(2 * time.Second)
+	if e4.Type != storage.TaskRefused || e4.Assignment == nil || e4.Assignment.Refused == nil {
+		t.Fatalf("Expected TaskRefused event, got: %+v", e4)
+	}
+
+	// 5. TaskTimeout event
+	ass.Timeout()
+	ass, err = stor.SaveChoreAssignment(ass)
+	if err != nil {
+		t.Fatalf("Failed to timeout chore assignment: %v", err)
+	}
+	e5 := readNextEvent(2 * time.Second)
+	if e5.Type != storage.TaskTimeout || e5.Assignment == nil || e5.Assignment.Timeouted == nil {
+		t.Fatalf("Expected TaskTimeout event, got: %+v", e5)
+	}
+
+	// 6. TaskCancelled event via u.CancelChore
+	uConf := ui.Config{DiscordChannelId: "123456"}
+	u := ui.NewUi(stor, slog.New(slog.NewTextHandler(io.Discard, nil)), nil, nil, uConf)
+	_, err = u.CancelChore(chore.ID)
+	if err != nil {
+		t.Fatalf("Failed to cancel chore: %v", err)
+	}
+	// Note: SaveChore emits TaskUpdated, CancelChore then emits TaskCancelled
+	e6a := readNextEvent(2 * time.Second)
+	if e6a.Type != storage.TaskUpdated && e6a.Type != storage.TaskCancelled {
+		t.Fatalf("Expected TaskUpdated or TaskCancelled, got: %+v", e6a)
+	}
+	e6b := readNextEvent(2 * time.Second)
+	if e6b.Type != storage.TaskCancelled {
+		t.Fatalf("Expected TaskCancelled, got: %+v", e6b)
 	}
 }
 

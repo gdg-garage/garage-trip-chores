@@ -50,6 +50,7 @@ components:
               - task_acked
               - task_refused
               - task_timeout
+              - task_cancelled
           chore:
             $ref: '#/components/schemas/Chore'
           assignment:

@@ -9,9 +9,10 @@ const (
 	TaskUpdated  EventType = "task_updated"
 	TaskAssigned EventType = "task_assigned"
 	TaskAcked    EventType = "task_acked"
-	TaskRefused  EventType = "task_refused"
-	TaskTimeout  EventType = "task_timeout"
-	TaskDone     EventType = "task_done"
+	TaskRefused   EventType = "task_refused"
+	TaskTimeout   EventType = "task_timeout"
+	TaskDone      EventType = "task_done"
+	TaskCancelled EventType = "task_cancelled"
 )
 
 type Event struct {

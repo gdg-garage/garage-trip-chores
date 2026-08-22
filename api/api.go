@@ -173,9 +173,17 @@ func (a *Api) SetupRoutes() *chi.Mux {
 		if err != nil {
 			return nil, err
 		}
+		allAssignments, err := a.storage.GetChoresAssignments()
+		if err != nil {
+			return nil, err
+		}
+		assignmentsByChore := make(map[uint][]storage.ChoreAssignment)
+		for _, a := range allAssignments {
+			assignmentsByChore[a.ChoreId] = append(assignmentsByChore[a.ChoreId], a)
+		}
 		var resp []TaskData
 		for _, c := range choresList {
-			resp = append(resp, toTaskData(c))
+			resp = append(resp, toTaskData(c, assignmentsByChore[c.ID]))
 		}
 		return &TasksResponse{Body: resp}, nil
 	})
@@ -191,7 +199,11 @@ func (a *Api) SetupRoutes() *chi.Mux {
 		if err != nil {
 			return nil, err
 		}
-		return &TaskCreateResponse{Body: toTaskData(chore)}, nil
+		assignments, err := a.storage.GetChoreAssignments(chore.ID)
+		if err != nil {
+			return nil, err
+		}
+		return &TaskCreateResponse{Body: toTaskData(chore, assignments)}, nil
 	})
 
 	// Create Task (with bidirectional Discord sync)
@@ -241,7 +253,8 @@ func (a *Api) SetupRoutes() *chi.Mux {
 			}
 		}
 
-		return &TaskCreateResponse{Body: toTaskData(saved)}, nil
+		assignments, _ := a.storage.GetChoreAssignments(saved.ID)
+		return &TaskCreateResponse{Body: toTaskData(saved, assignments)}, nil
 	})
 
 	// Edit / Update Task
@@ -255,7 +268,8 @@ func (a *Api) SetupRoutes() *chi.Mux {
 		if err != nil {
 			return nil, err
 		}
-		return &TaskCreateResponse{Body: toTaskData(updated)}, nil
+		assignments, _ := a.storage.GetChoreAssignments(updated.ID)
+		return &TaskCreateResponse{Body: toTaskData(updated, assignments)}, nil
 	})
 
 	// Schedule Task
@@ -451,6 +465,10 @@ type TaskData struct {
 	Cancelled             *time.Time `json:"cancelled,omitempty"`
 	Deadline              *time.Time `json:"deadline,omitempty"`
 	NecessaryCapabilities []string   `json:"necessary_capabilities"`
+	Assigned              []string   `json:"assigned"`
+	Acked                 []string   `json:"acked"`
+	Declined              []string   `json:"declined"`
+	Timeouted             []string   `json:"timeouted"`
 }
 
 type TasksResponse struct {
@@ -535,7 +553,24 @@ type TaskStatsResponse struct {
 	Body TaskStatsData
 }
 
-func toTaskData(chore storage.Chore) TaskData {
+func toTaskData(chore storage.Chore, assignments []storage.ChoreAssignment) TaskData {
+	assigned := make([]string, 0)
+	acked := make([]string, 0)
+	declined := make([]string, 0)
+	timeouted := make([]string, 0)
+
+	for _, a := range assignments {
+		if a.Acked != nil {
+			acked = append(acked, a.UserId)
+		} else if a.Refused != nil {
+			declined = append(declined, a.UserId)
+		} else if a.Timeouted != nil {
+			timeouted = append(timeouted, a.UserId)
+		} else {
+			assigned = append(assigned, a.UserId)
+		}
+	}
+
 	return TaskData{
 		ID:                    chore.ID,
 		Name:                  chore.Name,
@@ -548,5 +583,9 @@ func toTaskData(chore storage.Chore) TaskData {
 		Cancelled:             chore.Cancelled,
 		Deadline:              chore.Deadline,
 		NecessaryCapabilities: chore.GetCapabilities(),
+		Assigned:              assigned,
+		Acked:                 acked,
+		Declined:              declined,
+		Timeouted:             timeouted,
 	}
 }

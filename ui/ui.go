@@ -150,6 +150,8 @@ func (ui *Ui) EmitChoreEvent(eventType string, chore storage.Chore) {
 		storageEventType = storage.TaskRefused
 	case "chore_completed":
 		storageEventType = storage.TaskDone
+	case "chore_cancelled":
+		storageEventType = storage.TaskCancelled
 	default:
 		storageEventType = storage.EventType(eventType)
 	}
@@ -1175,7 +1177,7 @@ func (ui *Ui) Commands(ctx context.Context, wg *sync.WaitGroup) error {
 			case <-ctx.Done():
 				return
 			case event := <-sub:
-				if event.Type == storage.TaskUpdated || event.Type == storage.TaskDone || event.Type == storage.TaskAssigned || event.Type == storage.TaskAcked || event.Type == storage.TaskRefused || event.Type == storage.TaskTimeout {
+				if event.Type == storage.TaskUpdated || event.Type == storage.TaskDone || event.Type == storage.TaskAssigned || event.Type == storage.TaskAcked || event.Type == storage.TaskRefused || event.Type == storage.TaskTimeout || event.Type == storage.TaskCancelled {
 					var choreToUpdate *storage.Chore
 					if event.Chore != nil {
 						choreToUpdate = event.Chore
