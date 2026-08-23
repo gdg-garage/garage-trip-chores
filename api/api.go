@@ -271,22 +271,6 @@ func (a *Api) SetupRoutes() *chi.Mux {
 		assignments, _ := a.storage.GetChoreAssignments(updated.ID)
 		return &TaskCreateResponse{Body: toTaskData(updated, assignments)}, nil
 	})
-
-	// Schedule Task
-	huma.Register(api, huma.Operation{
-		OperationID: "schedule-task",
-		Method:      http.MethodPost,
-		Path:        "/tasks/{id}/schedule",
-		Summary:     "Schedule a task (assign to users and publish to Discord)",
-	}, func(ctx context.Context, input *TaskActionInput) (*struct{}, error) {
-		chore, err := a.storage.GetChore(uint(input.ID))
-		if err != nil {
-			return nil, err
-		}
-		_, _, err = a.ui.PublishChore(chore)
-		return nil, err
-	})
-
 	// Delete/Cancel task
 	huma.Register(api, huma.Operation{
 		OperationID: "delete-task",
