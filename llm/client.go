@@ -23,11 +23,13 @@ type Client interface {
 }
 
 type GeminiClient struct {
-	apiKey      string
-	model       string
-	baseURL     string
-	serviceTier string
-	httpClient  *http.Client
+	apiKey         string
+	model          string
+	baseURL        string
+	serviceTier    string
+	initialBackoff time.Duration
+	maxRetries     int
+	httpClient     *http.Client
 }
 
 func normalizeModel(m string) string {
@@ -53,10 +55,12 @@ func NewGeminiClient(conf Config) *GeminiClient {
 	}
 
 	return &GeminiClient{
-		apiKey:      strings.TrimSpace(conf.ApiKey),
-		model:       model,
-		baseURL:     baseURL,
-		serviceTier: serviceTier,
+		apiKey:         strings.TrimSpace(conf.ApiKey),
+		model:          model,
+		baseURL:        baseURL,
+		serviceTier:    serviceTier,
+		initialBackoff: 10 * time.Second,
+		maxRetries:     5,
 		httpClient: &http.Client{
 			Timeout: 5 * time.Minute,
 		},
@@ -105,6 +109,25 @@ func (c *GeminiClient) GenerateContent(ctx context.Context, prompt string) (stri
 		return "", fmt.Errorf("gemini API key is empty")
 	}
 
+	tiers := []string{c.serviceTier}
+	if c.serviceTier == "flex" {
+		// Fallback to standard tier if flex tier fails
+		tiers = append(tiers, "standard")
+	}
+
+	var lastErr error
+	for _, tier := range tiers {
+		res, err := c.generateContentWithTier(ctx, prompt, tier)
+		if err == nil {
+			return res, nil
+		}
+		lastErr = err
+	}
+
+	return "", lastErr
+}
+
+func (c *GeminiClient) generateContentWithTier(ctx context.Context, prompt string, tier string) (string, error) {
 	reqBody := GenerateContentRequest{
 		Contents: []Content{
 			{
@@ -118,7 +141,7 @@ func (c *GeminiClient) GenerateContent(ctx context.Context, prompt string) (stri
 			Temperature:     0.8,
 			MaxOutputTokens: 1200,
 		},
-		ServiceTier: c.serviceTier,
+		ServiceTier: tier,
 	}
 
 	reqBytes, err := json.Marshal(reqBody)
@@ -128,12 +151,24 @@ func (c *GeminiClient) GenerateContent(ctx context.Context, prompt string) (stri
 
 	endpointURL := fmt.Sprintf("%s/models/%s:generateContent?key=%s", c.baseURL, url.PathEscape(c.model), url.QueryEscape(c.apiKey))
 
-	maxRetries := 2
+	maxRetries := c.maxRetries
+	if maxRetries <= 0 {
+		maxRetries = 5
+	}
+	baseBackoff := c.initialBackoff
+	if baseBackoff <= 0 {
+		baseBackoff = 10 * time.Second
+	}
+
 	var lastErr error
 
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		if attempt > 0 {
-			backoff := time.Duration(attempt*2) * time.Second
+			// Exponential backoff: 10s, 20s, 40s, 60s, 60s (capped at 60s)
+			backoff := baseBackoff * (1 << (attempt - 1))
+			if backoff > 60*time.Second {
+				backoff = 60 * time.Second
+			}
 			select {
 			case <-ctx.Done():
 				return "", ctx.Err()
@@ -149,25 +184,25 @@ func (c *GeminiClient) GenerateContent(ctx context.Context, prompt string) (stri
 
 		resp, err := c.httpClient.Do(httpReq)
 		if err != nil {
-			lastErr = fmt.Errorf("gemini API request failed: %w", err)
+			lastErr = fmt.Errorf("gemini API request failed (tier=%s): %w", tier, err)
 			continue
 		}
 
 		respBytes, err := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		if err != nil {
-			lastErr = fmt.Errorf("failed to read response body: %w", err)
+			lastErr = fmt.Errorf("failed to read response body (tier=%s): %w", tier, err)
 			continue
 		}
 
 		// Retry on temporary server errors (503 Service Unavailable, 429 Rate Limit)
 		if resp.StatusCode == http.StatusServiceUnavailable || resp.StatusCode == http.StatusTooManyRequests {
-			lastErr = fmt.Errorf("gemini API returned retryable status %d: %s", resp.StatusCode, string(respBytes))
+			lastErr = fmt.Errorf("gemini API returned retryable status %d (tier=%s): %s", resp.StatusCode, tier, string(respBytes))
 			continue
 		}
 
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			return "", fmt.Errorf("gemini API returned status %d: %s", resp.StatusCode, string(respBytes))
+			return "", fmt.Errorf("gemini API returned status %d (tier=%s): %s", resp.StatusCode, tier, string(respBytes))
 		}
 
 		var genResp GenerateContentResponse
@@ -191,5 +226,5 @@ func (c *GeminiClient) GenerateContent(ctx context.Context, prompt string) (stri
 		return sb.String(), nil
 	}
 
-	return "", fmt.Errorf("gemini API call failed after %d retries: %w", maxRetries, lastErr)
+	return "", fmt.Errorf("gemini API call failed after %d retries (tier=%s): %w", maxRetries, tier, lastErr)
 }

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 func TestNormalizeModel(t *testing.T) {
@@ -37,37 +38,8 @@ func TestGeminiClient_GenerateContent(t *testing.T) {
 			t.Errorf("Expected key 'test-api-key', got %s", r.URL.Query().Get("key"))
 		}
 
-		resp := GenerateContentResponse{
-			Candidates: []struct {
-				Content struct {
-					Parts []struct {
-						Text string `json:"text"`
-					} `json:"parts"`
-					Role string `json:"role"`
-				} `json:"content"`
-				FinishReason string `json:"finishReason"`
-			}{
-				{
-					Content: struct {
-						Parts []struct {
-							Text string `json:"text"`
-						} `json:"parts"`
-						Role string `json:"role"`
-					}{
-						Parts: []struct {
-							Text string `json:"text"`
-						}{
-							{Text: "Test witty chore summary!"},
-						},
-						Role: "model",
-					},
-					FinishReason: "STOP",
-				},
-			},
-		}
-
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		w.Write([]byte(`{"candidates":[{"content":{"parts":[{"text":"Test witty chore summary!"}],"role":"model"},"finishReason":"STOP"}]}`))
 	}))
 	defer ts.Close()
 
@@ -92,37 +64,8 @@ func TestGeminiClient_ServiceTier(t *testing.T) {
 	var receivedRequest GenerateContentRequest
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		json.NewDecoder(r.Body).Decode(&receivedRequest)
-
-		resp := GenerateContentResponse{
-			Candidates: []struct {
-				Content struct {
-					Parts []struct {
-						Text string `json:"text"`
-					} `json:"parts"`
-					Role string `json:"role"`
-				} `json:"content"`
-				FinishReason string `json:"finishReason"`
-			}{
-				{
-					Content: struct {
-						Parts []struct {
-							Text string `json:"text"`
-						} `json:"parts"`
-						Role string `json:"role"`
-					}{
-						Parts: []struct {
-							Text string `json:"text"`
-						}{
-							{Text: "Flex response!"},
-						},
-						Role: "model",
-					},
-					FinishReason: "STOP",
-				},
-			},
-		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		w.Write([]byte(`{"candidates":[{"content":{"parts":[{"text":"Flex response!"}],"role":"model"},"finishReason":"STOP"}]}`))
 	}))
 	defer ts.Close()
 
@@ -156,3 +99,57 @@ func TestGeminiClient_EmptyApiKey(t *testing.T) {
 	}
 }
 
+func TestGeminiClient_FallbackToStandard(t *testing.T) {
+	var attempts []string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req GenerateContentRequest
+		json.NewDecoder(r.Body).Decode(&req)
+		attempts = append(attempts, req.ServiceTier)
+
+		if req.ServiceTier == "flex" {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			w.Write([]byte(`{"error":{"code":503,"message":"High demand"}}`))
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"candidates":[{"content":{"parts":[{"text":"Standard fallback success!"}],"role":"model"},"finishReason":"STOP"}]}`))
+	}))
+	defer ts.Close()
+
+	client := NewGeminiClient(Config{
+		ApiKey:      "test-api-key",
+		Model:       "gemini-3.7-flash",
+		ServiceTier: "flex",
+		ApiBaseUrl:  ts.URL,
+	})
+	client.initialBackoff = 1 * time.Millisecond
+	client.maxRetries = 2
+
+	output, err := client.GenerateContent(context.Background(), "Prompt")
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	if output != "Standard fallback success!" {
+		t.Errorf("Expected 'Standard fallback success!', got %q", output)
+	}
+
+	// Should have tried flex 3 times (1 initial + 2 retries), then tried standard
+	flexAttempts := 0
+	standardAttempts := 0
+	for _, tier := range attempts {
+		if tier == "flex" {
+			flexAttempts++
+		} else if tier == "standard" {
+			standardAttempts++
+		}
+	}
+
+	if flexAttempts != 3 {
+		t.Errorf("Expected 3 flex attempts, got %d", flexAttempts)
+	}
+	if standardAttempts != 1 {
+		t.Errorf("Expected 1 standard attempt, got %d", standardAttempts)
+	}
+}
