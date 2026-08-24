@@ -240,6 +240,107 @@ func TestTaskLifecycleViaAPI(t *testing.T) {
 	}
 }
 
+func TestReportTimeSpentViaAPI(t *testing.T) {
+	api, stor, _, cleanup := setupTestApi(t)
+	defer cleanup()
+
+	handler := api.SetupRoutes()
+
+	// 1. Create a task
+	createReq := TaskCreateInputBody{
+		Name:             "Clean kitchen",
+		EstimatedTimeMin: 30,
+	}
+	body, _ := json.Marshal(createReq)
+	req := httptest.NewRequest(http.MethodPost, "/tasks", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	var created TaskData
+	json.Unmarshal(w.Body.Bytes(), &created)
+	taskID := created.ID
+
+	// 2. Report time spent for user-1 (creates new worklog)
+	timeBody, _ := json.Marshal(ReportTaskTimeBody{
+		UserId:       "user-1",
+		TimeSpentMin: 45,
+	})
+	reqTime := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/tasks/%d/time", taskID), bytes.NewReader(timeBody))
+	reqTime.Header.Set("Content-Type", "application/json")
+	wTime := httptest.NewRecorder()
+	handler.ServeHTTP(wTime, reqTime)
+
+	if wTime.Code != http.StatusOK {
+		t.Fatalf("Report time failed with code %d: %s", wTime.Code, wTime.Body.String())
+	}
+
+	var timeResp WorkLogData
+	json.Unmarshal(wTime.Body.Bytes(), &timeResp)
+	if timeResp.ChoreId != taskID || timeResp.UserId != "user-1" || timeResp.TimeSpentMin != 45 || !timeResp.SelfReported {
+		t.Fatalf("Unexpected report time response: %+v", timeResp)
+	}
+
+	// 3. Update time spent for user-1 via PUT /tasks/{id}/time
+	updateTimeBody, _ := json.Marshal(ReportTaskTimeBody{
+		UserId:       "user-1",
+		TimeSpentMin: 50,
+	})
+	reqUpdateTime := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/tasks/%d/time", taskID), bytes.NewReader(updateTimeBody))
+	reqUpdateTime.Header.Set("Content-Type", "application/json")
+	wUpdateTime := httptest.NewRecorder()
+	handler.ServeHTTP(wUpdateTime, reqUpdateTime)
+
+	if wUpdateTime.Code != http.StatusOK {
+		t.Fatalf("Update time failed with code %d: %s", wUpdateTime.Code, wUpdateTime.Body.String())
+	}
+
+	// 4. Report time for user-2
+	timeBody2, _ := json.Marshal(ReportTaskTimeBody{
+		UserId:       "user-2",
+		TimeSpentMin: 20,
+	})
+	reqTime2 := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/tasks/%d/time", taskID), bytes.NewReader(timeBody2))
+	reqTime2.Header.Set("Content-Type", "application/json")
+	wTime2 := httptest.NewRecorder()
+	handler.ServeHTTP(wTime2, reqTime2)
+	if wTime2.Code != http.StatusOK {
+		t.Fatalf("Report time for user-2 failed: %s", wTime2.Body.String())
+	}
+
+	// 5. Get all worklogs for task
+	reqLogs := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/tasks/%d/worklogs", taskID), nil)
+	wLogs := httptest.NewRecorder()
+	handler.ServeHTTP(wLogs, reqLogs)
+
+	if wLogs.Code != http.StatusOK {
+		t.Fatalf("Get worklogs failed with code %d: %s", wLogs.Code, wLogs.Body.String())
+	}
+
+	var worklogs []WorkLogData
+	json.Unmarshal(wLogs.Body.Bytes(), &worklogs)
+	if len(worklogs) != 2 {
+		t.Fatalf("Expected 2 worklogs, got %d: %+v", len(worklogs), worklogs)
+	}
+
+	// 6. Check task stats endpoint
+	reqStats := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/tasks/%d/stats", taskID), nil)
+	wStats := httptest.NewRecorder()
+	handler.ServeHTTP(wStats, reqStats)
+
+	var statsResp TaskStatsData
+	json.Unmarshal(wStats.Body.Bytes(), &statsResp)
+	if statsResp.TotalTimeMin != 70 || statsResp.WorkerCount != 2 {
+		t.Fatalf("Expected total 70 min and 2 workers, got %+v", statsResp)
+	}
+
+	// 7. Verify directly in DB
+	dbLogs, err := stor.GetWorkLogsForChore(taskID)
+	if err != nil || len(dbLogs) != 2 {
+		t.Fatalf("Expected 2 DB logs: %v, %+v", err, dbLogs)
+	}
+}
+
 func TestCancelTaskViaAPI(t *testing.T) {
 	api, stor, _, cleanup := setupTestApi(t)
 	defer cleanup()
@@ -598,6 +699,20 @@ func TestWebSocketAllRealtimeEvents(t *testing.T) {
 	e6b := readNextEvent(2 * time.Second)
 	if e6b.Type != storage.TaskCancelled {
 		t.Fatalf("Expected TaskCancelled, got: %+v", e6b)
+	}
+
+	// 7. WorklogUpdated event via ReportTimeSpent (POST /tasks/{id}/time)
+	timeBody, _ := json.Marshal(ReportTaskTimeBody{
+		UserId:       "user-ws-time",
+		TimeSpentMin: 40,
+	})
+	resp, err := http.Post(fmt.Sprintf("%s/tasks/%d/time", ts.URL, chore.ID), "application/json", bytes.NewReader(timeBody))
+	if err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("Failed to report time via HTTP: %v", err)
+	}
+	e7 := readNextEvent(2 * time.Second)
+	if e7.Type != storage.WorklogUpdated || e7.Chore == nil || e7.Chore.ID != chore.ID {
+		t.Fatalf("Expected WorklogUpdated event, got: %+v", e7)
 	}
 }
 

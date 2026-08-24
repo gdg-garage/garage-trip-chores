@@ -326,6 +326,70 @@ func (a *Api) SetupRoutes() *chi.Mux {
 		return nil, err
 	})
 
+	// Report / Change Time Spent on Task
+	huma.Register(api, huma.Operation{
+		OperationID: "report-task-time",
+		Method:      http.MethodPost,
+		Path:        "/tasks/{id}/time",
+		Summary:     "Report or update time spent on a task for a user",
+	}, func(ctx context.Context, input *ReportTaskTimeInput) (*ReportTaskTimeResponse, error) {
+		wl, err := a.ui.ReportTimeSpent(uint(input.ID), input.Body.UserId, input.Body.TimeSpentMin)
+		if err != nil {
+			return nil, err
+		}
+		return &ReportTaskTimeResponse{
+			Body: WorkLogData{
+				ChoreId:      wl.ChoreId,
+				UserId:       wl.UserId,
+				TimeSpentMin: wl.TimeSpentMin,
+				SelfReported: wl.SelfReported,
+			},
+		}, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "update-task-time",
+		Method:      http.MethodPut,
+		Path:        "/tasks/{id}/time",
+		Summary:     "Update time spent on a task for a user (alias for POST /tasks/{id}/time)",
+	}, func(ctx context.Context, input *ReportTaskTimeInput) (*ReportTaskTimeResponse, error) {
+		wl, err := a.ui.ReportTimeSpent(uint(input.ID), input.Body.UserId, input.Body.TimeSpentMin)
+		if err != nil {
+			return nil, err
+		}
+		return &ReportTaskTimeResponse{
+			Body: WorkLogData{
+				ChoreId:      wl.ChoreId,
+				UserId:       wl.UserId,
+				TimeSpentMin: wl.TimeSpentMin,
+				SelfReported: wl.SelfReported,
+			},
+		}, nil
+	})
+
+	// Get work logs for a task
+	huma.Register(api, huma.Operation{
+		OperationID: "get-task-worklogs",
+		Method:      http.MethodGet,
+		Path:        "/tasks/{id}/worklogs",
+		Summary:     "Get all work logs / reported time for a task",
+	}, func(ctx context.Context, input *TaskActionInput) (*TaskWorkLogsResponse, error) {
+		worklogs, err := a.storage.GetWorkLogsForChore(uint(input.ID))
+		if err != nil {
+			return nil, err
+		}
+		var resp []WorkLogData
+		for _, wl := range worklogs {
+			resp = append(resp, WorkLogData{
+				ChoreId:      wl.ChoreId,
+				UserId:       wl.UserId,
+				TimeSpentMin: wl.TimeSpentMin,
+				SelfReported: wl.SelfReported,
+			})
+		}
+		return &TaskWorkLogsResponse{Body: resp}, nil
+	})
+
 	// Stats Endpoint
 	huma.Register(api, huma.Operation{
 		OperationID: "get-stats",
@@ -501,6 +565,31 @@ type TaskUserActionBody struct {
 type TaskUserActionInput struct {
 	ID   int                `path:"id"`
 	Body TaskUserActionBody
+}
+
+type ReportTaskTimeBody struct {
+	UserId       string `json:"user_id" doc:"User ID whose time spent is being reported/updated"`
+	TimeSpentMin uint   `json:"time_spent_min" doc:"Time spent in minutes"`
+}
+
+type ReportTaskTimeInput struct {
+	ID   int                `path:"id"`
+	Body ReportTaskTimeBody
+}
+
+type WorkLogData struct {
+	ChoreId      uint   `json:"chore_id"`
+	UserId       string `json:"user_id"`
+	TimeSpentMin uint   `json:"time_spent_min"`
+	SelfReported bool   `json:"self_reported"`
+}
+
+type ReportTaskTimeResponse struct {
+	Body WorkLogData
+}
+
+type TaskWorkLogsResponse struct {
+	Body []WorkLogData
 }
 
 type UserStats struct {

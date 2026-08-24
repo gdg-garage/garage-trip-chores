@@ -51,6 +51,8 @@ components:
               - task_refused
               - task_timeout
               - task_cancelled
+              - worklog_updated
+              - worklog_added
           chore:
             $ref: '#/components/schemas/Chore'
           assignment:

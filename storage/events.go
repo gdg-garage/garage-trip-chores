@@ -13,6 +13,8 @@ const (
 	TaskTimeout   EventType = "task_timeout"
 	TaskDone      EventType = "task_done"
 	TaskCancelled EventType = "task_cancelled"
+	WorklogUpdated EventType = "worklog_updated"
+	WorklogAdded   EventType = "worklog_added"
 )
 
 type Event struct {
