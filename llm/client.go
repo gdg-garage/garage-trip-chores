@@ -139,7 +139,7 @@ func (c *GeminiClient) generateContentWithTier(ctx context.Context, prompt strin
 		},
 		GenerationConfig: &GenerationConfig{
 			Temperature:     0.8,
-			MaxOutputTokens: 1200,
+			MaxOutputTokens: 4096,
 		},
 		ServiceTier: tier,
 	}
