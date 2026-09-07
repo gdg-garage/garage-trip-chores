@@ -1025,9 +1025,9 @@ func (ui *Ui) Commands(ctx context.Context, wg *sync.WaitGroup) error {
 
 	})
 
-	// 3. Set the intent to receive GuildMessages and Guilds.
-	// This is necessary for the bot to function correctly, especially for commands.
-	ui.discord.Identify.Intents = discordgo.IntentsGuildMessages | discordgo.IntentsGuilds
+	// 3. Set the intent to receive GuildMessages, Guilds, and DirectMessages.
+	// This is necessary for the bot to function correctly, especially for commands and DM interactions.
+	ui.discord.Identify.Intents = discordgo.IntentsGuildMessages | discordgo.IntentsGuilds | discordgo.IntentsDirectMessages
 
 	// 4. Open the WebSocket connection to Discord.
 
@@ -1177,7 +1177,7 @@ func (ui *Ui) Commands(ctx context.Context, wg *sync.WaitGroup) error {
 			case <-ctx.Done():
 				return
 			case event := <-sub:
-				if event.Type == storage.TaskUpdated || event.Type == storage.TaskDone || event.Type == storage.TaskAssigned || event.Type == storage.TaskAcked || event.Type == storage.TaskRefused || event.Type == storage.TaskTimeout || event.Type == storage.TaskCancelled {
+				if event.Type == storage.TaskUpdated || event.Type == storage.TaskDone || event.Type == storage.TaskAssigned || event.Type == storage.TaskAcked || event.Type == storage.TaskRefused || event.Type == storage.TaskTimeout || event.Type == storage.TaskCancelled || event.Type == storage.WorklogUpdated || event.Type == storage.WorklogAdded {
 					var choreToUpdate *storage.Chore
 					if event.Chore != nil {
 						choreToUpdate = event.Chore
@@ -1363,10 +1363,27 @@ func (ui *Ui) reportTimeSpentButtonClick(d string, s *discordgo.Session, i *disc
 	choreId, err := getChoreIdFromCustomID(d)
 	if err != nil {
 		ui.logger.Error("failed to parse chore ID from button", "error", err, "custom_id", d)
-		s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
+		_ = s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
 		return
 	}
-	err = ui.discord.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+
+	var userId string
+	if i.Interaction.User != nil {
+		userId = i.Interaction.User.ID
+	} else if i.Interaction.Member != nil && i.Interaction.Member.User != nil {
+		userId = i.Interaction.Member.User.ID
+	}
+
+	value := ""
+	if userId != "" {
+		if wl, err := ui.storage.GetWorkLogForChoreAndUser(choreId, userId); err == nil {
+			value = fmt.Sprint(wl.TimeSpentMin)
+		} else if chore, err := ui.storage.GetChore(choreId); err == nil && chore.EstimatedTimeMin > 0 {
+			value = fmt.Sprint(chore.EstimatedTimeMin)
+		}
+	}
+
+	err = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseModal,
 		Data: &discordgo.InteractionResponseData{
 			CustomID: ReportTimeSpentModal + fmt.Sprint(choreId),
@@ -1381,6 +1398,7 @@ func (ui *Ui) reportTimeSpentButtonClick(d string, s *discordgo.Session, i *disc
 							MinLength:   1,
 							MaxLength:   4,
 							Placeholder: "Enter time spent on chore",
+							Value:       value,
 							Required:    true,
 						},
 					},
@@ -1389,8 +1407,8 @@ func (ui *Ui) reportTimeSpentButtonClick(d string, s *discordgo.Session, i *disc
 		},
 	})
 	if err != nil {
-		ui.logger.Error("failed to send modal", "error", err)
-		s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
+		ui.logger.Error("failed to send modal", "error", err, "chore_id", choreId)
+		_ = s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
 		return
 	}
 }
@@ -1416,6 +1434,7 @@ func (ui *Ui) ReportTimeSpent(choreId uint, userId string, timeSpentMin uint) (s
 		}
 	} else {
 		wl.TimeSpentMin = timeSpentMin
+		wl.SelfReported = true
 	}
 
 	wl, err = ui.storage.SaveWorkLog(wl)
@@ -1423,7 +1442,11 @@ func (ui *Ui) ReportTimeSpent(choreId uint, userId string, timeSpentMin uint) (s
 		return wl, fmt.Errorf("failed to save work log: %w", err)
 	}
 
-	_ = ui.UpdateChoreMessage(chore)
+	go func() {
+		if err := ui.UpdateChoreMessage(chore); err != nil {
+			ui.logger.Error("failed to asynchronously update chore message after time report", "error", err, "chore_id", chore.ID)
+		}
+	}()
 	ui.EmitChoreEvent("worklog_updated", chore)
 	return wl, nil
 }
@@ -1435,7 +1458,7 @@ func (ui *Ui) reportTimeSpent(s *discordgo.Session, i *discordgo.InteractionCrea
 	choreId, err := getChoreIdFromCustomID(data.CustomID)
 	if err != nil {
 		ui.logger.Error("failed to parse chore ID from modal", "error", err, "custom_id", data.CustomID)
-		s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
+		_ = s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
 		return
 	}
 
@@ -1443,20 +1466,33 @@ func (ui *Ui) reportTimeSpent(s *discordgo.Session, i *discordgo.InteractionCrea
 	timeSpent, err := strconv.Atoi(timeSpentStr)
 	if err != nil {
 		ui.logger.Error("failed to parse time spent", "error", err, "input", timeSpentStr)
-		s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
+		_ = s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
 		return
 	}
 
-	userId := i.Interaction.User.ID
+	var userId string
+	if i.Interaction.User != nil {
+		userId = i.Interaction.User.ID
+	} else if i.Interaction.Member != nil && i.Interaction.Member.User != nil {
+		userId = i.Interaction.Member.User.ID
+	}
+	if userId == "" {
+		ui.logger.Error("failed to identify user from modal submit interaction", "chore_id", choreId)
+		_ = s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
+		return
+	}
+
 	_, err = ui.ReportTimeSpent(choreId, userId, uint(timeSpent))
 	if err != nil {
 		ui.logger.Error("failed to save work log", "error", err, "chore_id", choreId, "user_id", userId)
-		s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
+		_ = s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
 		return
 	}
 
 	r := simpleContainerizedInteractionResponse(fmt.Sprintf("Updated time spent on chore `id: %d` to `%d` min.", choreId, timeSpent), &ui.colors.GreenColor)
-	s.InteractionRespond(i.Interaction, r)
+	if err := s.InteractionRespond(i.Interaction, r); err != nil {
+		ui.logger.Error("failed to respond to time spent interaction", "error", err, "chore_id", choreId, "user_id", userId)
+	}
 }
 
 func (ui *Ui) stats(i *discordgo.InteractionCreate) {
