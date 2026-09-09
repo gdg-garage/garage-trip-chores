@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"sort"
 	"strings"
 	"time"
 
@@ -43,6 +44,7 @@ func (s *Storage) GetSkills() ([]string, error) {
 			skills = append(skills, role.Name[len(s.conf.SkillPrefix):])
 		}
 	}
+	sort.Strings(skills)
 	return skills, nil
 }
 

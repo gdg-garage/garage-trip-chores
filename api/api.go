@@ -441,6 +441,39 @@ func (a *Api) SetupRoutes() *chi.Mux {
 		return &UsersResponse{Body: resp}, nil
 	})
 
+	// Get Skills
+	huma.Register(api, huma.Operation{
+		OperationID: "get-skills",
+		Method:      http.MethodGet,
+		Path:        "/skills",
+		Summary:     "Get all available chore skills/capabilities",
+	}, func(ctx context.Context, input *struct{}) (*SkillsResponse, error) {
+		skills, err := a.storage.GetSkills()
+		if err != nil {
+			return nil, err
+		}
+		if skills == nil {
+			skills = []string{}
+		}
+		return &SkillsResponse{Body: skills}, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "get-api-skills",
+		Method:      http.MethodGet,
+		Path:        "/api/skills",
+		Summary:     "Get all available chore skills/capabilities (alias)",
+	}, func(ctx context.Context, input *struct{}) (*SkillsResponse, error) {
+		skills, err := a.storage.GetSkills()
+		if err != nil {
+			return nil, err
+		}
+		if skills == nil {
+			skills = []string{}
+		}
+		return &SkillsResponse{Body: skills}, nil
+	})
+
 	// Get Task Stats
 	huma.Register(api, huma.Operation{
 		OperationID: "get-task-stats",
@@ -615,6 +648,10 @@ type UserData struct {
 
 type UsersResponse struct {
 	Body []UserData
+}
+
+type SkillsResponse struct {
+	Body []string
 }
 
 type TaskStatsData struct {

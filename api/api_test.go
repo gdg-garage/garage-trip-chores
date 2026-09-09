@@ -734,3 +734,30 @@ func TestCORSHeaders(t *testing.T) {
 		t.Fatalf("Expected Allow-Origin *, got %s", wOpt.Header().Get("Access-Control-Allow-Origin"))
 	}
 }
+
+func TestGetSkills(t *testing.T) {
+	api, _, _, cleanup := setupTestApi(t)
+	defer cleanup()
+
+	handler := api.SetupRoutes()
+
+	for _, path := range []string{"/skills", "/api/skills"} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("Expected 200 for %s, got %d: %s", path, w.Code, w.Body.String())
+		}
+
+		var skills []string
+		if err := json.Unmarshal(w.Body.Bytes(), &skills); err != nil {
+			t.Fatalf("Failed to decode skills JSON for %s: %v", path, err)
+		}
+
+		if skills == nil {
+			t.Fatalf("Expected non-nil skills array for %s", path)
+		}
+	}
+}
+
