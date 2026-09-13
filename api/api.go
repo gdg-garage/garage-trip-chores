@@ -542,12 +542,11 @@ type TaskData struct {
 	Deadline              *time.Time `json:"deadline,omitempty"`
 	NecessaryCapabilities []string   `json:"necessary_capabilities"`
 	Assigned              []string   `json:"assigned"`
-	Acked                 []string   `json:"acked"`
-	Declined              []string   `json:"declined"`
-	Timeouted             []string   `json:"timeouted"`
-	// Helped lists users who logged work on the task without an acked assignment
-	// (typically via the "I helped" button after the task was completed).
-	Helped []string `json:"helped"`
+	// Acked lists users credited with the task: acked assignments plus anyone
+	// who logged work on it (e.g. via "I helped" after completion).
+	Acked     []string `json:"acked"`
+	Declined  []string `json:"declined"`
+	Timeouted []string `json:"timeouted"`
 	// WorkLogs holds every reported time entry for the task, including "I helped" entries.
 	WorkLogs []WorkLogData `json:"worklogs"`
 	// WorkedMinTotal is the sum of all reported minutes across WorkLogs.
@@ -581,7 +580,7 @@ type UpdateTaskInputBody struct {
 }
 
 type UpdateTaskInput struct {
-	ID   int                 `path:"id"`
+	ID   int `path:"id"`
 	Body UpdateTaskInputBody
 }
 
@@ -598,7 +597,7 @@ type TaskUserActionBody struct {
 }
 
 type TaskUserActionInput struct {
-	ID   int                `path:"id"`
+	ID   int `path:"id"`
 	Body TaskUserActionBody
 }
 
@@ -608,7 +607,7 @@ type ReportTaskTimeBody struct {
 }
 
 type ReportTaskTimeInput struct {
-	ID   int                `path:"id"`
+	ID   int `path:"id"`
 	Body ReportTaskTimeBody
 }
 
@@ -679,7 +678,6 @@ func toTaskData(chore storage.Chore, assignments []storage.ChoreAssignment, work
 	acked := make([]string, 0)
 	declined := make([]string, 0)
 	timeouted := make([]string, 0)
-	helped := make([]string, 0)
 	workLogData := make([]WorkLogData, 0, len(worklogs))
 	var workedMinTotal uint
 
@@ -701,7 +699,8 @@ func toTaskData(chore storage.Chore, assignments []storage.ChoreAssignment, work
 		workLogData = append(workLogData, toWorkLogData(wl))
 		workedMinTotal += wl.TimeSpentMin
 		if _, ok := ackedSet[wl.UserId]; !ok {
-			helped = append(helped, wl.UserId)
+			acked = append(acked, wl.UserId)
+			ackedSet[wl.UserId] = struct{}{}
 		}
 	}
 
@@ -721,7 +720,6 @@ func toTaskData(chore storage.Chore, assignments []storage.ChoreAssignment, work
 		Acked:                 acked,
 		Declined:              declined,
 		Timeouted:             timeouted,
-		Helped:                helped,
 		WorkLogs:              workLogData,
 		WorkedMinTotal:        workedMinTotal,
 	}

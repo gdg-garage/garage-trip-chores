@@ -761,7 +761,7 @@ func TestGetSkills(t *testing.T) {
 	}
 }
 
-func TestHelpedWorkIncludedInTasksAndStats(t *testing.T) {
+func TestHelpedUserCountsAsAckedInTasksAndStats(t *testing.T) {
 	api, stor, u, cleanup := setupTestApi(t)
 	defer cleanup()
 
@@ -818,11 +818,8 @@ func TestHelpedWorkIncludedInTasksAndStats(t *testing.T) {
 
 	check := func(td TaskData) {
 		t.Helper()
-		if len(td.Acked) != 1 || td.Acked[0] != "user-acked" {
-			t.Fatalf("Expected acked=[user-acked], got %v", td.Acked)
-		}
-		if len(td.Helped) != 1 || td.Helped[0] != "user-helper" {
-			t.Fatalf("Expected helped=[user-helper], got %v", td.Helped)
+		if len(td.Acked) != 2 || td.Acked[0] != "user-acked" || td.Acked[1] != "user-helper" {
+			t.Fatalf("Expected acked=[user-acked user-helper], got %v", td.Acked)
 		}
 		if len(td.WorkLogs) != 2 {
 			t.Fatalf("Expected 2 worklogs, got %+v", td.WorkLogs)
