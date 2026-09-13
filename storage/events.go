@@ -5,14 +5,14 @@ import "sync"
 type EventType string
 
 const (
-	TaskCreated  EventType = "task_created"
-	TaskUpdated  EventType = "task_updated"
-	TaskAssigned EventType = "task_assigned"
-	TaskAcked    EventType = "task_acked"
-	TaskRefused   EventType = "task_refused"
-	TaskTimeout   EventType = "task_timeout"
-	TaskDone      EventType = "task_done"
-	TaskCancelled EventType = "task_cancelled"
+	TaskCreated    EventType = "task_created"
+	TaskUpdated    EventType = "task_updated"
+	TaskAssigned   EventType = "task_assigned"
+	TaskAcked      EventType = "task_acked"
+	TaskRefused    EventType = "task_refused"
+	TaskTimeout    EventType = "task_timeout"
+	TaskDone       EventType = "task_done"
+	TaskCancelled  EventType = "task_cancelled"
 	WorklogUpdated EventType = "worklog_updated"
 	WorklogAdded   EventType = "worklog_added"
 )
@@ -21,6 +21,9 @@ type Event struct {
 	Type       EventType        `json:"type"`
 	Chore      *Chore           `json:"chore,omitempty"`
 	Assignment *ChoreAssignment `json:"assignment,omitempty"`
+	// WorkLog is set on worklog_added / worklog_updated events and carries the
+	// reported time entry (including "I helped" entries) that triggered the event.
+	WorkLog *WorkLog `json:"worklog,omitempty"`
 }
 
 type EventBus struct {

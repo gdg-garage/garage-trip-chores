@@ -181,9 +181,17 @@ func (a *Api) SetupRoutes() *chi.Mux {
 		for _, a := range allAssignments {
 			assignmentsByChore[a.ChoreId] = append(assignmentsByChore[a.ChoreId], a)
 		}
+		allWorkLogs, err := a.storage.GetWorkLogs()
+		if err != nil {
+			return nil, err
+		}
+		worklogsByChore := make(map[uint][]storage.WorkLog)
+		for _, wl := range allWorkLogs {
+			worklogsByChore[wl.ChoreId] = append(worklogsByChore[wl.ChoreId], wl)
+		}
 		var resp []TaskData
 		for _, c := range choresList {
-			resp = append(resp, toTaskData(c, assignmentsByChore[c.ID]))
+			resp = append(resp, toTaskData(c, assignmentsByChore[c.ID], worklogsByChore[c.ID]))
 		}
 		return &TasksResponse{Body: resp}, nil
 	})
@@ -203,7 +211,11 @@ func (a *Api) SetupRoutes() *chi.Mux {
 		if err != nil {
 			return nil, err
 		}
-		return &TaskCreateResponse{Body: toTaskData(chore, assignments)}, nil
+		worklogs, err := a.storage.GetWorkLogsForChore(chore.ID)
+		if err != nil {
+			return nil, err
+		}
+		return &TaskCreateResponse{Body: toTaskData(chore, assignments, worklogs)}, nil
 	})
 
 	// Create Task (with bidirectional Discord sync)
@@ -254,7 +266,8 @@ func (a *Api) SetupRoutes() *chi.Mux {
 		}
 
 		assignments, _ := a.storage.GetChoreAssignments(saved.ID)
-		return &TaskCreateResponse{Body: toTaskData(saved, assignments)}, nil
+		worklogs, _ := a.storage.GetWorkLogsForChore(saved.ID)
+		return &TaskCreateResponse{Body: toTaskData(saved, assignments, worklogs)}, nil
 	})
 
 	// Edit / Update Task
@@ -269,7 +282,8 @@ func (a *Api) SetupRoutes() *chi.Mux {
 			return nil, err
 		}
 		assignments, _ := a.storage.GetChoreAssignments(updated.ID)
-		return &TaskCreateResponse{Body: toTaskData(updated, assignments)}, nil
+		worklogs, _ := a.storage.GetWorkLogsForChore(updated.ID)
+		return &TaskCreateResponse{Body: toTaskData(updated, assignments, worklogs)}, nil
 	})
 	// Delete/Cancel task
 	huma.Register(api, huma.Operation{
@@ -337,14 +351,7 @@ func (a *Api) SetupRoutes() *chi.Mux {
 		if err != nil {
 			return nil, err
 		}
-		return &ReportTaskTimeResponse{
-			Body: WorkLogData{
-				ChoreId:      wl.ChoreId,
-				UserId:       wl.UserId,
-				TimeSpentMin: wl.TimeSpentMin,
-				SelfReported: wl.SelfReported,
-			},
-		}, nil
+		return &ReportTaskTimeResponse{Body: toWorkLogData(wl)}, nil
 	})
 
 	huma.Register(api, huma.Operation{
@@ -357,14 +364,7 @@ func (a *Api) SetupRoutes() *chi.Mux {
 		if err != nil {
 			return nil, err
 		}
-		return &ReportTaskTimeResponse{
-			Body: WorkLogData{
-				ChoreId:      wl.ChoreId,
-				UserId:       wl.UserId,
-				TimeSpentMin: wl.TimeSpentMin,
-				SelfReported: wl.SelfReported,
-			},
-		}, nil
+		return &ReportTaskTimeResponse{Body: toWorkLogData(wl)}, nil
 	})
 
 	// Get work logs for a task
@@ -378,14 +378,9 @@ func (a *Api) SetupRoutes() *chi.Mux {
 		if err != nil {
 			return nil, err
 		}
-		var resp []WorkLogData
+		resp := make([]WorkLogData, 0, len(worklogs))
 		for _, wl := range worklogs {
-			resp = append(resp, WorkLogData{
-				ChoreId:      wl.ChoreId,
-				UserId:       wl.UserId,
-				TimeSpentMin: wl.TimeSpentMin,
-				SelfReported: wl.SelfReported,
-			})
+			resp = append(resp, toWorkLogData(wl))
 		}
 		return &TaskWorkLogsResponse{Body: resp}, nil
 	})
@@ -550,6 +545,13 @@ type TaskData struct {
 	Acked                 []string   `json:"acked"`
 	Declined              []string   `json:"declined"`
 	Timeouted             []string   `json:"timeouted"`
+	// Helped lists users who logged work on the task without an acked assignment
+	// (typically via the "I helped" button after the task was completed).
+	Helped []string `json:"helped"`
+	// WorkLogs holds every reported time entry for the task, including "I helped" entries.
+	WorkLogs []WorkLogData `json:"worklogs"`
+	// WorkedMinTotal is the sum of all reported minutes across WorkLogs.
+	WorkedMinTotal uint `json:"worked_min_total"`
 }
 
 type TasksResponse struct {
@@ -663,21 +665,43 @@ type TaskStatsResponse struct {
 	Body TaskStatsData
 }
 
-func toTaskData(chore storage.Chore, assignments []storage.ChoreAssignment) TaskData {
+func toWorkLogData(wl storage.WorkLog) WorkLogData {
+	return WorkLogData{
+		ChoreId:      wl.ChoreId,
+		UserId:       wl.UserId,
+		TimeSpentMin: wl.TimeSpentMin,
+		SelfReported: wl.SelfReported,
+	}
+}
+
+func toTaskData(chore storage.Chore, assignments []storage.ChoreAssignment, worklogs []storage.WorkLog) TaskData {
 	assigned := make([]string, 0)
 	acked := make([]string, 0)
 	declined := make([]string, 0)
 	timeouted := make([]string, 0)
+	helped := make([]string, 0)
+	workLogData := make([]WorkLogData, 0, len(worklogs))
+	var workedMinTotal uint
 
+	ackedSet := make(map[string]struct{})
 	for _, a := range assignments {
 		if a.Acked != nil {
 			acked = append(acked, a.UserId)
+			ackedSet[a.UserId] = struct{}{}
 		} else if a.Refused != nil {
 			declined = append(declined, a.UserId)
 		} else if a.Timeouted != nil {
 			timeouted = append(timeouted, a.UserId)
 		} else {
 			assigned = append(assigned, a.UserId)
+		}
+	}
+
+	for _, wl := range worklogs {
+		workLogData = append(workLogData, toWorkLogData(wl))
+		workedMinTotal += wl.TimeSpentMin
+		if _, ok := ackedSet[wl.UserId]; !ok {
+			helped = append(helped, wl.UserId)
 		}
 	}
 
@@ -697,5 +721,8 @@ func toTaskData(chore storage.Chore, assignments []storage.ChoreAssignment) Task
 		Acked:                 acked,
 		Declined:              declined,
 		Timeouted:             timeouted,
+		Helped:                helped,
+		WorkLogs:              workLogData,
+		WorkedMinTotal:        workedMinTotal,
 	}
 }

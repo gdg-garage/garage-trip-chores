@@ -57,6 +57,8 @@ components:
             $ref: '#/components/schemas/Chore'
           assignment:
             $ref: '#/components/schemas/Assignment'
+          worklog:
+            $ref: '#/components/schemas/WorkLog'
   
   schemas:
     Chore:
@@ -107,3 +109,17 @@ components:
         Timeouted:
           type: string
           format: date-time
+    WorkLog:
+      type: object
+      description: Reported time entry for a chore. Present on worklog_added / worklog_updated events, including entries created via the "I helped" button.
+      properties:
+        ID:
+          type: integer
+        UserId:
+          type: string
+        ChoreId:
+          type: integer
+        TimeSpentMin:
+          type: integer
+        SelfReported:
+          type: boolean

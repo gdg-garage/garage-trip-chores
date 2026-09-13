@@ -136,6 +136,16 @@ func (ui *Ui) SetBroadcaster(b EventBroadcaster) {
 }
 
 func (ui *Ui) EmitChoreEvent(eventType string, chore storage.Chore) {
+	ui.emitChoreEvent(eventType, chore, nil)
+}
+
+// EmitWorkLogEvent emits a chore event that also carries the work log entry
+// which caused it (worklog_added / worklog_updated).
+func (ui *Ui) EmitWorkLogEvent(eventType string, chore storage.Chore, wl storage.WorkLog) {
+	ui.emitChoreEvent(eventType, chore, &wl)
+}
+
+func (ui *Ui) emitChoreEvent(eventType string, chore storage.Chore, wl *storage.WorkLog) {
 	var storageEventType storage.EventType
 	switch eventType {
 	case "chore_created":
@@ -157,8 +167,9 @@ func (ui *Ui) EmitChoreEvent(eventType string, chore storage.Chore) {
 	}
 
 	ui.storage.Events.Publish(storage.Event{
-		Type:  storageEventType,
-		Chore: &chore,
+		Type:    storageEventType,
+		Chore:   &chore,
+		WorkLog: wl,
 	})
 
 	if ui.broadcaster != nil {
@@ -1187,7 +1198,7 @@ func (ui *Ui) Commands(ctx context.Context, wg *sync.WaitGroup) error {
 							choreToUpdate = &chore
 						}
 					}
-					
+
 					if choreToUpdate != nil && choreToUpdate.MessageId != "" {
 						err := ui.UpdateChoreMessage(*choreToUpdate)
 						if err != nil {
@@ -1447,7 +1458,7 @@ func (ui *Ui) ReportTimeSpent(choreId uint, userId string, timeSpentMin uint) (s
 			ui.logger.Error("failed to asynchronously update chore message after time report", "error", err, "chore_id", chore.ID)
 		}
 	}()
-	ui.EmitChoreEvent("worklog_updated", chore)
+	ui.EmitWorkLogEvent("worklog_updated", chore, wl)
 	return wl, nil
 }
 
@@ -1727,7 +1738,7 @@ func (ui *Ui) HelpedChore(choreId uint, userId string) (storage.WorkLog, error) 
 		})
 	}
 
-	ui.EmitChoreEvent("worklog_added", chore)
+	ui.EmitWorkLogEvent("worklog_added", chore, wl)
 	return wl, nil
 }
 

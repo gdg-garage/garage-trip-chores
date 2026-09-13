@@ -761,3 +761,133 @@ func TestGetSkills(t *testing.T) {
 	}
 }
 
+func TestHelpedWorkIncludedInTasksAndStats(t *testing.T) {
+	api, stor, u, cleanup := setupTestApi(t)
+	defer cleanup()
+
+	handler := api.SetupRoutes()
+
+	chore, err := stor.SaveChore(storage.Chore{
+		Name:             "Grill master",
+		EstimatedTimeMin: 60,
+		CreatorId:        "creator",
+	})
+	if err != nil {
+		t.Fatalf("Failed to create chore: %v", err)
+	}
+
+	now := time.Now()
+	if _, err := stor.SaveChoreAssignment(storage.ChoreAssignment{
+		ChoreId: chore.ID,
+		UserId:  "user-acked",
+		Acked:   &now,
+	}); err != nil {
+		t.Fatalf("Failed to save assignment: %v", err)
+	}
+
+	// Completing the chore logs work for the acked user.
+	if _, err := u.CompleteChore(chore.ID); err != nil {
+		t.Fatalf("Failed to complete chore: %v", err)
+	}
+
+	// Subscribe before the late "I helped" click so we can inspect the event.
+	sub := stor.Events.Subscribe()
+
+	// A second user clicks "I helped" after the chore is done (no assignment).
+	body, _ := json.Marshal(TaskUserActionBody{UserId: "user-helper"})
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/tasks/%d/help", chore.ID), bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != http.StatusNoContent && w.Code != http.StatusOK {
+		t.Fatalf("Help task failed with code %d: %s", w.Code, w.Body.String())
+	}
+
+	// The worklog_added event carries the helper's work log.
+	select {
+	case ev := <-sub:
+		if ev.Type != storage.WorklogAdded {
+			t.Fatalf("Expected worklog_added event, got %s", ev.Type)
+		}
+		if ev.WorkLog == nil || ev.WorkLog.UserId != "user-helper" || ev.WorkLog.TimeSpentMin != 60 {
+			t.Fatalf("Expected worklog for user-helper with 60 min in event, got %+v", ev.WorkLog)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Timed out waiting for worklog_added event")
+	}
+
+	check := func(td TaskData) {
+		t.Helper()
+		if len(td.Acked) != 1 || td.Acked[0] != "user-acked" {
+			t.Fatalf("Expected acked=[user-acked], got %v", td.Acked)
+		}
+		if len(td.Helped) != 1 || td.Helped[0] != "user-helper" {
+			t.Fatalf("Expected helped=[user-helper], got %v", td.Helped)
+		}
+		if len(td.WorkLogs) != 2 {
+			t.Fatalf("Expected 2 worklogs, got %+v", td.WorkLogs)
+		}
+		if td.WorkedMinTotal != 120 {
+			t.Fatalf("Expected worked_min_total=120, got %d", td.WorkedMinTotal)
+		}
+		var helperMin uint
+		for _, wl := range td.WorkLogs {
+			if wl.UserId == "user-helper" {
+				helperMin = wl.TimeSpentMin
+				if !wl.SelfReported {
+					t.Fatalf("Expected helper worklog to be self reported")
+				}
+			}
+		}
+		if helperMin != 60 {
+			t.Fatalf("Expected helper to have 60 min logged, got %d", helperMin)
+		}
+	}
+
+	// GET /tasks
+	reqList := httptest.NewRequest(http.MethodGet, "/tasks", nil)
+	wList := httptest.NewRecorder()
+	handler.ServeHTTP(wList, reqList)
+	if wList.Code != http.StatusOK {
+		t.Fatalf("Get tasks failed with code %d: %s", wList.Code, wList.Body.String())
+	}
+	var tasks []TaskData
+	if err := json.Unmarshal(wList.Body.Bytes(), &tasks); err != nil {
+		t.Fatalf("Failed to decode tasks: %v", err)
+	}
+	if len(tasks) != 1 {
+		t.Fatalf("Expected 1 task, got %d", len(tasks))
+	}
+	check(tasks[0])
+
+	// GET /tasks/{id}
+	reqOne := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/tasks/%d", chore.ID), nil)
+	wOne := httptest.NewRecorder()
+	handler.ServeHTTP(wOne, reqOne)
+	if wOne.Code != http.StatusOK {
+		t.Fatalf("Get task failed with code %d: %s", wOne.Code, wOne.Body.String())
+	}
+	var task TaskData
+	if err := json.Unmarshal(wOne.Body.Bytes(), &task); err != nil {
+		t.Fatalf("Failed to decode task: %v", err)
+	}
+	check(task)
+
+	// GET /stats counts the helper's minutes.
+	reqStats := httptest.NewRequest(http.MethodGet, "/stats", nil)
+	wStats := httptest.NewRecorder()
+	handler.ServeHTTP(wStats, reqStats)
+	if wStats.Code != http.StatusOK {
+		t.Fatalf("Get stats failed with code %d: %s", wStats.Code, wStats.Body.String())
+	}
+	var stats map[string]UserStats
+	if err := json.Unmarshal(wStats.Body.Bytes(), &stats); err != nil {
+		t.Fatalf("Failed to decode stats: %v", err)
+	}
+	if stats["user-helper"].WorkedMin != 60 || stats["user-helper"].WorkedCount != 1 {
+		t.Fatalf("Expected helper stats 60 min / 1 task, got %+v", stats["user-helper"])
+	}
+	if stats["user-acked"].WorkedMin != 60 {
+		t.Fatalf("Expected acked user stats 60 min, got %+v", stats["user-acked"])
+	}
+}
