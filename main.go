@@ -47,6 +47,7 @@ func main() {
 
 	uiServer := ui.NewUi(s, logger, &cl, s.GetDiscord(), conf.Ui)
 	go uiServer.Commands(ctx, &wg)
+	go uiServer.RunDelayedTaskScheduler(ctx, &wg)
 
 	tracker := presencetracker.NewTracker(s, logger, conf.Tracker)
 	go tracker.RunTracker(ctx, &wg)

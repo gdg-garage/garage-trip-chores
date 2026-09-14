@@ -323,6 +323,38 @@ func (ui *Ui) scheduleChore(buttonId string, s *discordgo.Session, i *discordgo.
 		return
 	}
 
+	if c.DelayMin > 0 {
+		publishAt := time.Now().Add(time.Duration(c.DelayMin) * time.Minute)
+		_, err := ui.storage.CreateDelayedTask(c.ID, publishAt, c.DelayMin)
+		if err != nil {
+			ui.logger.Error("failed to create delayed task", "error", err, "chore_id", choreId)
+			if respErr := s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText)); respErr != nil {
+				ui.logger.Error("failed to respond with error to schedule chore", "error", respErr, "chore_id", choreId)
+			}
+			return
+		}
+
+		r := simpleContainerizedInteractionResponse(fmt.Sprintf("This chore `id: %d` was scheduled with a delay and will be sent in %d minutes (at %s).", choreId, c.DelayMin, publishAt.Format("15:04")), &ui.colors.GreenColor)
+		r.Data.Components = append(r.Data.Components, discordgo.Container{
+			Components: []discordgo.MessageComponent{
+				discordgo.ActionsRow{
+					Components: []discordgo.MessageComponent{
+						&discordgo.Button{
+							Style:    discordgo.DangerButton,
+							Label:    "Cancel",
+							CustomID: CancelButtonClick + fmt.Sprint(choreId),
+						},
+					},
+				},
+			},
+		})
+		r.Type = discordgo.InteractionResponseUpdateMessage
+		if respErr := s.InteractionRespond(i.Interaction, r); respErr != nil {
+			ui.logger.Error("failed to respond to schedule chore interaction", "error", respErr, "chore_id", choreId)
+		}
+		return
+	}
+
 	c, _, err = ui.PublishChore(c)
 	if err != nil {
 		ui.logger.Error("failed to publish chore", "error", err, "chore_id", choreId)
@@ -519,6 +551,7 @@ func (ui *Ui) CancelChore(choreId uint) (storage.Chore, error) {
 	}
 
 	_ = ui.storage.RemoveStorageAssignments(choreId)
+	_ = ui.storage.CancelDelayedTaskByChoreId(choreId)
 	_ = ui.UpdateChoreMessage(chore)
 	ui.EmitChoreEvent("chore_cancelled", chore)
 	return chore, nil
@@ -828,6 +861,9 @@ func (ui *Ui) generateChoreMd(chore storage.Chore) string {
 	if necessaryCapabilities != "" {
 		choreDesc += fmt.Sprintf("\n**Necessary Capabilities**: `%s`", necessaryCapabilities)
 	}
+	if chore.DelayMin > 0 {
+		choreDesc += fmt.Sprintf("\n**Delay**: %d min", chore.DelayMin)
+	}
 	if chore.Deadline != nil {
 		choreDesc += fmt.Sprintf("\n**Deadline**: %s", chore.Deadline.Format(time.RFC822))
 	}
@@ -877,6 +913,10 @@ func (ui *Ui) choreCreate(i *discordgo.InteractionCreate) {
 		case "capabilities":
 			if v.StringValue() != "" {
 				chore.SetCapabilities(strings.Split(v.StringValue(), ","))
+			}
+		case "delay":
+			if v.IntValue() > 0 {
+				chore.DelayMin = uint(v.IntValue())
 			}
 		}
 	}
@@ -968,13 +1008,18 @@ func (ui *Ui) choreCreate(i *discordgo.InteractionCreate) {
 		})
 	}
 
+	scheduleLabel := "Schedule"
+	if chore.DelayMin > 0 {
+		scheduleLabel = fmt.Sprintf("Schedule (in %d min)", chore.DelayMin)
+	}
+
 	components = append(components, discordgo.Container{
 		Components: []discordgo.MessageComponent{
 			discordgo.ActionsRow{
 				Components: []discordgo.MessageComponent{
 					&discordgo.Button{
 						Style:    discordgo.SuccessButton,
-						Label:    "Schedule",
+						Label:    scheduleLabel,
 						CustomID: ScheduleButtonClick + fmt.Sprint(chore.ID),
 					},
 					&discordgo.Button{
@@ -1202,6 +1247,12 @@ func (ui *Ui) Commands(ctx context.Context, wg *sync.WaitGroup) error {
 					Type:        discordgo.ApplicationCommandOptionInteger,
 					Name:        "assignment_timeout_min",
 					Description: "The time in minutes after which the chore will be unassigned if not acked (0 to disable). [15]",
+					Required:    false,
+				},
+				{
+					Type:        discordgo.ApplicationCommandOptionInteger,
+					Name:        "delay",
+					Description: "Delay in minutes before sending and scheduling the task. [0]",
 					Required:    false,
 				},
 			},
@@ -1664,7 +1715,13 @@ func (ui *Ui) choresOpen(i *discordgo.InteractionCreate) {
 	}
 	openMd := ""
 	for _, c := range openChores {
+		if c.MessageId == "" {
+			continue
+		}
 		openMd += fmt.Sprintf("* %s (id: `%d`) %s\n", c.Name, c.ID, ui.GetChoreMessageUrl(c))
+	}
+	if openMd == "" {
+		openMd = "No open chores at the moment."
 	}
 	embed := discordgo.MessageEmbed{
 		Title:       "Open chores",
@@ -1909,3 +1966,61 @@ func (ui *Ui) doneChore(d string, s *discordgo.Session, i *discordgo.Interaction
 	r.Type = discordgo.InteractionResponseUpdateMessage
 	s.InteractionRespond(i.Interaction, r)
 }
+
+func (ui *Ui) RunDelayedTaskScheduler(ctx context.Context, wg *sync.WaitGroup) {
+	wg.Add(1)
+	defer wg.Done()
+
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			ui.logger.Debug("Delayed task scheduler stopped: context cancelled")
+			return
+		case <-ticker.C:
+			ui.ProcessPendingDelayedTasks()
+		}
+	}
+}
+
+func (ui *Ui) ProcessPendingDelayedTasks() {
+	tasks, err := ui.storage.GetPendingDelayedTasks(time.Now())
+	if err != nil {
+		ui.logger.Error("failed to get pending delayed tasks", "error", err)
+		return
+	}
+
+	for _, t := range tasks {
+		chore, err := ui.storage.GetChore(t.ChoreID)
+		if err != nil {
+			ui.logger.Error("failed to get chore for delayed task", "chore_id", t.ChoreID, "error", err)
+			continue
+		}
+
+		if chore.Cancelled != nil || chore.Completed != nil {
+			ui.logger.Info("Chore cancelled or completed before delayed execution, marking executed", "chore_id", chore.ID)
+			_ = ui.storage.MarkDelayedTaskExecuted(t.ID)
+			continue
+		}
+
+		if chore.MessageId != "" {
+			ui.logger.Info("Chore already published, marking executed", "chore_id", chore.ID)
+			_ = ui.storage.MarkDelayedTaskExecuted(t.ID)
+			continue
+		}
+
+		_, _, err = ui.PublishChore(chore)
+		if err != nil {
+			ui.logger.Error("failed to publish delayed chore", "chore_id", chore.ID, "error", err)
+			continue
+		}
+
+		err = ui.storage.MarkDelayedTaskExecuted(t.ID)
+		if err != nil {
+			ui.logger.Error("failed to mark delayed task executed", "task_id", t.ID, "error", err)
+		}
+	}
+}
+

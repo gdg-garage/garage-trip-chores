@@ -24,6 +24,7 @@ type Chore struct {
 	Completed             *time.Time
 	Cancelled             *time.Time
 	Deadline              *time.Time
+	DelayMin              uint
 	necessaryCapabilities []string
 	AfterDeadlineReminded bool
 }
@@ -172,3 +173,14 @@ func (a *TasksActivity) TotalActivityCount() int {
 	}
 	return len(a.CreatedChores) + len(a.CompletedChores) + len(a.CancelledChores) + len(a.UpdatedAssignments) + len(a.WorkLogs)
 }
+
+type DelayedTask struct {
+	ID         uint       `gorm:"primaryKey" json:"id"`
+	ChoreID    uint       `gorm:"not null;index" json:"chore_id"`
+	Chore      Chore      `gorm:"foreignKey:ChoreID" json:"chore"`
+	PublishAt  time.Time  `gorm:"not null;index" json:"publish_at"`
+	DelayMin   uint       `gorm:"not null" json:"delay_min"`
+	CreatedAt  time.Time  `json:"created_at"`
+	ExecutedAt *time.Time `json:"executed_at,omitempty"`
+}
+

@@ -40,6 +40,9 @@ func (r *Reminder) CheckChores() {
 	}
 
 	for _, chore := range chores {
+		if chore.MessageId == "" {
+			continue
+		}
 		if chore.Deadline != nil && chore.Deadline.Before(time.Now()) && !chore.AfterDeadlineReminded {
 			r.ui.SendDM(chore.CreatorId, &discordgo.MessageSend{
 				Content: fmt.Sprintf("Your chore `id: %d` is after its deadline %s.", chore.ID, r.ui.GetChoreMessageUrl(chore)),

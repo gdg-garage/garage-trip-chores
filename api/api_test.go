@@ -888,3 +888,93 @@ func TestHelpedUserCountsAsAckedInTasksAndStats(t *testing.T) {
 		t.Fatalf("Expected acked user stats 60 min, got %+v", stats["user-acked"])
 	}
 }
+
+func TestCreateTaskWithDelay(t *testing.T) {
+	api, s, _, cleanup := setupTestApi(t)
+	defer cleanup()
+
+	handler := api.SetupRoutes()
+
+	createReq := CreateTaskInput{
+		Body: TaskCreateInputBody{
+			Name:             "Empty dishwasher",
+			EstimatedTimeMin: 15,
+			DelayMin:         60,
+		},
+	}
+
+	body, _ := json.Marshal(createReq.Body)
+	req := httptest.NewRequest(http.MethodPost, "/tasks", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var created TaskData
+	if err := json.Unmarshal(w.Body.Bytes(), &created); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	if created.ID == 0 {
+		t.Fatalf("Expected non-zero task ID")
+	}
+	if created.DelayMin != 60 {
+		t.Fatalf("Expected DelayMin 60, got %d", created.DelayMin)
+	}
+	if created.PublishAt == nil {
+		t.Fatalf("Expected PublishAt to be set, got nil")
+	}
+	if len(created.Assigned) != 0 {
+		t.Fatalf("Expected no assignments before delay expires, got %v", created.Assigned)
+	}
+
+	// Verify delayed task in storage
+	dt, err := s.GetDelayedTaskForChore(created.ID)
+	if err != nil {
+		t.Fatalf("Failed to get delayed task from storage: %v", err)
+	}
+	if dt == nil {
+		t.Fatalf("Expected delayed task in storage, got nil")
+	}
+	if dt.DelayMin != 60 {
+		t.Fatalf("Expected delayed task delay 60, got %d", dt.DelayMin)
+	}
+
+	// GET /tasks should include delay_min and publish_at
+	reqAll := httptest.NewRequest(http.MethodGet, "/tasks", nil)
+	wAll := httptest.NewRecorder()
+	handler.ServeHTTP(wAll, reqAll)
+	if wAll.Code != http.StatusOK {
+		t.Fatalf("Expected status 200, got %d", wAll.Code)
+	}
+	var allTasks []TaskData
+	if err := json.Unmarshal(wAll.Body.Bytes(), &allTasks); err != nil {
+		t.Fatalf("Failed to decode all tasks: %v", err)
+	}
+	if len(allTasks) != 1 {
+		t.Fatalf("Expected 1 task, got %d", len(allTasks))
+	}
+	if allTasks[0].DelayMin != 60 || allTasks[0].PublishAt == nil {
+		t.Fatalf("Expected delayed task details in GET /tasks: %+v", allTasks[0])
+	}
+
+	// GET /tasks/{id} should include delay_min and publish_at
+	reqOne := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/tasks/%d", created.ID), nil)
+	wOne := httptest.NewRecorder()
+	handler.ServeHTTP(wOne, reqOne)
+	if wOne.Code != http.StatusOK {
+		t.Fatalf("Expected status 200, got %d", wOne.Code)
+	}
+	var oneTask TaskData
+	if err := json.Unmarshal(wOne.Body.Bytes(), &oneTask); err != nil {
+		t.Fatalf("Failed to decode single task: %v", err)
+	}
+	if oneTask.DelayMin != 60 || oneTask.PublishAt == nil {
+		t.Fatalf("Expected delayed task details in GET /tasks/{id}: %+v", oneTask)
+	}
+}
+

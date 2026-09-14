@@ -29,7 +29,7 @@ func dbConnect(conf Config, logger *slog.Logger) (*gorm.DB, error) {
 	}
 
 	// Migrate the schema
-	db.AutoMigrate(&Chore{}, &WorkLog{}, &ChoreAssignment{}, &PresenceLog{}, &LLMSummaryLog{})
+	db.AutoMigrate(&Chore{}, &WorkLog{}, &ChoreAssignment{}, &PresenceLog{}, &LLMSummaryLog{}, &DelayedTask{})
 	return db, nil
 }
 

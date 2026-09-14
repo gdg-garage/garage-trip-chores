@@ -88,6 +88,8 @@ components:
         Deadline:
           type: string
           format: date-time
+        DelayMin:
+          type: integer
     Assignment:
       type: object
       properties:

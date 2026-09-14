@@ -189,9 +189,18 @@ func (a *Api) SetupRoutes() *chi.Mux {
 		for _, wl := range allWorkLogs {
 			worklogsByChore[wl.ChoreId] = append(worklogsByChore[wl.ChoreId], wl)
 		}
+		allDelayedTasks, _ := a.storage.GetPendingDelayedTasks(time.Now().Add(365 * 24 * time.Hour))
+		delayedByChore := make(map[uint]time.Time)
+		for _, dt := range allDelayedTasks {
+			delayedByChore[dt.ChoreID] = dt.PublishAt
+		}
 		var resp []TaskData
 		for _, c := range choresList {
-			resp = append(resp, toTaskData(c, assignmentsByChore[c.ID], worklogsByChore[c.ID]))
+			var pubAt *time.Time
+			if t, ok := delayedByChore[c.ID]; ok {
+				pubAt = &t
+			}
+			resp = append(resp, toTaskData(c, assignmentsByChore[c.ID], worklogsByChore[c.ID], pubAt))
 		}
 		return &TasksResponse{Body: resp}, nil
 	})
@@ -215,7 +224,12 @@ func (a *Api) SetupRoutes() *chi.Mux {
 		if err != nil {
 			return nil, err
 		}
-		return &TaskCreateResponse{Body: toTaskData(chore, assignments, worklogs)}, nil
+		dt, _ := a.storage.GetDelayedTaskForChore(chore.ID)
+		var pubAt *time.Time
+		if dt != nil {
+			pubAt = &dt.PublishAt
+		}
+		return &TaskCreateResponse{Body: toTaskData(chore, assignments, worklogs, pubAt)}, nil
 	})
 
 	// Create Task (with bidirectional Discord sync)
@@ -251,9 +265,23 @@ func (a *Api) SetupRoutes() *chi.Mux {
 			Deadline:             deadline,
 			CreatorId:            "API",
 			Created:              time.Now(),
+			DelayMin:             input.Body.DelayMin,
 		}
 		if len(input.Body.NecessaryCapabilities) > 0 {
 			chore.SetCapabilities(input.Body.NecessaryCapabilities)
+		}
+
+		if input.Body.DelayMin > 0 {
+			saved, err := a.storage.SaveChore(chore)
+			if err != nil {
+				return nil, err
+			}
+			publishAt := time.Now().Add(time.Duration(input.Body.DelayMin) * time.Minute)
+			_, err = a.storage.CreateDelayedTask(saved.ID, publishAt, input.Body.DelayMin)
+			if err != nil {
+				return nil, err
+			}
+			return &TaskCreateResponse{Body: toTaskData(saved, nil, nil, &publishAt)}, nil
 		}
 
 		saved, _, err := a.ui.PublishChore(chore)
@@ -551,6 +579,10 @@ type TaskData struct {
 	WorkLogs []WorkLogData `json:"worklogs"`
 	// WorkedMinTotal is the sum of all reported minutes across WorkLogs.
 	WorkedMinTotal uint `json:"worked_min_total"`
+	// DelayMin is the delay in minutes before sending/publishing the task.
+	DelayMin uint `json:"delay_min,omitempty"`
+	// PublishAt is the scheduled time when the task will be published and assigned.
+	PublishAt *time.Time `json:"publish_at,omitempty"`
 }
 
 type TasksResponse struct {
@@ -564,6 +596,7 @@ type TaskCreateInputBody struct {
 	AssignmentTimeoutMin  uint       `json:"assignment_timeout_min" default:"15"`
 	Deadline              *time.Time `json:"deadline,omitempty"`
 	NecessaryCapabilities []string   `json:"necessary_capabilities,omitempty"`
+	DelayMin              uint       `json:"delay_min,omitempty" doc:"Delay in minutes before sending and scheduling the task"`
 }
 
 type CreateTaskInput struct {
@@ -673,7 +706,11 @@ func toWorkLogData(wl storage.WorkLog) WorkLogData {
 	}
 }
 
-func toTaskData(chore storage.Chore, assignments []storage.ChoreAssignment, worklogs []storage.WorkLog) TaskData {
+func toTaskData(chore storage.Chore, assignments []storage.ChoreAssignment, worklogs []storage.WorkLog, publishAt ...*time.Time) TaskData {
+	var pubAt *time.Time
+	if len(publishAt) > 0 {
+		pubAt = publishAt[0]
+	}
 	assigned := make([]string, 0)
 	acked := make([]string, 0)
 	declined := make([]string, 0)
@@ -722,5 +759,7 @@ func toTaskData(chore storage.Chore, assignments []storage.ChoreAssignment, work
 		Timeouted:             timeouted,
 		WorkLogs:              workLogData,
 		WorkedMinTotal:        workedMinTotal,
+		DelayMin:              chore.DelayMin,
+		PublishAt:             pubAt,
 	}
 }
