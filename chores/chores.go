@@ -116,10 +116,10 @@ func (cl ChoresLogic) AssignChoresToUsers(users []storage.User, chore storage.Ch
 		}
 	}
 
-	needed -= alreadyAssignedCnt
-	if needed <= 0 {
+	if alreadyAssignedCnt >= needed {
 		return assignments, nil
 	}
+	needed -= alreadyAssignedCnt
 
 	sortedUsers := SortUsersBasedOnChoreStats(userStatsWithCap)
 	selectedUsers := sortedUsers[:int(math.Min(float64(len(sortedUsers)), float64(needed)))]

@@ -126,4 +126,15 @@ func TestAssignChoresToUsers(t *testing.T) {
 	if len(assignments4) != 0 {
 		t.Fatalf("expected 0 assignment, got %d", len(assignments4))
 	}
+
+	// Test case 5: alreadyAssignedCnt >= needed (e.g. needed=1, but 2 active assignments exist)
+	mockStorage.Assignments[2].Timeouted = nil
+	chore.NecessaryWorkers = 1
+	assignments5, err := cl.AssignChoresToUsers(users, chore)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(assignments5) != 0 {
+		t.Fatalf("expected 0 assignment when alreadyAssignedCnt >= needed, got %d", len(assignments5))
+	}
 }

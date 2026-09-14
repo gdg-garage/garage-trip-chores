@@ -1,6 +1,10 @@
 package ui
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/bwmarrin/discordgo"
+)
 
 func TestGetChoreIdFromButton(t *testing.T) {
 	tests := []struct {
@@ -64,6 +68,63 @@ func TestGetChoreIdFromButton(t *testing.T) {
 
 			if gotID != tt.wantID {
 				t.Errorf("getChoreIdFromButton() gotID = %v, want %v", gotID, tt.wantID)
+			}
+		})
+	}
+}
+
+func TestGetInteractionUserId(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    *discordgo.InteractionCreate
+		expected string
+	}{
+		{
+			name:     "nil input",
+			input:    nil,
+			expected: "",
+		},
+		{
+			name:     "empty interaction",
+			input:    &discordgo.InteractionCreate{},
+			expected: "",
+		},
+		{
+			name: "from interaction user",
+			input: &discordgo.InteractionCreate{
+				Interaction: &discordgo.Interaction{
+					User: &discordgo.User{ID: "user_123"},
+				},
+			},
+			expected: "user_123",
+		},
+		{
+			name: "from interaction member user",
+			input: &discordgo.InteractionCreate{
+				Interaction: &discordgo.Interaction{
+					Member: &discordgo.Member{
+						User: &discordgo.User{ID: "member_456"},
+					},
+				},
+			},
+			expected: "member_456",
+		},
+		{
+			name: "member without user",
+			input: &discordgo.InteractionCreate{
+				Interaction: &discordgo.Interaction{
+					Member: &discordgo.Member{},
+				},
+			},
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := getInteractionUserId(tt.input)
+			if got != tt.expected {
+				t.Errorf("getInteractionUserId() = %q, want %q", got, tt.expected)
 			}
 		})
 	}

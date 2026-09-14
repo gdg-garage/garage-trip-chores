@@ -10,16 +10,26 @@ import (
 )
 
 func (s *Storage) getGuildRolesMap() (map[string]*discordgo.Role, error) {
-	if s.discord == nil || s.discord.State == nil {
+	if s.discord == nil {
 		return make(map[string]*discordgo.Role), nil
-	}
-	guild, err := s.discord.State.Guild(s.conf.DiscordGuildId)
-	if err != nil {
-		return nil, err
 	}
 
 	guildRolesMap := make(map[string]*discordgo.Role)
-	for _, role := range guild.Roles {
+	if s.discord.State != nil {
+		if guild, err := s.discord.State.Guild(s.conf.DiscordGuildId); err == nil && guild != nil && len(guild.Roles) > 0 {
+			for _, role := range guild.Roles {
+				guildRolesMap[role.ID] = role
+			}
+			return guildRolesMap, nil
+		}
+	}
+
+	// Fallback to Discord REST API if state cache does not have the guild or roles
+	roles, err := s.discord.GuildRoles(s.conf.DiscordGuildId)
+	if err != nil {
+		return nil, err
+	}
+	for _, role := range roles {
 		guildRolesMap[role.ID] = role
 	}
 	return guildRolesMap, nil
