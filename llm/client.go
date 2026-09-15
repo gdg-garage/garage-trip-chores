@@ -67,9 +67,15 @@ func NewGeminiClient(conf Config) *GeminiClient {
 	}
 }
 
+type SafetySetting struct {
+	Category  string `json:"category"`
+	Threshold string `json:"threshold"`
+}
+
 type GenerateContentRequest struct {
 	Contents         []Content         `json:"contents"`
 	GenerationConfig *GenerationConfig `json:"generationConfig,omitempty"`
+	SafetySettings   []SafetySetting   `json:"safetySettings,omitempty"`
 	ServiceTier      string            `json:"service_tier,omitempty"`
 }
 
@@ -141,6 +147,13 @@ func (c *GeminiClient) generateContentWithTier(ctx context.Context, prompt strin
 			Temperature:     0.8,
 			MaxOutputTokens: 4096,
 		},
+		SafetySettings: []SafetySetting{
+			{Category: "HARM_CATEGORY_HARASSMENT", Threshold: "BLOCK_NONE"},
+			{Category: "HARM_CATEGORY_HATE_SPEECH", Threshold: "BLOCK_NONE"},
+			{Category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", Threshold: "BLOCK_NONE"},
+			{Category: "HARM_CATEGORY_DANGEROUS_CONTENT", Threshold: "BLOCK_NONE"},
+			{Category: "HARM_CATEGORY_CIVIC_INTEGRITY", Threshold: "BLOCK_NONE"},
+		},
 		ServiceTier: tier,
 	}
 
@@ -178,13 +191,13 @@ func (c *GeminiClient) generateContentWithTier(ctx context.Context, prompt strin
 
 		httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, endpointURL, bytes.NewReader(reqBytes))
 		if err != nil {
-			return "", fmt.Errorf("failed to create http request: %w", err)
+			return "", fmt.Errorf("failed to create request: %w", err)
 		}
 		httpReq.Header.Set("Content-Type", "application/json")
 
 		resp, err := c.httpClient.Do(httpReq)
 		if err != nil {
-			lastErr = fmt.Errorf("gemini API request failed (tier=%s): %w", tier, err)
+			lastErr = fmt.Errorf("request error (tier=%s): %w", tier, err)
 			continue
 		}
 
@@ -215,7 +228,11 @@ func (c *GeminiClient) generateContentWithTier(ctx context.Context, prompt strin
 		}
 
 		if len(genResp.Candidates) == 0 || len(genResp.Candidates[0].Content.Parts) == 0 {
-			return "", fmt.Errorf("gemini API returned empty candidate response")
+			finishReason := ""
+			if len(genResp.Candidates) > 0 {
+				finishReason = genResp.Candidates[0].FinishReason
+			}
+			return "", fmt.Errorf("gemini API returned empty candidate response (finishReason=%s, body=%s)", finishReason, string(respBytes))
 		}
 
 		var sb strings.Builder
