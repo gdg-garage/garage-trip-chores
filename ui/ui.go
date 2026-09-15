@@ -27,14 +27,23 @@ type EventBroadcaster interface {
 	BroadcastChoreEvent(eventType string, chore storage.Chore, assignments []storage.ChoreAssignment, worklogs []storage.WorkLog)
 }
 
+type SummaryRunner interface {
+	RunOnce(ctx context.Context) error
+}
+
 type Ui struct {
-	storage     *storage.Storage
-	logger      *slog.Logger
-	chores      *chores.ChoresLogic
-	discord     *discordgo.Session
-	conf        Config
-	colors      Colors
-	broadcaster EventBroadcaster
+	storage       *storage.Storage
+	logger        *slog.Logger
+	chores        *chores.ChoresLogic
+	discord       *discordgo.Session
+	conf          Config
+	colors        Colors
+	broadcaster   EventBroadcaster
+	summaryRunner SummaryRunner
+}
+
+func (ui *Ui) SetSummaryRunner(runner SummaryRunner) {
+	ui.summaryRunner = runner
 }
 
 const (
@@ -1245,9 +1254,8 @@ func (ui *Ui) Commands(ctx context.Context, wg *sync.WaitGroup) error {
 				}
 			}
 
-			// chore_create preview is ephemeral and the final task is published to the configured chores channel,
-			// so allow chore_create from any channel to prevent command failure for users.
-			if !allowed && cmdName != "chore_create" {
+			// chore_create and chore_summary interactions are ephemeral or safe from any channel
+			if !allowed && cmdName != "chore_create" && cmdName != "chore_summary" {
 				ui.logger.Warn("Command rejected due to channel restriction", "command", cmdName, "channel_id", channelId, "expected_channel_id", ui.conf.DiscordChannelId, "user_id", userId)
 				if err := s.InteractionRespond(i.Interaction, simpleInteractionResponse("This command can only be used in <#"+ui.conf.DiscordChannelId+"> channel.")); err != nil {
 					ui.logger.Error("failed to respond to wrong channel interaction", "error", err, "channel_id", channelId)
@@ -1258,6 +1266,8 @@ func (ui *Ui) Commands(ctx context.Context, wg *sync.WaitGroup) error {
 			switch cmdName {
 			case "chore_create":
 				ui.choreCreate(i)
+			case "chore_summary":
+				ui.choreSummary(i)
 			case "chores":
 				ui.choresList(i)
 			case "chores_open":
@@ -1444,6 +1454,11 @@ func (ui *Ui) Commands(ctx context.Context, wg *sync.WaitGroup) error {
 		{
 			Name:        "stats",
 			Description: "Display chores stats.",
+			Type:        discordgo.ChatApplicationCommand,
+		},
+		{
+			Name:        "chore_summary",
+			Description: "Triggers the LLM chore summary and posts it to the chore channel.",
 			Type:        discordgo.ChatApplicationCommand,
 		},
 	}
@@ -1837,6 +1852,50 @@ func (ui *Ui) stats(i *discordgo.InteractionCreate) {
 		},
 	}
 	ui.discord.InteractionRespond(i.Interaction, r)
+}
+
+func (ui *Ui) choreSummary(i *discordgo.InteractionCreate) {
+	if err := ui.discord.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Flags: discordgo.MessageFlagsEphemeral,
+		},
+	}); err != nil {
+		ui.logger.Error("failed to defer choreSummary interaction", "error", err)
+	}
+
+	if ui.summaryRunner == nil {
+		content := "LLM summarizer is not configured."
+		if _, err := ui.discord.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+			Content: &content,
+		}); err != nil {
+			ui.logger.Error("failed to edit choreSummary interaction response", "error", err)
+		}
+		return
+	}
+
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+
+		if err := ui.summaryRunner.RunOnce(ctx); err != nil {
+			ui.logger.Error("Manual chore summary failed", "error", err)
+			content := fmt.Sprintf("Failed to generate summary: %v", err)
+			if _, err := ui.discord.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+				Content: &content,
+			}); err != nil {
+				ui.logger.Error("failed to edit choreSummary interaction response", "error", err)
+			}
+			return
+		}
+
+		content := "Chores summary generated and posted successfully to the chores channel!"
+		if _, err := ui.discord.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+			Content: &content,
+		}); err != nil {
+			ui.logger.Error("failed to edit choreSummary interaction response", "error", err)
+		}
+	}()
 }
 
 func (ui *Ui) choresCompleted(i *discordgo.InteractionCreate) {

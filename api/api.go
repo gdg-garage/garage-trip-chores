@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/gdg-garage/garage-trip-chores/chores"
+	"github.com/gdg-garage/garage-trip-chores/llm"
 	"github.com/gdg-garage/garage-trip-chores/storage"
 	"github.com/gdg-garage/garage-trip-chores/ui"
 )
@@ -28,9 +29,14 @@ type Api struct {
 	logger         *slog.Logger
 	chores         *chores.ChoresLogic
 	ui             *ui.Ui
+	summarizer     *llm.Summarizer
 	conf           Config
 	hub            *WsHub
 	authorizedKeys map[string]struct{}
+}
+
+func (a *Api) SetSummarizer(s *llm.Summarizer) {
+	a.summarizer = s
 }
 
 func NewApi(s *storage.Storage, logger *slog.Logger, c *chores.ChoresLogic, ui *ui.Ui, conf Config) *Api {
@@ -520,6 +526,38 @@ func (a *Api) SetupRoutes() *chi.Mux {
 			Body: TaskStatsData{
 				TotalTimeMin: totalTime,
 				WorkerCount:  uint(len(workerIdMap)),
+			},
+		}, nil
+	})
+
+	type TriggerSummaryResponse struct {
+		Body struct {
+			Message string `json:"message"`
+		}
+	}
+
+	huma.Register(api, huma.Operation{
+		OperationID: "trigger-llm-summary",
+		Method:      http.MethodPost,
+		Path:        "/summary",
+		Summary:     "Trigger LLM chore summary",
+		Description: "Manually trigger the LLM chore summary generation and post to Discord",
+		Tags:        []string{"LLM"},
+		Security: []map[string][]string{
+			{"bearerAuth": {}},
+		},
+	}, func(ctx context.Context, input *struct{}) (*TriggerSummaryResponse, error) {
+		if a.summarizer == nil {
+			return nil, huma.Error500InternalServerError("LLM summarizer not configured")
+		}
+		if err := a.summarizer.RunOnce(ctx); err != nil {
+			return nil, huma.Error500InternalServerError(fmt.Sprintf("Failed to run LLM summary: %v", err))
+		}
+		return &TriggerSummaryResponse{
+			Body: struct {
+				Message string `json:"message"`
+			}{
+				Message: "LLM summary triggered and published successfully",
 			},
 		}, nil
 	})

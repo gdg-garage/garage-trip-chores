@@ -45,7 +45,20 @@ func main() {
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, syscall.SIGALRM, os.Interrupt)
 
+	llmSummarizer := llm.NewSummarizer(s, s.GetDiscord(), logger, conf.LLM, conf.Ui.DiscordChannelId)
+
+	if len(os.Args) > 1 && os.Args[1] == "summary" {
+		logger.Info("Executing one-off LLM chore summary via CLI...")
+		if err := llmSummarizer.RunOnce(context.Background()); err != nil {
+			logger.Error("One-off LLM chore summary failed", "error", err)
+			os.Exit(1)
+		}
+		logger.Info("One-off LLM chore summary completed successfully!")
+		return
+	}
+
 	uiServer := ui.NewUi(s, logger, &cl, s.GetDiscord(), conf.Ui)
+	uiServer.SetSummaryRunner(llmSummarizer)
 	go uiServer.Commands(ctx, &wg)
 	go uiServer.RunDelayedTaskScheduler(ctx, &wg)
 
@@ -55,11 +68,11 @@ func main() {
 	reminder := reminders.NewReminder(s, uiServer, &cl, logger, &conf.Reminder)
 	go reminder.RunReminder(ctx, &wg)
 
-	llmSummarizer := llm.NewSummarizer(s, s.GetDiscord(), logger, conf.LLM, conf.Ui.DiscordChannelId)
 	llmScheduler := llm.NewScheduler(llmSummarizer, logger, conf.LLM)
 	go llmScheduler.Run(ctx, &wg)
 
 	apiServer := api.NewApi(s, logger, &cl, uiServer, conf.Api)
+	apiServer.SetSummarizer(llmSummarizer)
 	go apiServer.Run(ctx)
 
 	<-sc
