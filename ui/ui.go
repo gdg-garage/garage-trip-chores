@@ -2019,20 +2019,31 @@ func (ui *Ui) doneChore(d string, s *discordgo.Session, i *discordgo.Interaction
 	choreId, err := getChoreIdFromCustomID(d)
 	if err != nil {
 		ui.logger.Error("failed to parse chore ID from button", "error", err, "custom_id", d)
-		s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
+		_ = s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
 		return
 	}
 
 	chore, err := ui.CompleteChore(choreId)
 	if err != nil {
+		if strings.Contains(err.Error(), "already been completed") {
+			ui.logger.Info("chore already completed when done button clicked", "chore_id", choreId)
+			r := simpleContainerizedInteractionResponse(fmt.Sprintf("This chore `id: %d` has already been completed.", choreId), &ui.colors.GreenColor)
+			r.Type = discordgo.InteractionResponseUpdateMessage
+			_ = s.InteractionRespond(i.Interaction, r)
+			return
+		}
 		ui.logger.Error("failed to complete chore", "error", err, "chore_id", choreId)
-		s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(err.Error()))
+		r := ui.errorInteractionResponse(err.Error())
+		r.Type = discordgo.InteractionResponseUpdateMessage
+		_ = s.InteractionRespond(i.Interaction, r)
 		return
 	}
 
 	r := simpleContainerizedInteractionResponse(fmt.Sprintf("This chore `id: %d` `%s` has been completed.", choreId, chore.Name), &ui.colors.GreenColor)
 	r.Type = discordgo.InteractionResponseUpdateMessage
-	s.InteractionRespond(i.Interaction, r)
+	if err := s.InteractionRespond(i.Interaction, r); err != nil {
+		ui.logger.Error("failed to respond to doneChore interaction", "error", err, "chore_id", choreId)
+	}
 }
 
 func (ui *Ui) RunDelayedTaskScheduler(ctx context.Context, wg *sync.WaitGroup) {
