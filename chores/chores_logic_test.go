@@ -138,3 +138,47 @@ func TestAssignChoresToUsers(t *testing.T) {
 		t.Fatalf("expected 0 assignment when alreadyAssignedCnt >= needed, got %d", len(assignments5))
 	}
 }
+
+func TestAssignChoresToUsers_DirectAssignee(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	mockStorage := &MockStorage{
+		Stats: storage.UserChoreStats{
+			"u1": {Count: 0, TotalMin: 0},
+			"u2": {Count: 1, TotalMin: 10},
+		},
+		Assignments: []storage.ChoreAssignment{
+			{
+				ChoreId: 10,
+				UserId:  "u-direct",
+				Created: time.Now(),
+			},
+		},
+	}
+
+	// OversampleRatio is 0.5. Without direct assignee, needed = 1 + 1 = 2.
+	// With direct assignee, oversampling is skipped so needed = 1.
+	cl := NewChoresLogic(mockStorage, logger, Config{OversampleRatio: 0.5})
+
+	users := []storage.User{
+		{DiscordId: "u1"},
+		{DiscordId: "u2"},
+	}
+
+	chore := storage.Chore{
+		ID:               10,
+		AssigneeId:       "u-direct",
+		NecessaryWorkers: 1,
+	}
+
+	// Because u-direct is already assigned and needed is 1 (no oversampling),
+	// AssignChoresToUsers should not assign any additional users.
+	assignments, err := cl.AssignChoresToUsers(users, chore)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(assignments) != 0 {
+		t.Fatalf("expected 0 extra assignments for direct assignee, got %d: %+v", len(assignments), assignments)
+	}
+}
+

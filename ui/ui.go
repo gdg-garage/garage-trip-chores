@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -16,6 +17,8 @@ import (
 	"github.com/gdg-garage/garage-trip-chores/storage"
 	"gorm.io/gorm"
 )
+
+var userMentionRegex = regexp.MustCompile(`<@!?(\d+)>`)
 
 type Colors struct {
 	OrangeColor int
@@ -62,8 +65,9 @@ const (
 	ReportTimeSpentModal = "report_time_spent" + ModalSubmitSuffix
 	EditChoreModal       = "edit" + ModalSubmitSuffix
 
-	SelectMenuSuffix = "_select_menu:"
-	SkillsSelectMenu = "skills" + SelectMenuSuffix
+	SelectMenuSuffix   = "_select_menu:"
+	SkillsSelectMenu   = "skills" + SelectMenuSuffix
+	AssigneeSelectMenu = "assignee" + SelectMenuSuffix
 )
 
 func getInteractionUserId(i *discordgo.InteractionCreate) string {
@@ -307,6 +311,16 @@ func (ui *Ui) PublishChore(c storage.Chore) (storage.Chore, []storage.ChoreAssig
 		return c, assignments, nil
 	}
 
+	if c.AssigneeId != "" {
+		existing, _ := ui.storage.GetChoreAssignment(c.ID, c.AssigneeId)
+		if existing.ID == 0 {
+			_, err := ui.storage.AssignChore(c, c.AssigneeId)
+			if err != nil {
+				ui.logger.Error("failed to assign direct user", "error", err, "chore_id", c.ID, "assignee", c.AssigneeId)
+			}
+		}
+	}
+
 	users, err := ui.storage.GetPresentUsers()
 	if err != nil {
 		ui.logger.Error("Error getting present users", "error", err)
@@ -318,6 +332,17 @@ func (ui *Ui) PublishChore(c storage.Chore) (storage.Chore, []storage.ChoreAssig
 		return c, nil, fmt.Errorf("error assigning chores to users: %w", err)
 	}
 
+	allAssignments, err := ui.storage.GetChoreAssignments(c.ID)
+	if err != nil {
+		allAssignments = ass
+	}
+	activeAssignments := []storage.ChoreAssignment{}
+	for _, a := range allAssignments {
+		if a.Refused == nil && a.Timeouted == nil {
+			activeAssignments = append(activeAssignments, a)
+		}
+	}
+
 	embeds := []*discordgo.MessageEmbed{}
 
 	choreMd := ui.generateChoreMd(c)
@@ -327,14 +352,19 @@ func (ui *Ui) PublishChore(c storage.Chore) (storage.Chore, []storage.ChoreAssig
 	}
 	embeds = append(embeds, &choreEmbed)
 
-	assignmentsEmbed := ui.generateAssignmentEmbed(ass, "Assignments", ui.colors.OrangeColor)
+	assignmentsEmbed := ui.generateAssignmentEmbed(activeAssignments, "Assignments", ui.colors.OrangeColor)
 	if assignmentsEmbed != nil {
 		embeds = append(embeds, assignmentsEmbed)
 	}
 
 	if ui.discord != nil {
+		content := c.Name
+		if c.AssigneeId != "" {
+			content = fmt.Sprintf("%s — Assigned to <@%s>", c.Name, c.AssigneeId)
+		}
+
 		m, err := ui.discord.ChannelMessageSendComplex(ui.conf.DiscordChannelId, &discordgo.MessageSend{
-			Content: c.Name,
+			Content: content,
 			Components: []discordgo.MessageComponent{
 				discordgo.ActionsRow{
 					Components: []discordgo.MessageComponent{
@@ -355,16 +385,41 @@ func (ui *Ui) PublishChore(c storage.Chore) (storage.Chore, []storage.ChoreAssig
 		})
 		if err != nil {
 			ui.logger.Error("failed to send public chore message", "error", err, "chore_id", c.ID)
-			return c, ass, fmt.Errorf("failed to send public chore message: %w", err)
+			return c, activeAssignments, fmt.Errorf("failed to send public chore message: %w", err)
 		}
 
 		c.MessageId = m.ID
 		c, err = ui.storage.SaveChore(c)
 		if err != nil {
 			ui.logger.Error("failed to save chore with message ID", "error", err, "chore_id", c.ID)
-			return c, ass, fmt.Errorf("failed to save chore with message ID: %w", err)
+			return c, activeAssignments, fmt.Errorf("failed to save chore with message ID: %w", err)
 		}
 		ui.logger.Info("Chore scheduled and published", "chore_id", c.ID, "message_id", m.ID)
+
+		if c.AssigneeId != "" {
+			messageUrl := ui.GetChoreMessageUrl(c)
+			go func(assigneeId, choreName string, choreId uint, msgUrl string) {
+				_ = ui.SendDM(assigneeId, &discordgo.MessageSend{
+					Content: fmt.Sprintf("You were assigned to chore `%s` (id: `%d`) in <#%s>.\n%s", choreName, choreId, ui.conf.DiscordChannelId, msgUrl),
+					Components: []discordgo.MessageComponent{
+						discordgo.ActionsRow{
+							Components: []discordgo.MessageComponent{
+								&discordgo.Button{
+									Style:    discordgo.PrimaryButton,
+									Label:    "Ack",
+									CustomID: AckButtonClick + fmt.Sprint(choreId),
+								},
+								&discordgo.Button{
+									Style:    discordgo.SecondaryButton,
+									Label:    "Reject",
+									CustomID: RejectButtonClick + fmt.Sprint(choreId),
+								},
+							},
+						},
+					},
+				})
+			}(c.AssigneeId, c.Name, c.ID, messageUrl)
+		}
 
 		if c.CreatorId != "" {
 			messageUrl := ui.GetChoreMessageUrl(c)
@@ -393,12 +448,12 @@ func (ui *Ui) PublishChore(c storage.Chore) (storage.Chore, []storage.ChoreAssig
 	} else {
 		c, err = ui.storage.SaveChore(c)
 		if err != nil {
-			return c, ass, err
+			return c, activeAssignments, err
 		}
 	}
 
 	ui.EmitChoreEvent("chore_created", c)
-	return c, ass, nil
+	return c, activeAssignments, nil
 }
 
 func (ui *Ui) scheduleChore(buttonId string, s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -1152,6 +1207,9 @@ func (ui *Ui) generateChoreMd(chore storage.Chore) string {
 	if necessaryCapabilities != "" {
 		choreDesc += fmt.Sprintf("\n**Necessary Capabilities**: `%s`", necessaryCapabilities)
 	}
+	if chore.AssigneeId != "" {
+		choreDesc += fmt.Sprintf("\n**Assigned to**: <@%s>", chore.AssigneeId)
+	}
 	if chore.DelayMin > 0 {
 		choreDesc += fmt.Sprintf("\n**Delay**: %d min", chore.DelayMin)
 	}
@@ -1188,9 +1246,36 @@ func (ui *Ui) choreCreate(i *discordgo.InteractionCreate) {
 		return
 	}
 
+	var assigneeId string
+	if opt, ok := optionMap["assignee"]; ok && opt != nil {
+		if opt.UserValue(ui.discord) != nil {
+			assigneeId = opt.UserValue(ui.discord).ID
+		} else if str, ok := opt.Value.(string); ok {
+			assigneeId = str
+		}
+	} else if opt, ok := optionMap["user"]; ok && opt != nil {
+		if opt.UserValue(ui.discord) != nil {
+			assigneeId = opt.UserValue(ui.discord).ID
+		} else if str, ok := opt.Value.(string); ok {
+			assigneeId = str
+		}
+	}
+
+	// If no explicit assignee option was given, check if a user mention is embedded in the chore name
+	if assigneeId == "" {
+		if matches := userMentionRegex.FindStringSubmatch(name); len(matches) > 1 {
+			assigneeId = matches[1]
+			cleanName := strings.TrimSpace(userMentionRegex.ReplaceAllString(name, ""))
+			if cleanName != "" {
+				name = cleanName
+			}
+		}
+	}
+
 	defaultDeadline := time.Now().Add(24 * time.Hour) // Default deadline is 24 hours from creation
 	chore := storage.Chore{
 		Name:                 name,
+		AssigneeId:           assigneeId,
 		NecessaryWorkers:     uint(1),
 		EstimatedTimeMin:     uint(10),
 		AssignmentTimeoutMin: uint(15),
@@ -1359,6 +1444,36 @@ func (ui *Ui) choreCreate(i *discordgo.InteractionCreate) {
 			},
 		})
 	}
+
+	minAssignees := 0
+	assigneeSelect := discordgo.SelectMenu{
+		MenuType:    discordgo.UserSelectMenu,
+		CustomID:    AssigneeSelectMenu + fmt.Sprint(chore.ID),
+		Placeholder: "Assign to a member (optional)",
+		MinValues:   &minAssignees,
+		MaxValues:   1,
+	}
+	if chore.AssigneeId != "" {
+		assigneeSelect.DefaultValues = []discordgo.SelectMenuDefaultValue{
+			{
+				ID:   chore.AssigneeId,
+				Type: discordgo.SelectMenuDefaultValueUser,
+			},
+		}
+	}
+
+	components = append(components, discordgo.Container{
+		Components: []discordgo.MessageComponent{
+			&discordgo.TextDisplay{
+				Content: "Assign to a member (optional):",
+			},
+			discordgo.ActionsRow{
+				Components: []discordgo.MessageComponent{
+					&assigneeSelect,
+				},
+			},
+		},
+	})
 
 	scheduleLabel := "Schedule"
 	if chore.DelayMin > 0 {
@@ -1551,6 +1666,8 @@ func (ui *Ui) Commands(ctx context.Context, wg *sync.WaitGroup) error {
 				ui.reportTimeSpentButtonClick(data.CustomID, s, i)
 			case strings.HasPrefix(data.CustomID, SkillsSelectMenu):
 				ui.handleSkillsSelect(data.CustomID, s, i)
+			case strings.HasPrefix(data.CustomID, AssigneeSelectMenu):
+				ui.handleAssigneeSelect(data.CustomID, s, i)
 			default:
 				ui.logger.Warn("Unhandled message component interaction", "custom_id", data.CustomID)
 			}
@@ -1602,6 +1719,12 @@ func (ui *Ui) Commands(ctx context.Context, wg *sync.WaitGroup) error {
 					Name:        "name",
 					Description: "The chore description.",
 					Required:    true,
+				},
+				{
+					Type:        discordgo.ApplicationCommandOptionUser,
+					Name:        "assignee",
+					Description: "Assign this chore directly to a specific member (optional).",
+					Required:    false,
 				},
 				{
 					Type:        discordgo.ApplicationCommandOptionInteger,
@@ -1841,6 +1964,50 @@ func (ui *Ui) handleSkillsSelect(d string, s *discordgo.Session, i *discordgo.In
 	}
 	r.Data.Components = append(r.Data.Components, container)
 	s.InteractionRespond(i.Interaction, r)
+}
+
+func (ui *Ui) handleAssigneeSelect(d string, s *discordgo.Session, i *discordgo.InteractionCreate) {
+	failedText := "Failed to update assignee."
+
+	choreId, err := getChoreIdFromCustomID(d)
+	if err != nil {
+		ui.logger.Error("failed to parse chore ID from assignee select menu", "error", err, "custom_id", d)
+		_ = s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
+		return
+	}
+
+	chore, err := ui.storage.GetChore(choreId)
+	if err != nil {
+		ui.logger.Error("failed to get chore", "error", err, "chore_id", choreId)
+		_ = s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
+		return
+	}
+
+	selectedAssignees := i.MessageComponentData().Values
+	if len(selectedAssignees) > 0 {
+		chore.AssigneeId = selectedAssignees[0]
+	} else {
+		chore.AssigneeId = ""
+	}
+
+	chore, err = ui.storage.SaveChore(chore)
+	if err != nil {
+		ui.logger.Error("failed to save chore with updated assignee", "error", err, "chore_id", choreId)
+		_ = s.InteractionRespond(i.Interaction, ui.errorInteractionResponse(failedText))
+		return
+	}
+
+	_ = ui.UpdateChoreMessage(chore)
+	ui.EmitChoreEvent("chore_updated", chore)
+
+	var msg string
+	if chore.AssigneeId != "" {
+		msg = fmt.Sprintf("Assigned chore to <@%s>.", chore.AssigneeId)
+	} else {
+		msg = "Cleared direct assignment. The chore will be automatically assigned upon scheduling."
+	}
+	r := simpleContainerizedInteractionResponse(msg, &ui.colors.GreenColor)
+	_ = s.InteractionRespond(i.Interaction, r)
 }
 
 func (ui *Ui) EditChoreDetails(choreId uint, name string, necessaryWorkers, estimatedTimeMin, assignmentTimeoutMin uint, deadline *time.Time, capabilities []string) (storage.Chore, error) {

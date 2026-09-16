@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -16,6 +18,8 @@ import (
 	"github.com/gdg-garage/garage-trip-chores/storage"
 	"github.com/gdg-garage/garage-trip-chores/ui"
 )
+
+var userMentionRegex = regexp.MustCompile(`<@!?(\d+)>`)
 
 type Config struct {
 	Port    int      `json:"port"`
@@ -268,8 +272,21 @@ func (a *Api) SetupRoutes() *chi.Mux {
 			creatorId = input.Body.CreatorId
 		}
 
+		name := input.Body.Name
+		assigneeId := input.Body.AssigneeId
+		if assigneeId == "" {
+			if matches := userMentionRegex.FindStringSubmatch(name); len(matches) > 1 {
+				assigneeId = matches[1]
+				cleanName := strings.TrimSpace(userMentionRegex.ReplaceAllString(name, ""))
+				if cleanName != "" {
+					name = cleanName
+				}
+			}
+		}
+
 		chore := storage.Chore{
-			Name:                 input.Body.Name,
+			Name:                 name,
+			AssigneeId:           assigneeId,
 			NecessaryWorkers:     workers,
 			EstimatedTimeMin:     estTime,
 			AssignmentTimeoutMin: timeoutMin,
@@ -604,6 +621,7 @@ type HealthResponse struct {
 type TaskData struct {
 	ID                    uint       `json:"id"`
 	Name                  string     `json:"name"`
+	AssigneeId            string     `json:"assignee_id,omitempty"`
 	NecessaryWorkers      uint       `json:"necessary_workers"`
 	EstimatedTimeMin      uint       `json:"estimated_time_min"`
 	AssignmentTimeoutMin  uint       `json:"assignment_timeout_min"`
@@ -637,6 +655,7 @@ type TasksResponse struct {
 
 type TaskCreateInputBody struct {
 	Name                  string     `json:"name" doc:"Name of the chore"`
+	AssigneeId            string     `json:"assignee_id,omitempty" doc:"Direct assignee ID (e.g. Discord user ID)"`
 	NecessaryWorkers      uint       `json:"necessary_workers" default:"1"`
 	EstimatedTimeMin      uint       `json:"estimated_time_min" default:"10"`
 	AssignmentTimeoutMin  uint       `json:"assignment_timeout_min" default:"15"`
@@ -792,6 +811,7 @@ func toTaskData(chore storage.Chore, assignments []storage.ChoreAssignment, work
 	return TaskData{
 		ID:                    chore.ID,
 		Name:                  chore.Name,
+		AssigneeId:            chore.AssigneeId,
 		NecessaryWorkers:      chore.NecessaryWorkers,
 		EstimatedTimeMin:      chore.EstimatedTimeMin,
 		AssignmentTimeoutMin:  chore.AssignmentTimeoutMin,

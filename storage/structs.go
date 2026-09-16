@@ -19,6 +19,7 @@ type Chore struct {
 	EstimatedTimeMin      uint
 	AssignmentTimeoutMin  uint
 	CreatorId             string // Discord ID of the user who created the chore
+	AssigneeId            string // Discord ID of the directly assigned user (optional)
 	MessageId             string // ID of the message in Discord where the chore was posted
 	Created               time.Time
 	Completed             *time.Time

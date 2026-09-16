@@ -1098,3 +1098,92 @@ func TestCreateSelfReportedTask(t *testing.T) {
 	}
 }
 
+func TestCreateTaskWithAssignee(t *testing.T) {
+	api, s, _, cleanup := setupTestApi(t)
+	defer cleanup()
+	handler := api.SetupRoutes()
+
+	createReq := CreateTaskInput{
+		Body: TaskCreateInputBody{
+			Name:       "Task for Bob",
+			AssigneeId: "user-bob-123",
+		},
+	}
+	body, _ := json.Marshal(createReq.Body)
+	req := httptest.NewRequest(http.MethodPost, "/tasks", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var created TaskData
+	if err := json.Unmarshal(w.Body.Bytes(), &created); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	if created.AssigneeId != "user-bob-123" {
+		t.Fatalf("Expected AssigneeId 'user-bob-123', got %q", created.AssigneeId)
+	}
+	if len(created.Assigned) != 1 || created.Assigned[0] != "user-bob-123" {
+		t.Fatalf("Expected Assigned ['user-bob-123'], got: %+v", created.Assigned)
+	}
+
+	// Verify storage assignment
+	assignments, err := s.GetChoreAssignments(created.ID)
+	if err != nil {
+		t.Fatalf("Failed to get assignments: %v", err)
+	}
+	if len(assignments) != 1 || assignments[0].UserId != "user-bob-123" {
+		t.Fatalf("Expected 1 assignment for user-bob-123 in storage: %+v", assignments)
+	}
+}
+
+func TestCreateTaskWithMentionInName(t *testing.T) {
+	api, s, _, cleanup := setupTestApi(t)
+	defer cleanup()
+	handler := api.SetupRoutes()
+
+	createReq := CreateTaskInput{
+		Body: TaskCreateInputBody{
+			Name: "Do laundry <@999888>",
+		},
+	}
+	body, _ := json.Marshal(createReq.Body)
+	req := httptest.NewRequest(http.MethodPost, "/tasks", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var created TaskData
+	if err := json.Unmarshal(w.Body.Bytes(), &created); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	if created.AssigneeId != "999888" {
+		t.Fatalf("Expected AssigneeId '999888', got %q", created.AssigneeId)
+	}
+	if created.Name != "Do laundry" {
+		t.Fatalf("Expected cleaned Name 'Do laundry', got %q", created.Name)
+	}
+	if len(created.Assigned) != 1 || created.Assigned[0] != "999888" {
+		t.Fatalf("Expected Assigned ['999888'], got: %+v", created.Assigned)
+	}
+
+	// Verify storage assignment
+	assignments, err := s.GetChoreAssignments(created.ID)
+	if err != nil {
+		t.Fatalf("Failed to get assignments: %v", err)
+	}
+	if len(assignments) != 1 || assignments[0].UserId != "999888" {
+		t.Fatalf("Expected 1 assignment for 999888 in storage: %+v", assignments)
+	}
+}
+
+

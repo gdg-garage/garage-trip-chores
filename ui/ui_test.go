@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -399,5 +400,103 @@ func TestPublishSelfReportedChore(t *testing.T) {
 		t.Fatalf("Unexpected worklog in storage: %+v", worklogs[0])
 	}
 }
+
+func TestPublishChoreWithDirectAssignee(t *testing.T) {
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "test.sqlite")
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+
+	s, err := storage.New(storage.Config{
+		DbPath: dbPath,
+	}, logger)
+	if err != nil {
+		t.Fatalf("Failed to initialize storage: %v", err)
+	}
+
+	cl := chores.NewChoresLogic(s, logger, chores.Config{})
+	ui := NewUi(s, logger, &cl, nil, Config{})
+
+	chore := storage.Chore{
+		Name:             "Direct assigned chore",
+		CreatorId:        "creator_user",
+		AssigneeId:       "direct_worker_123",
+		NecessaryWorkers: 1,
+		EstimatedTimeMin: 20,
+	}
+
+	published, assignments, err := ui.PublishChore(chore)
+	if err != nil {
+		t.Fatalf("PublishChore failed: %v", err)
+	}
+
+	if published.AssigneeId != "direct_worker_123" {
+		t.Fatalf("Expected published chore AssigneeId to be 'direct_worker_123', got %s", published.AssigneeId)
+	}
+
+	if len(assignments) != 1 {
+		t.Fatalf("Expected 1 assignment, got %d", len(assignments))
+	}
+	if assignments[0].UserId != "direct_worker_123" {
+		t.Fatalf("Expected assignment for direct_worker_123, got %s", assignments[0].UserId)
+	}
+
+	// Verify storage state
+	storedAssignments, err := s.GetChoreAssignments(published.ID)
+	if err != nil {
+		t.Fatalf("Failed to get assignments: %v", err)
+	}
+	if len(storedAssignments) != 1 || storedAssignments[0].UserId != "direct_worker_123" {
+		t.Fatalf("Expected 1 assignment in storage for direct_worker_123: %+v", storedAssignments)
+	}
+}
+
+func TestUserMentionExtraction(t *testing.T) {
+	tests := []struct {
+		inputName      string
+		expectedName   string
+		expectedUserId string
+	}{
+		{
+			inputName:      "Wash dishes <@123456789>",
+			expectedName:   "Wash dishes",
+			expectedUserId: "123456789",
+		},
+		{
+			inputName:      "<@!987654321> Cook dinner",
+			expectedName:   "Cook dinner",
+			expectedUserId: "987654321",
+		},
+		{
+			inputName:      "Take out trash",
+			expectedName:   "Take out trash",
+			expectedUserId: "",
+		},
+		{
+			inputName:      "Clean table <@111222> after lunch",
+			expectedName:   "Clean table  after lunch",
+			expectedUserId: "111222",
+		},
+	}
+
+	for _, tt := range tests {
+		var extractedUserId string
+		name := tt.inputName
+		if matches := userMentionRegex.FindStringSubmatch(name); len(matches) > 1 {
+			extractedUserId = matches[1]
+			cleanName := strings.TrimSpace(userMentionRegex.ReplaceAllString(name, ""))
+			if cleanName != "" {
+				name = cleanName
+			}
+		}
+
+		if extractedUserId != tt.expectedUserId {
+			t.Errorf("For %q, expected user ID %q, got %q", tt.inputName, tt.expectedUserId, extractedUserId)
+		}
+		if name != tt.expectedName {
+			t.Errorf("For %q, expected clean name %q, got %q", tt.inputName, tt.expectedName, name)
+		}
+	}
+}
+
 
 

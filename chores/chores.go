@@ -77,7 +77,10 @@ func NewChoresLogic(storage StorageAccess, logger *slog.Logger, config Config) C
 }
 
 func (cl ChoresLogic) AssignChoresToUsers(users []storage.User, chore storage.Chore) ([]storage.ChoreAssignment, error) {
-	needed := chore.NecessaryWorkers + OversampleCnt(chore.NecessaryWorkers, cl.config.OversampleRatio)
+	needed := chore.NecessaryWorkers
+	if chore.AssigneeId == "" {
+		needed += OversampleCnt(chore.NecessaryWorkers, cl.config.OversampleRatio)
+	}
 	assignments := make([]storage.ChoreAssignment, 0, needed)
 
 	userTotalStats, err := cl.storage.GetTotalNormalizedChoreStats()
