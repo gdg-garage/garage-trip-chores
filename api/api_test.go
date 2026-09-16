@@ -1186,4 +1186,89 @@ func TestCreateTaskWithMentionInName(t *testing.T) {
 	}
 }
 
+func TestDraftTasksInAPI(t *testing.T) {
+	api, stor, _, cleanup := setupTestApi(t)
+	defer cleanup()
+
+	handler := api.SetupRoutes()
+
+	// 1. Create a draft chore (like chore 66 created as a preview in Discord)
+	draftChore, err := stor.SaveChore(storage.Chore{
+		Name:             "Draft Preview Chore",
+		EstimatedTimeMin: 15,
+		CreatorId:        "user-creator",
+		Draft:            true,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create draft chore: %v", err)
+	}
+
+	// 2. Create a published/non-draft chore
+	publishedChore, err := stor.SaveChore(storage.Chore{
+		Name:             "Published Chore",
+		EstimatedTimeMin: 20,
+		CreatorId:        "user-creator",
+		Draft:            false,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create published chore: %v", err)
+	}
+
+	// 3. GET /tasks should only return the published chore, NOT the draft
+	reqGet := httptest.NewRequest(http.MethodGet, "/tasks", nil)
+	wGet := httptest.NewRecorder()
+	handler.ServeHTTP(wGet, reqGet)
+
+	if wGet.Code != http.StatusOK {
+		t.Fatalf("GET /tasks failed: %d", wGet.Code)
+	}
+
+	var tasks []TaskData
+	if err := json.Unmarshal(wGet.Body.Bytes(), &tasks); err != nil {
+		t.Fatalf("Failed to unmarshal GET /tasks: %v", err)
+	}
+
+	if len(tasks) != 1 {
+		t.Fatalf("Expected exactly 1 task in GET /tasks, got %d", len(tasks))
+	}
+	if tasks[0].ID != publishedChore.ID {
+		t.Fatalf("Expected published chore ID %d, got %d", publishedChore.ID, tasks[0].ID)
+	}
+
+	// 4. GET /tasks/{draft_id} should return 404
+	reqDraft := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/tasks/%d", draftChore.ID), nil)
+	wDraft := httptest.NewRecorder()
+	handler.ServeHTTP(wDraft, reqDraft)
+
+	if wDraft.Code != http.StatusNotFound {
+		t.Fatalf("Expected 404 for GET /tasks/%d (draft), got %d", draftChore.ID, wDraft.Code)
+	}
+
+	// 5. GET /tasks/{published_id} should return 200
+	reqPub := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/tasks/%d", publishedChore.ID), nil)
+	wPub := httptest.NewRecorder()
+	handler.ServeHTTP(wPub, reqPub)
+
+	if wPub.Code != http.StatusOK {
+		t.Fatalf("Expected 200 for GET /tasks/%d, got %d", publishedChore.ID, wPub.Code)
+	}
+
+	// 6. Actions on draft chore should return 404
+	reqDone := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/tasks/%d/done", draftChore.ID), nil)
+	wDone := httptest.NewRecorder()
+	handler.ServeHTTP(wDone, reqDone)
+
+	if wDone.Code != http.StatusNotFound {
+		t.Fatalf("Expected 404 for POST /tasks/%d/done (draft), got %d", draftChore.ID, wDone.Code)
+	}
+
+	reqDelete := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/tasks/%d", draftChore.ID), nil)
+	wDelete := httptest.NewRecorder()
+	handler.ServeHTTP(wDelete, reqDelete)
+
+	if wDelete.Code != http.StatusNotFound {
+		t.Fatalf("Expected 404 for DELETE /tasks/%d (draft), got %d", draftChore.ID, wDelete.Code)
+	}
+}
+
 

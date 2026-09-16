@@ -29,6 +29,7 @@ type Chore struct {
 	necessaryCapabilities []string
 	AfterDeadlineReminded bool
 	SelfReported          bool
+	Draft                 bool `gorm:"default:false"`
 }
 
 func (c *Chore) GetCapabilities() []string {

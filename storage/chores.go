@@ -5,7 +5,7 @@ import "gorm.io/gorm/clause"
 func (s *Storage) SaveChore(chore Chore) (Chore, error) {
 	isNew := chore.ID == 0
 	r := s.db.Save(&chore)
-	if r.Error == nil && s.Events != nil {
+	if r.Error == nil && s.Events != nil && !chore.Draft {
 		eventType := TaskUpdated
 		if isNew {
 			eventType = TaskCreated
@@ -29,9 +29,13 @@ func (s *Storage) GetChore(Id uint) (Chore, error) {
 	return chore, r.Error
 }
 
+func (s *Storage) DeleteChore(id uint) error {
+	return s.db.Delete(&Chore{}, id).Error
+}
+
 func (s *Storage) GetChores() ([]Chore, error) {
 	var chores []Chore
-	r := s.db.Find(&chores)
+	r := s.db.Where("draft = ? OR draft IS NULL", false).Find(&chores)
 	if r.Error == nil {
 		for i := range chores {
 			chores[i].GetCapabilities()
@@ -42,7 +46,7 @@ func (s *Storage) GetChores() ([]Chore, error) {
 
 func (s *Storage) GetCompletedChores() ([]Chore, error) {
 	var chores []Chore
-	r := s.db.Where("completed IS NOT NULL").Order("chores.created DESC").Find(&chores)
+	r := s.db.Where("completed IS NOT NULL AND (draft = ? OR draft IS NULL)", false).Order("chores.created DESC").Find(&chores)
 	if r.Error == nil {
 		for i := range chores {
 			chores[i].GetCapabilities()
@@ -53,7 +57,7 @@ func (s *Storage) GetCompletedChores() ([]Chore, error) {
 
 func (s *Storage) GetUnfinishedChores() ([]Chore, error) {
 	var chores []Chore
-	r := s.db.Where("completed IS NULL and cancelled IS NULL").Order("created DESC").Find(&chores)
+	r := s.db.Where("completed IS NULL and cancelled IS NULL and (draft = ? OR draft IS NULL)", false).Order("created DESC").Find(&chores)
 	if r.Error == nil {
 		for i := range chores {
 			chores[i].GetCapabilities()

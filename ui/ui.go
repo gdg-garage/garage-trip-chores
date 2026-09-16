@@ -211,6 +211,7 @@ func (ui *Ui) emitChoreEvent(eventType string, chore storage.Chore, wl *storage.
 
 func (ui *Ui) PublishChore(c storage.Chore) (storage.Chore, []storage.ChoreAssignment, error) {
 	var err error
+	c.Draft = false
 	if c.ID == 0 {
 		c, err = ui.storage.SaveChore(c)
 		if err != nil {
@@ -523,6 +524,14 @@ func (ui *Ui) scheduleChore(buttonId string, s *discordgo.Session, i *discordgo.
 		return
 	}
 
+	c.Draft = false
+	c, err = ui.storage.SaveChore(c)
+	if err != nil {
+		ui.logger.Error("failed to update chore draft state", "error", err, "chore_id", choreId)
+		sendResponse(ui.errorInteractionResponse(failedText))
+		return
+	}
+
 	if c.DelayMin > 0 {
 		publishAt := time.Now().Add(time.Duration(c.DelayMin) * time.Minute)
 		_, err := ui.storage.CreateDelayedTask(c.ID, publishAt, c.DelayMin)
@@ -531,6 +540,8 @@ func (ui *Ui) scheduleChore(buttonId string, s *discordgo.Session, i *discordgo.
 			sendResponse(ui.errorInteractionResponse(failedText))
 			return
 		}
+
+		ui.EmitChoreEvent("chore_created", c)
 
 		ui.logger.Info("Chore scheduled with delay", "chore_id", choreId, "delay_min", c.DelayMin, "publish_at", publishAt)
 		r := simpleContainerizedInteractionResponse(fmt.Sprintf("This chore `id: %d` was scheduled with a delay and will be sent in %d minutes (at %s).", choreId, c.DelayMin, publishAt.Format("15:04")), &ui.colors.GreenColor)
@@ -829,6 +840,17 @@ func (ui *Ui) cancelChore(buttonId string, s *discordgo.Session, i *discordgo.In
 	if chore.CreatorId != "" && userId != "" && chore.CreatorId != userId {
 		ui.logger.Warn("non-creator attempted to cancel chore", "user_id", userId, "creator_id", chore.CreatorId, "chore_id", choreId)
 		sendResp("Only the chore creator can cancel this chore.", true)
+		return
+	}
+
+	if chore.Draft {
+		if err := ui.storage.DeleteChore(choreId); err != nil {
+			ui.logger.Error("failed to delete chore draft", "error", err, "chore_id", choreId)
+			sendResp("Failed to delete chore preview.", true)
+			return
+		}
+		ui.logger.Info("Chore draft deleted successfully", "chore_id", choreId, "user_id", userId)
+		sendResp(fmt.Sprintf("This chore preview `id: %d` has been deleted.", choreId), false)
 		return
 	}
 
@@ -1494,6 +1516,7 @@ func (ui *Ui) choreCreate(i *discordgo.InteractionCreate) {
 		"estimated_time_min", chore.EstimatedTimeMin,
 	)
 
+	chore.Draft = true
 	chore, err := ui.storage.SaveChore(chore)
 	if err != nil {
 		ui.logger.Error("failed to save chore in chore_create", "error", err, "name", chore.Name, "user_id", userId)
@@ -2086,8 +2109,10 @@ func (ui *Ui) handleSkillsSelect(d string, s *discordgo.Session, i *discordgo.In
 		return
 	}
 
-	_ = ui.UpdateChoreMessage(chore)
-	ui.EmitChoreEvent("chore_updated", chore)
+	if !chore.Draft {
+		_ = ui.UpdateChoreMessage(chore)
+		ui.EmitChoreEvent("chore_updated", chore)
+	}
 
 	r := simpleContainerizedInteractionResponse("Successfully updated skills for the chore.", &ui.colors.GreenColor)
 	skillsMd := "### Skills\n"
@@ -2140,8 +2165,10 @@ func (ui *Ui) handleAssigneeSelect(d string, s *discordgo.Session, i *discordgo.
 		return
 	}
 
-	_ = ui.UpdateChoreMessage(chore)
-	ui.EmitChoreEvent("chore_updated", chore)
+	if !chore.Draft {
+		_ = ui.UpdateChoreMessage(chore)
+		ui.EmitChoreEvent("chore_updated", chore)
+	}
 
 	var msg string
 	if chore.AssigneeId != "" {
@@ -2181,8 +2208,10 @@ func (ui *Ui) EditChoreDetails(choreId uint, name string, necessaryWorkers, esti
 		return chore, fmt.Errorf("failed to update chore: %w", err)
 	}
 
-	_ = ui.UpdateChoreMessage(chore)
-	ui.EmitChoreEvent("chore_updated", chore)
+	if !chore.Draft {
+		_ = ui.UpdateChoreMessage(chore)
+		ui.EmitChoreEvent("chore_updated", chore)
+	}
 	return chore, nil
 }
 

@@ -30,7 +30,7 @@ func (s *Storage) GetTasksActivitySince(since time.Time) (*TasksActivity, error)
 
 	// 1. Created chores since the cutoff
 	var createdChores []Chore
-	r := s.db.Where("created >= ?", since).Order("created ASC").Find(&createdChores)
+	r := s.db.Where("created >= ? AND (draft = ? OR draft IS NULL)", since, false).Order("created ASC").Find(&createdChores)
 	if r.Error != nil {
 		return nil, r.Error
 	}
@@ -41,7 +41,7 @@ func (s *Storage) GetTasksActivitySince(since time.Time) (*TasksActivity, error)
 
 	// 2. Completed chores since the cutoff
 	var completedChores []Chore
-	r = s.db.Where("completed IS NOT NULL AND completed >= ?", since).Order("completed ASC").Find(&completedChores)
+	r = s.db.Where("completed IS NOT NULL AND completed >= ? AND (draft = ? OR draft IS NULL)", since, false).Order("completed ASC").Find(&completedChores)
 	if r.Error != nil {
 		return nil, r.Error
 	}
@@ -52,7 +52,7 @@ func (s *Storage) GetTasksActivitySince(since time.Time) (*TasksActivity, error)
 
 	// 3. Cancelled chores since the cutoff
 	var cancelledChores []Chore
-	r = s.db.Where("cancelled IS NOT NULL AND cancelled >= ?", since).Order("cancelled ASC").Find(&cancelledChores)
+	r = s.db.Where("cancelled IS NOT NULL AND cancelled >= ? AND (draft = ? OR draft IS NULL)", since, false).Order("cancelled ASC").Find(&cancelledChores)
 	if r.Error != nil {
 		return nil, r.Error
 	}
@@ -73,7 +73,7 @@ func (s *Storage) GetTasksActivitySince(since time.Time) (*TasksActivity, error)
 
 	// 5. Currently active/unfinished chores
 	var activeChores []Chore
-	r = s.db.Where("completed IS NULL AND cancelled IS NULL").Order("created ASC").Find(&activeChores)
+	r = s.db.Where("completed IS NULL AND cancelled IS NULL AND (draft = ? OR draft IS NULL)", false).Order("created ASC").Find(&activeChores)
 	if r.Error != nil {
 		return nil, r.Error
 	}

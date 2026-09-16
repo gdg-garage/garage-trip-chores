@@ -222,7 +222,7 @@ func (a *Api) SetupRoutes() *chi.Mux {
 		Path:        "/tasks/{id}",
 		Summary:     "Get a single task by ID",
 	}, func(ctx context.Context, input *TaskActionInput) (*TaskCreateResponse, error) {
-		chore, err := a.storage.GetChore(uint(input.ID))
+		chore, err := a.getNonDraftChore(uint(input.ID))
 		if err != nil {
 			return nil, err
 		}
@@ -334,6 +334,9 @@ func (a *Api) SetupRoutes() *chi.Mux {
 		Path:        "/tasks/{id}",
 		Summary:     "Update task details",
 	}, func(ctx context.Context, input *UpdateTaskInput) (*TaskCreateResponse, error) {
+		if _, err := a.getNonDraftChore(uint(input.ID)); err != nil {
+			return nil, err
+		}
 		updated, err := a.ui.EditChoreDetails(uint(input.ID), input.Body.Name, input.Body.NecessaryWorkers, input.Body.EstimatedTimeMin, input.Body.AssignmentTimeoutMin, input.Body.Deadline, input.Body.NecessaryCapabilities)
 		if err != nil {
 			return nil, err
@@ -349,6 +352,9 @@ func (a *Api) SetupRoutes() *chi.Mux {
 		Path:        "/tasks/{id}",
 		Summary:     "Cancel/Delete a task",
 	}, func(ctx context.Context, input *TaskActionInput) (*struct{}, error) {
+		if _, err := a.getNonDraftChore(uint(input.ID)); err != nil {
+			return nil, err
+		}
 		_, err := a.ui.CancelChore(uint(input.ID))
 		return nil, err
 	})
@@ -360,6 +366,9 @@ func (a *Api) SetupRoutes() *chi.Mux {
 		Path:        "/tasks/{id}/done",
 		Summary:     "Mark a task as completed",
 	}, func(ctx context.Context, input *TaskActionInput) (*struct{}, error) {
+		if _, err := a.getNonDraftChore(uint(input.ID)); err != nil {
+			return nil, err
+		}
 		_, err := a.ui.CompleteChore(uint(input.ID))
 		return nil, err
 	})
@@ -371,6 +380,9 @@ func (a *Api) SetupRoutes() *chi.Mux {
 		Path:        "/tasks/{id}/ack",
 		Summary:     "Acknowledge / claim a task for a user",
 	}, func(ctx context.Context, input *TaskUserActionInput) (*struct{}, error) {
+		if _, err := a.getNonDraftChore(uint(input.ID)); err != nil {
+			return nil, err
+		}
 		_, _, err := a.ui.AckChore(uint(input.ID), input.Body.UserId)
 		return nil, err
 	})
@@ -382,6 +394,9 @@ func (a *Api) SetupRoutes() *chi.Mux {
 		Path:        "/tasks/{id}/reject",
 		Summary:     "Reject a task assignment for a user",
 	}, func(ctx context.Context, input *TaskUserActionInput) (*struct{}, error) {
+		if _, err := a.getNonDraftChore(uint(input.ID)); err != nil {
+			return nil, err
+		}
 		_, err := a.ui.RejectChore(uint(input.ID), input.Body.UserId)
 		return nil, err
 	})
@@ -393,6 +408,9 @@ func (a *Api) SetupRoutes() *chi.Mux {
 		Path:        "/tasks/{id}/help",
 		Summary:     "Log work on a completed task",
 	}, func(ctx context.Context, input *TaskUserActionInput) (*struct{}, error) {
+		if _, err := a.getNonDraftChore(uint(input.ID)); err != nil {
+			return nil, err
+		}
 		_, err := a.ui.HelpedChore(uint(input.ID), input.Body.UserId)
 		return nil, err
 	})
@@ -404,6 +422,9 @@ func (a *Api) SetupRoutes() *chi.Mux {
 		Path:        "/tasks/{id}/time",
 		Summary:     "Report or update time spent on a task for a user",
 	}, func(ctx context.Context, input *ReportTaskTimeInput) (*ReportTaskTimeResponse, error) {
+		if _, err := a.getNonDraftChore(uint(input.ID)); err != nil {
+			return nil, err
+		}
 		wl, err := a.ui.ReportTimeSpent(uint(input.ID), input.Body.UserId, input.Body.TimeSpentMin)
 		if err != nil {
 			return nil, err
@@ -417,6 +438,9 @@ func (a *Api) SetupRoutes() *chi.Mux {
 		Path:        "/tasks/{id}/time",
 		Summary:     "Update time spent on a task for a user (alias for POST /tasks/{id}/time)",
 	}, func(ctx context.Context, input *ReportTaskTimeInput) (*ReportTaskTimeResponse, error) {
+		if _, err := a.getNonDraftChore(uint(input.ID)); err != nil {
+			return nil, err
+		}
 		wl, err := a.ui.ReportTimeSpent(uint(input.ID), input.Body.UserId, input.Body.TimeSpentMin)
 		if err != nil {
 			return nil, err
@@ -431,6 +455,9 @@ func (a *Api) SetupRoutes() *chi.Mux {
 		Path:        "/tasks/{id}/worklogs",
 		Summary:     "Get all work logs / reported time for a task",
 	}, func(ctx context.Context, input *TaskActionInput) (*TaskWorkLogsResponse, error) {
+		if _, err := a.getNonDraftChore(uint(input.ID)); err != nil {
+			return nil, err
+		}
 		worklogs, err := a.storage.GetWorkLogsForChore(uint(input.ID))
 		if err != nil {
 			return nil, err
@@ -533,6 +560,9 @@ func (a *Api) SetupRoutes() *chi.Mux {
 		Path:        "/tasks/{id}/stats",
 		Summary:     "Get stats for a specific task",
 	}, func(ctx context.Context, input *TaskActionInput) (*TaskStatsResponse, error) {
+		if _, err := a.getNonDraftChore(uint(input.ID)); err != nil {
+			return nil, err
+		}
 		worklogs, err := a.storage.GetWorkLogsForChore(uint(input.ID))
 		if err != nil {
 			return nil, err
@@ -762,6 +792,17 @@ type TaskStatsData struct {
 
 type TaskStatsResponse struct {
 	Body TaskStatsData
+}
+
+func (a *Api) getNonDraftChore(id uint) (storage.Chore, error) {
+	chore, err := a.storage.GetChore(id)
+	if err != nil {
+		return chore, err
+	}
+	if chore.Draft {
+		return chore, huma.Error404NotFound("task not found")
+	}
+	return chore, nil
 }
 
 func toWorkLogData(wl storage.WorkLog) WorkLogData {
