@@ -83,8 +83,7 @@ func simpleInteractionResponse(content string) *discordgo.InteractionResponse {
 	return &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Content: content,
-			Flags:   discordgo.MessageFlagsEphemeral | discordgo.MessageFlagsIsComponentsV2,
+			Flags: discordgo.MessageFlagsEphemeral | discordgo.MessageFlagsIsComponentsV2,
 			Components: []discordgo.MessageComponent{
 				discordgo.TextDisplay{
 					Content: content,
@@ -98,8 +97,7 @@ func simpleContainerizedInteractionResponse(content string, color *int) *discord
 	return &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Content: content,
-			Flags:   discordgo.MessageFlagsEphemeral | discordgo.MessageFlagsIsComponentsV2,
+			Flags: discordgo.MessageFlagsEphemeral | discordgo.MessageFlagsIsComponentsV2,
 			Components: []discordgo.MessageComponent{
 				discordgo.Container{
 					AccentColor: color,
@@ -590,7 +588,9 @@ func (ui *Ui) CancelChore(choreId uint) (storage.Chore, error) {
 
 	_ = ui.storage.RemoveStorageAssignments(choreId)
 	_ = ui.storage.CancelDelayedTaskByChoreId(choreId)
-	_ = ui.UpdateChoreMessage(chore)
+	go func() {
+		_ = ui.UpdateChoreMessage(chore)
+	}()
 	ui.EmitChoreEvent("chore_cancelled", chore)
 	return chore, nil
 }
@@ -680,7 +680,9 @@ func (ui *Ui) RejectChore(choreId uint, userId string) (storage.Chore, error) {
 		_, _ = ui.chores.AssignChoresToUsers(users, c)
 	}
 
-	_ = ui.UpdateChoreMessage(c)
+	go func() {
+		_ = ui.UpdateChoreMessage(c)
+	}()
 	ui.EmitChoreEvent("chore_rejected", c)
 	return c, nil
 }
@@ -777,24 +779,26 @@ func (ui *Ui) AckChore(choreId uint, userId string) (storage.Chore, storage.Chor
 		return c, ass, fmt.Errorf("failed to save chore assignment: %w", err)
 	}
 
-	if ui.discord != nil && userId != "" {
-		_ = ui.SendDM(userId, &discordgo.MessageSend{
-			Content: fmt.Sprintf("Your acknowledged chore `id: %d` `%s` %s.", c.ID, c.Name, ui.GetChoreMessageUrl(c)),
-			Components: []discordgo.MessageComponent{
-				discordgo.ActionsRow{
-					Components: []discordgo.MessageComponent{
-						&discordgo.Button{
-							Style:    discordgo.SuccessButton,
-							Label:    "Done!",
-							CustomID: DoneButtonClick + fmt.Sprint(c.ID),
+	go func() {
+		if ui.discord != nil && userId != "" {
+			_ = ui.SendDM(userId, &discordgo.MessageSend{
+				Content: fmt.Sprintf("Your acknowledged chore `id: %d` `%s` %s.", c.ID, c.Name, ui.GetChoreMessageUrl(c)),
+				Components: []discordgo.MessageComponent{
+					discordgo.ActionsRow{
+						Components: []discordgo.MessageComponent{
+							&discordgo.Button{
+								Style:    discordgo.SuccessButton,
+								Label:    "Done!",
+								CustomID: DoneButtonClick + fmt.Sprint(c.ID),
+							},
 						},
 					},
 				},
-			},
-		})
-	}
+			})
+		}
 
-	_ = ui.UpdateChoreMessage(c)
+		_ = ui.UpdateChoreMessage(c)
+	}()
 	ui.EmitChoreEvent("chore_claimed", c)
 	return c, ass, nil
 }
@@ -2077,24 +2081,26 @@ func (ui *Ui) HelpedChore(choreId uint, userId string) (storage.WorkLog, error) 
 		return wl, fmt.Errorf("failed to save work log: %w", err)
 	}
 
-	_ = ui.UpdateChoreMessage(chore)
+	go func() {
+		_ = ui.UpdateChoreMessage(chore)
 
-	if ui.discord != nil && userId != "" {
-		_ = ui.SendDM(userId, &discordgo.MessageSend{
-			Content: fmt.Sprintf("Chore `id: %d` `%s` has been completed %s. Thank you for your work!\nYou spent `%d` minutes on this chore (which was the estimate of the chore creator).", choreId, chore.Name, ui.GetChoreMessageUrl(chore), wl.TimeSpentMin),
-			Components: []discordgo.MessageComponent{
-				discordgo.ActionsRow{
-					Components: []discordgo.MessageComponent{
-						&discordgo.Button{
-							Style:    discordgo.SuccessButton,
-							Label:    "Change Time Spent",
-							CustomID: ReportTimeSpentClick + fmt.Sprint(chore.ID),
+		if ui.discord != nil && userId != "" {
+			_ = ui.SendDM(userId, &discordgo.MessageSend{
+				Content: fmt.Sprintf("Chore `id: %d` `%s` has been completed %s. Thank you for your work!\nYou spent `%d` minutes on this chore (which was the estimate of the chore creator).", choreId, chore.Name, ui.GetChoreMessageUrl(chore), wl.TimeSpentMin),
+				Components: []discordgo.MessageComponent{
+					discordgo.ActionsRow{
+						Components: []discordgo.MessageComponent{
+							&discordgo.Button{
+								Style:    discordgo.SuccessButton,
+								Label:    "Change Time Spent",
+								CustomID: ReportTimeSpentClick + fmt.Sprint(chore.ID),
+							},
 						},
 					},
 				},
-			},
-		})
-	}
+			})
+		}
+	}()
 
 	ui.EmitWorkLogEvent("worklog_added", chore, wl)
 	return wl, nil
@@ -2202,10 +2208,17 @@ func (ui *Ui) CompleteChore(choreId uint) (storage.Chore, error) {
 				TimeSpentMin: chore.EstimatedTimeMin,
 			}
 			_, _ = ui.storage.SaveWorkLog(wl)
+		}
+	}
 
-			if ui.discord != nil && a.UserId != "" {
+	go func() {
+		if ui.discord != nil {
+			for _, a := range ass {
+				if a.Acked == nil || a.UserId == "" {
+					continue
+				}
 				_ = ui.SendDM(a.UserId, &discordgo.MessageSend{
-					Content: fmt.Sprintf("Chore `id: %d` `%s` has been completed %s. Thank you for your work!\nYou spent `%d` minutes on this chore (which was the estimate of the chore creator).", choreId, chore.Name, ui.GetChoreMessageUrl(chore), wl.TimeSpentMin),
+					Content: fmt.Sprintf("Chore `id: %d` `%s` has been completed %s. Thank you for your work!\nYou spent `%d` minutes on this chore (which was the estimate of the chore creator).", choreId, chore.Name, ui.GetChoreMessageUrl(chore), chore.EstimatedTimeMin),
 					Components: []discordgo.MessageComponent{
 						discordgo.ActionsRow{
 							Components: []discordgo.MessageComponent{
@@ -2219,16 +2232,17 @@ func (ui *Ui) CompleteChore(choreId uint) (storage.Chore, error) {
 					},
 				})
 			}
+
+			if chore.CreatorId != "" {
+				_ = ui.SendDM(chore.CreatorId, &discordgo.MessageSend{
+					Content: fmt.Sprintf("Chore `id: %d`. `%s` has been completed %s.", choreId, chore.Name, ui.GetChoreMessageUrl(chore)),
+				})
+			}
 		}
-	}
 
-	if ui.discord != nil && chore.CreatorId != "" {
-		_ = ui.SendDM(chore.CreatorId, &discordgo.MessageSend{
-			Content: fmt.Sprintf("Chore `id: %d`. `%s` has been completed %s.", choreId, chore.Name, ui.GetChoreMessageUrl(chore)),
-		})
-	}
+		_ = ui.UpdateChoreMessage(chore)
+	}()
 
-	_ = ui.UpdateChoreMessage(chore)
 	ui.EmitChoreEvent("chore_completed", chore)
 	return chore, nil
 }
