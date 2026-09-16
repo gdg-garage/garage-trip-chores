@@ -1260,8 +1260,29 @@ func NewUi(storage *storage.Storage, logger *slog.Logger, chores *chores.ChoresL
 func (ui *Ui) Commands(ctx context.Context, wg *sync.WaitGroup) error {
 	wg.Add(1)
 	defer wg.Done()
+
+	// Log Discord gateway connection lifecycle events
+	ui.discord.AddHandler(func(s *discordgo.Session, e *discordgo.Connect) {
+		ui.logger.Info("Discord gateway connected")
+	})
+	ui.discord.AddHandler(func(s *discordgo.Session, e *discordgo.Disconnect) {
+		ui.logger.Warn("Discord gateway disconnected")
+	})
+	ui.discord.AddHandler(func(s *discordgo.Session, e *discordgo.Resumed) {
+		ui.logger.Info("Discord gateway session resumed")
+	})
+	ui.discord.AddHandler(func(s *discordgo.Session, e *discordgo.Ready) {
+		ui.logger.Info("Discord gateway ready", "user", e.User.Username, "session_id", e.SessionID, "guilds", len(e.Guilds))
+	})
+
 	// 2. Register a handler for incoming interactions (like slash commands).
 	ui.discord.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+		defer func() {
+			if r := recover(); r != nil {
+				ui.logger.Error("PANIC in interaction handler", "panic", fmt.Sprintf("%v", r), "interaction_type", i.Type, "channel_id", i.ChannelID)
+			}
+		}()
+
 		userId := getInteractionUserId(i)
 		channelId := i.ChannelID
 
