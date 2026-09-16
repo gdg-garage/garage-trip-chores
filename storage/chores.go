@@ -23,7 +23,7 @@ func (s *Storage) SaveChore(chore Chore) (Chore, error) {
 func (s *Storage) GetChore(Id uint) (Chore, error) {
 	var chore Chore
 	r := s.db.First(&chore, Id)
-	if r.Error != nil {
+	if r.Error == nil {
 		chore.GetCapabilities()
 	}
 	return chore, r.Error
@@ -32,7 +32,7 @@ func (s *Storage) GetChore(Id uint) (Chore, error) {
 func (s *Storage) GetChores() ([]Chore, error) {
 	var chores []Chore
 	r := s.db.Find(&chores)
-	if r.Error != nil {
+	if r.Error == nil {
 		for i := range chores {
 			chores[i].GetCapabilities()
 		}
@@ -43,7 +43,7 @@ func (s *Storage) GetChores() ([]Chore, error) {
 func (s *Storage) GetCompletedChores() ([]Chore, error) {
 	var chores []Chore
 	r := s.db.Where("completed IS NOT NULL").Order("chores.created DESC").Find(&chores)
-	if r.Error != nil {
+	if r.Error == nil {
 		for i := range chores {
 			chores[i].GetCapabilities()
 		}
@@ -54,7 +54,7 @@ func (s *Storage) GetCompletedChores() ([]Chore, error) {
 func (s *Storage) GetUnfinishedChores() ([]Chore, error) {
 	var chores []Chore
 	r := s.db.Where("completed IS NULL and cancelled IS NULL").Order("created DESC").Find(&chores)
-	if r.Error != nil {
+	if r.Error == nil {
 		for i := range chores {
 			chores[i].GetCapabilities()
 		}

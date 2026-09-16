@@ -1,11 +1,13 @@
 package storage
 
 import (
+	"errors"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
@@ -188,12 +190,32 @@ func (s *Storage) GetTotalNormalizedChoreStats() (UserChoreStats, error) {
 			userPresenceCount = c
 		}
 
-		stats.TotalMin /= float64(userPresenceCount)
-		stats.Count /= float64(userPresenceCount)
+		effectivePresence := float64(userPresenceCount)
+		if effectivePresence < 6.0 {
+			effectivePresence = 6.0
+		}
+
+		stats.TotalMin /= effectivePresence
+		stats.Count /= effectivePresence
 		userTotalStats[user] = stats
 	}
 
 	return userTotalStats, nil
+}
+
+func (s *Storage) GetLastUserWorkTime(userId string) (*time.Time, error) {
+	var chore Chore
+	r := s.db.Joins("JOIN work_logs ON work_logs.chore_id = chores.id").
+		Where("work_logs.user_id = ? AND chores.completed IS NOT NULL", userId).
+		Order("chores.completed DESC").
+		First(&chore)
+	if r.Error != nil {
+		if errors.Is(r.Error, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, r.Error
+	}
+	return chore.Completed, nil
 }
 
 func (s *Storage) AssignChore(chore Chore, userId string) (ChoreAssignment, error) {

@@ -107,6 +107,8 @@ type ChoreStats struct {
 type ChoreStatsWithCapabilities struct {
 	ChoreStats
 	CapabilitiesMatched uint
+	PresentTicks        int
+	OnCooldown          bool
 }
 
 type UserChoreStats map[string]ChoreStats

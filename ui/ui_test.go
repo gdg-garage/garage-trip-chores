@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -495,6 +496,332 @@ func TestUserMentionExtraction(t *testing.T) {
 		if name != tt.expectedName {
 			t.Errorf("For %q, expected clean name %q, got %q", tt.inputName, tt.expectedName, name)
 		}
+	}
+}
+
+func TestCompleteChore_CreditsClicker(t *testing.T) {
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "test.sqlite")
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+
+	s, err := storage.New(storage.Config{
+		DbPath: dbPath,
+	}, logger)
+	if err != nil {
+		t.Fatalf("Failed to initialize storage: %v", err)
+	}
+
+	cl := chores.NewChoresLogic(s, logger, chores.Config{})
+	ui := NewUi(s, logger, &cl, nil, Config{})
+
+	// Chore created without any acked workers
+	chore, err := s.SaveChore(storage.Chore{
+		Name:             "Clean floor",
+		CreatorId:        "creator1",
+		NecessaryWorkers: 1,
+		EstimatedTimeMin: 25,
+	})
+	if err != nil {
+		t.Fatalf("Failed to save chore: %v", err)
+	}
+
+	// User 'volunteer_clicker' marks it done
+	completed, err := ui.CompleteChore(chore.ID, "volunteer_clicker")
+	if err != nil {
+		t.Fatalf("CompleteChore failed: %v", err)
+	}
+	if completed.Completed == nil {
+		t.Fatal("Expected chore to be completed")
+	}
+
+	// Verify worklog was created for volunteer_clicker
+	wls, err := s.GetWorkLogsForChore(chore.ID)
+	if err != nil {
+		t.Fatalf("Failed to get worklogs: %v", err)
+	}
+	if len(wls) != 1 {
+		t.Fatalf("Expected 1 worklog credited to clicker, got %d", len(wls))
+	}
+	if wls[0].UserId != "volunteer_clicker" || wls[0].TimeSpentMin != 25 {
+		t.Fatalf("Unexpected worklog: %+v", wls[0])
+	}
+}
+
+func TestAckAndReject_StateGuards(t *testing.T) {
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "test.sqlite")
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+
+	s, err := storage.New(storage.Config{
+		DbPath: dbPath,
+	}, logger)
+	if err != nil {
+		t.Fatalf("Failed to initialize storage: %v", err)
+	}
+
+	cl := chores.NewChoresLogic(s, logger, chores.Config{})
+	ui := NewUi(s, logger, &cl, nil, Config{})
+
+	now := time.Now()
+	completedChore, _ := s.SaveChore(storage.Chore{
+		Name:             "Done chore",
+		CreatorId:        "c1",
+		EstimatedTimeMin: 10,
+		Completed:        &now,
+	})
+
+	cancelledChore, _ := s.SaveChore(storage.Chore{
+		Name:             "Cancelled chore",
+		CreatorId:        "c1",
+		EstimatedTimeMin: 10,
+		Cancelled:        &now,
+	})
+
+	// Try Acking completed chore
+	_, _, err = ui.AckChore(completedChore.ID, "u1")
+	if err == nil || !strings.Contains(err.Error(), "already been completed") {
+		t.Fatalf("Expected 'already been completed' error, got %v", err)
+	}
+
+	// Try Rejecting completed chore
+	_, err = ui.RejectChore(completedChore.ID, "u1")
+	if err == nil || !strings.Contains(err.Error(), "already been completed") {
+		t.Fatalf("Expected 'already been completed' error, got %v", err)
+	}
+
+	// Try Acking cancelled chore
+	_, _, err = ui.AckChore(cancelledChore.ID, "u1")
+	if err == nil || !strings.Contains(err.Error(), "has been cancelled") {
+		t.Fatalf("Expected 'has been cancelled' error, got %v", err)
+	}
+
+	// Try Rejecting cancelled chore
+	_, err = ui.RejectChore(cancelledChore.ID, "u1")
+	if err == nil || !strings.Contains(err.Error(), "has been cancelled") {
+		t.Fatalf("Expected 'has been cancelled' error, got %v", err)
+	}
+}
+
+func TestGetOverachieverNudge(t *testing.T) {
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "test.sqlite")
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+
+	s, err := storage.New(storage.Config{
+		DbPath: dbPath,
+	}, logger)
+	if err != nil {
+		t.Fatalf("Failed to initialize storage: %v", err)
+	}
+
+	cl := chores.NewChoresLogic(s, logger, chores.Config{})
+	ui := NewUi(s, logger, &cl, nil, Config{})
+
+	// Log work for 4 users: 1 overachiever (100 mins) and 3 normal performers (10 mins each)
+	// Total = 130 mins, Average = 32.5 mins, 2x Average = 65 mins.
+	// Overachiever has 100 mins >= 65 mins -> gets nudge.
+	chore1, _ := s.SaveChore(storage.Chore{Name: "c1", EstimatedTimeMin: 100})
+	chore2, _ := s.SaveChore(storage.Chore{Name: "c2", EstimatedTimeMin: 10})
+
+	_, _ = s.SaveWorkLog(storage.WorkLog{ChoreId: chore1.ID, UserId: "overachiever", TimeSpentMin: 100})
+	_, _ = s.SaveWorkLog(storage.WorkLog{ChoreId: chore2.ID, UserId: "user_b", TimeSpentMin: 10})
+	_, _ = s.SaveWorkLog(storage.WorkLog{ChoreId: chore2.ID, UserId: "user_c", TimeSpentMin: 10})
+	_, _ = s.SaveWorkLog(storage.WorkLog{ChoreId: chore2.ID, UserId: "user_d", TimeSpentMin: 10})
+
+	nudgeHigh := ui.getOverachieverNudge("overachiever")
+	if nudgeHigh == "" || !strings.Contains(nudgeHigh, "Friendly nudge") {
+		t.Fatalf("Expected overachiever nudge, got %q", nudgeHigh)
+	}
+
+	nudgeRegular := ui.getOverachieverNudge("user_b")
+	if nudgeRegular != "" {
+		t.Fatalf("Expected no nudge for regular worker, got %q", nudgeRegular)
+	}
+}
+
+func TestBuildChoreComponents(t *testing.T) {
+	now := time.Now()
+
+	// 1. Open chore with no acks -> [Ack, Reject]
+	choreUnacked := storage.Chore{ID: 10}
+	comps := buildChoreComponents(choreUnacked, 0)
+	if len(comps) != 1 {
+		t.Fatalf("Expected 1 ActionsRow, got %d", len(comps))
+	}
+	row, ok := comps[0].(discordgo.ActionsRow)
+	if !ok {
+		t.Fatalf("Expected ActionsRow type")
+	}
+	if len(row.Components) != 2 {
+		t.Fatalf("Expected 2 buttons for unacked chore, got %d", len(row.Components))
+	}
+	btn0 := row.Components[0].(*discordgo.Button)
+	btn1 := row.Components[1].(*discordgo.Button)
+	if btn0.CustomID != AckButtonClick+"10" || btn1.CustomID != RejectButtonClick+"10" {
+		t.Fatalf("Unexpected buttons: %+v, %+v", btn0, btn1)
+	}
+
+	// 2. Open chore with acks -> [Ack, Reject, Done!]
+	compsAcked := buildChoreComponents(choreUnacked, 1)
+	if len(compsAcked) != 1 {
+		t.Fatalf("Expected 1 ActionsRow, got %d", len(compsAcked))
+	}
+	rowAcked := compsAcked[0].(discordgo.ActionsRow)
+	if len(rowAcked.Components) != 3 {
+		t.Fatalf("Expected 3 buttons for acked chore, got %d", len(rowAcked.Components))
+	}
+	btnDone := rowAcked.Components[2].(*discordgo.Button)
+	if btnDone.CustomID != DoneButtonClick+"10" || btnDone.Label != "Done!" {
+		t.Fatalf("Unexpected Done button: %+v", btnDone)
+	}
+
+	// 3. Completed chore -> [I helped]
+	choreCompleted := storage.Chore{ID: 20, Completed: &now}
+	compsCompleted := buildChoreComponents(choreCompleted, 1)
+	if len(compsCompleted) != 1 {
+		t.Fatalf("Expected 1 ActionsRow, got %d", len(compsCompleted))
+	}
+	rowCompleted := compsCompleted[0].(discordgo.ActionsRow)
+	if len(rowCompleted.Components) != 1 {
+		t.Fatalf("Expected 1 button for completed chore, got %d", len(rowCompleted.Components))
+	}
+	btnHelped := rowCompleted.Components[0].(*discordgo.Button)
+	if btnHelped.CustomID != HelpedButtonClick+"20" || btnHelped.Label != "I helped" {
+		t.Fatalf("Unexpected Helped button: %+v", btnHelped)
+	}
+
+	// 4. Cancelled chore -> no buttons
+	choreCancelled := storage.Chore{ID: 30, Cancelled: &now}
+	compsCancelled := buildChoreComponents(choreCancelled, 0)
+	if len(compsCancelled) != 0 {
+		t.Fatalf("Expected 0 components for cancelled chore, got %d", len(compsCancelled))
+	}
+}
+
+func TestBuildChoreMessageContent(t *testing.T) {
+	now := time.Now()
+
+	// 1. Completed
+	cComp := storage.Chore{Name: "Wash dishes", Completed: &now}
+	if got := buildChoreMessageContent(cComp, nil, nil); got != "✅ Wash dishes" {
+		t.Fatalf("Expected completed prefix, got %q", got)
+	}
+
+	// 2. Cancelled
+	cCanc := storage.Chore{Name: "Wash dishes", Cancelled: &now}
+	if got := buildChoreMessageContent(cCanc, nil, nil); got != "❌ Wash dishes" {
+		t.Fatalf("Expected cancelled prefix, got %q", got)
+	}
+
+	// 3. Direct Assignee
+	cDirect := storage.Chore{Name: "Fix door", AssigneeId: "u123"}
+	if got := buildChoreMessageContent(cDirect, nil, nil); got != "Fix door — Assigned to <@u123>" {
+		t.Fatalf("Expected direct assignee mention, got %q", got)
+	}
+
+	// 4. Multiple active assignments
+	cAssigned := storage.Chore{Name: "Cook dinner"}
+	assignments := []storage.ChoreAssignment{
+		{UserId: "u1"},
+		{UserId: "u2"},
+	}
+	if got := buildChoreMessageContent(cAssigned, assignments, nil); got != "Cook dinner — Assigned to <@u1>, <@u2>" {
+		t.Fatalf("Expected multiple assignee mentions, got %q", got)
+	}
+
+	// 5. Claimed/acked
+	acked := []storage.ChoreAssignment{
+		{UserId: "u1"},
+	}
+	if got := buildChoreMessageContent(cAssigned, nil, acked); got != "Cook dinner — Claimed by <@u1>" {
+		t.Fatalf("Expected claimed by mention, got %q", got)
+	}
+
+	// 6. Plain chore
+	if got := buildChoreMessageContent(cAssigned, nil, nil); got != "Cook dinner" {
+		t.Fatalf("Expected plain chore name, got %q", got)
+	}
+}
+
+func TestBuildChoresListResponse(t *testing.T) {
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "test.sqlite")
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+
+	s, err := storage.New(storage.Config{
+		DbPath: dbPath,
+	}, logger)
+	if err != nil {
+		t.Fatalf("Failed to initialize storage: %v", err)
+	}
+
+	cl := chores.NewChoresLogic(s, logger, chores.Config{})
+	ui := NewUi(s, logger, &cl, nil, Config{})
+
+	// 1. User with no chores
+	respEmpty, err := ui.buildChoresListResponse("user_empty")
+	if err != nil {
+		t.Fatalf("Failed to build chores list for empty user: %v", err)
+	}
+	if len(respEmpty.Data.Embeds) != 1 || respEmpty.Data.Embeds[0].Title != "No chores found!" {
+		t.Fatalf("Expected 'No chores found!' embed, got %+v", respEmpty.Data.Embeds)
+	}
+	if len(respEmpty.Data.Components) != 0 {
+		t.Fatalf("Expected no components for empty chores list, got %d", len(respEmpty.Data.Components))
+	}
+
+	// 2. User with 1 assigned chore and 1 acked chore
+	choreAssigned, _ := s.SaveChore(storage.Chore{Name: "Clean garage", CreatorId: "c1", EstimatedTimeMin: 15})
+	_, _ = s.SaveChoreAssignment(storage.ChoreAssignment{
+		ChoreId: choreAssigned.ID,
+		UserId:  "user_active",
+		Created: time.Now(),
+	})
+
+	choreAcked, _ := s.SaveChore(storage.Chore{Name: "Cook dinner", CreatorId: "c1", EstimatedTimeMin: 30})
+	assAcked, _ := s.SaveChoreAssignment(storage.ChoreAssignment{
+		ChoreId: choreAcked.ID,
+		UserId:  "user_active",
+		Created: time.Now(),
+	})
+	assAcked.Ack()
+	_, _ = s.SaveChoreAssignment(assAcked)
+
+	resp, err := ui.buildChoresListResponse("user_active")
+	if err != nil {
+		t.Fatalf("Failed to build chores list for active user: %v", err)
+	}
+	if len(resp.Data.Embeds) != 2 {
+		t.Fatalf("Expected 2 embeds (assigned + acked), got %d", len(resp.Data.Embeds))
+	}
+
+	// Components should contain:
+	// Row 0: Done! button for Cook dinner
+	// Row 1: Ack & Reject buttons for Clean garage
+	if len(resp.Data.Components) != 2 {
+		t.Fatalf("Expected 2 component rows, got %d", len(resp.Data.Components))
+	}
+
+	rowDone := resp.Data.Components[0].(discordgo.ActionsRow)
+	if len(rowDone.Components) != 1 {
+		t.Fatalf("Expected 1 Done button, got %d", len(rowDone.Components))
+	}
+	doneBtn := rowDone.Components[0].(*discordgo.Button)
+	if doneBtn.CustomID != DoneButtonClick+fmt.Sprint(choreAcked.ID) || !strings.Contains(doneBtn.Label, "Done:") {
+		t.Fatalf("Unexpected Done button: %+v", doneBtn)
+	}
+
+	rowAssigned := resp.Data.Components[1].(discordgo.ActionsRow)
+	if len(rowAssigned.Components) != 2 {
+		t.Fatalf("Expected 2 buttons for assigned chore, got %d", len(rowAssigned.Components))
+	}
+	ackBtn := rowAssigned.Components[0].(*discordgo.Button)
+	rejectBtn := rowAssigned.Components[1].(*discordgo.Button)
+	if ackBtn.CustomID != AckButtonClick+fmt.Sprint(choreAssigned.ID) || !strings.Contains(ackBtn.Label, "Ack:") {
+		t.Fatalf("Unexpected Ack button: %+v", ackBtn)
+	}
+	if rejectBtn.CustomID != RejectButtonClick+fmt.Sprint(choreAssigned.ID) || !strings.Contains(rejectBtn.Label, "Reject:") {
+		t.Fatalf("Unexpected Reject button: %+v", rejectBtn)
 	}
 }
 

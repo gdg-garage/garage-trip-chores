@@ -151,10 +151,36 @@ func (r *Reminder) CheckChores() {
 					r.logger.Error("Error getting present users", "error", err)
 					return
 				}
-				_, err = r.chores.AssignChoresToUsers(users, chore)
+				newAss, err := r.chores.AssignChoresToUsers(users, chore)
 				if err != nil {
 					r.logger.Error("Error assigning chores to users", "error", err)
 					return
+				}
+				messageUrl := r.ui.GetChoreMessageUrl(chore)
+				for _, na := range newAss {
+					if na.UserId != "" {
+						go func(assigneeId string, c storage.Chore, msgUrl string) {
+							_ = r.ui.SendDM(assigneeId, &discordgo.MessageSend{
+								Content: fmt.Sprintf("You were assigned to chore `%s` (id: `%d`) in <#%s>.\n%s", c.Name, c.ID, r.ui.GetDiscordChannelId(), msgUrl),
+								Components: []discordgo.MessageComponent{
+									discordgo.ActionsRow{
+										Components: []discordgo.MessageComponent{
+											&discordgo.Button{
+												Style:    discordgo.PrimaryButton,
+												Label:    "Ack",
+												CustomID: ui.AckButtonClick + fmt.Sprint(c.ID),
+											},
+											&discordgo.Button{
+												Style:    discordgo.SecondaryButton,
+												Label:    "Reject",
+												CustomID: ui.RejectButtonClick + fmt.Sprint(c.ID),
+											},
+										},
+									},
+								},
+							})
+						}(na.UserId, chore, messageUrl)
+					}
 				}
 				r.ui.UpdateChoreMessage(chore)
 				r.ui.EmitChoreEvent("chore_reassigned", chore)

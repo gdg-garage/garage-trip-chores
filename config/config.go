@@ -37,6 +37,7 @@ func New() (*Config, error) {
 	viper.SetDefault("db.skillprefix", "skill::")
 
 	viper.SetDefault("chores.oversampleratio", 0.5)
+	viper.SetDefault("chores.cooldownmin", 30)
 
 	viper.SetDefault("ui.discordchannelid", "???")
 

@@ -25,20 +25,48 @@ func sliceIntersect(a, b []string) []string {
 	return intersection
 }
 
+type CooldownStorageAccess interface {
+	GetLastUserWorkTime(userId string) (*time.Time, error)
+}
+
+type PresenceStorageAccess interface {
+	GetUsersPresenceCounts() (map[string]int, error)
+}
+
 func SortUsersBasedOnChoreStats(stats map[string]storage.ChoreStatsWithCapabilities) []string {
-	// Sort users based on the number capabilities matched, chores total time and count in this order (lowest first).
+	// Sort users based on:
+	// 1. OnCooldown: false before true (not on cooldown prioritized)
+	// 2. CapabilitiesMatched: highest first
+	// 3. TotalMin: lowest first
+	// 4. Count: lowest first
+	// 5. PresentTicks: highest first (if worked time & count are equal, people present longer get assigned first)
+	// 6. User ID: alphabetical deterministic tie breaker
 	sortedUsers := make([]string, 0, len(stats))
 	for user := range stats {
 		sortedUsers = append(sortedUsers, user)
 	}
 	sort.Slice(sortedUsers, func(i, j int) bool {
-		if stats[sortedUsers[i]].CapabilitiesMatched != stats[sortedUsers[j]].CapabilitiesMatched {
-			return stats[sortedUsers[i]].CapabilitiesMatched > stats[sortedUsers[j]].CapabilitiesMatched
+		u1 := sortedUsers[i]
+		u2 := sortedUsers[j]
+		s1 := stats[u1]
+		s2 := stats[u2]
+
+		if s1.OnCooldown != s2.OnCooldown {
+			return !s1.OnCooldown
 		}
-		if stats[sortedUsers[i]].TotalMin != stats[sortedUsers[j]].TotalMin {
-			return stats[sortedUsers[i]].TotalMin < stats[sortedUsers[j]].TotalMin
+		if s1.CapabilitiesMatched != s2.CapabilitiesMatched {
+			return s1.CapabilitiesMatched > s2.CapabilitiesMatched
 		}
-		return stats[sortedUsers[i]].Count < stats[sortedUsers[j]].Count
+		if s1.TotalMin != s2.TotalMin {
+			return s1.TotalMin < s2.TotalMin
+		}
+		if s1.Count != s2.Count {
+			return s1.Count < s2.Count
+		}
+		if s1.PresentTicks != s2.PresentTicks {
+			return s1.PresentTicks > s2.PresentTicks
+		}
+		return u1 < u2
 	})
 	return sortedUsers
 }
@@ -88,21 +116,42 @@ func (cl ChoresLogic) AssignChoresToUsers(users []storage.User, chore storage.Ch
 		return assignments, err
 	}
 
+	var presenceCounts map[string]int
+	if ps, ok := cl.storage.(PresenceStorageAccess); ok {
+		if pc, err := ps.GetUsersPresenceCounts(); err == nil {
+			presenceCounts = pc
+		}
+	}
+
+	now := time.Now()
 	userStatsWithCap := map[string]storage.ChoreStatsWithCapabilities{}
 	for _, user := range users {
-		if s, ok := userTotalStats[user.DiscordId]; ok {
-			userStatsWithCap[user.DiscordId] = storage.ChoreStatsWithCapabilities{
-				ChoreStats:          s,
-				CapabilitiesMatched: uint(len(sliceIntersect(user.Capabilities, chore.GetCapabilities()))),
+		var s storage.ChoreStats
+		if st, ok := userTotalStats[user.DiscordId]; ok {
+			s = st
+		}
+
+		onCooldown := false
+		if cl.config.CooldownMin > 0 {
+			if cs, ok := cl.storage.(CooldownStorageAccess); ok {
+				if lastWork, err := cs.GetLastUserWorkTime(user.DiscordId); err == nil && lastWork != nil {
+					if now.Sub(*lastWork) < time.Duration(cl.config.CooldownMin)*time.Minute {
+						onCooldown = true
+					}
+				}
 			}
-		} else {
-			userStatsWithCap[user.DiscordId] = storage.ChoreStatsWithCapabilities{
-				ChoreStats: storage.ChoreStats{
-					Count:    0,
-					TotalMin: 0,
-				},
-				CapabilitiesMatched: uint(len(sliceIntersect(user.Capabilities, chore.GetCapabilities()))),
-			}
+		}
+
+		presentTicks := 0
+		if presenceCounts != nil {
+			presentTicks = presenceCounts[user.DiscordId]
+		}
+
+		userStatsWithCap[user.DiscordId] = storage.ChoreStatsWithCapabilities{
+			ChoreStats:          s,
+			CapabilitiesMatched: uint(len(sliceIntersect(user.Capabilities, chore.GetCapabilities()))),
+			PresentTicks:        presentTicks,
+			OnCooldown:          onCooldown,
 		}
 	}
 

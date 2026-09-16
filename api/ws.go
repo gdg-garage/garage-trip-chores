@@ -10,6 +10,11 @@ import (
 	"github.com/gdg-garage/garage-trip-chores/storage"
 )
 
+const (
+	writeWait      = 10 * time.Second
+	sendBufferSize = 64
+)
+
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
@@ -18,22 +23,42 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
+type WsClient struct {
+	hub  *WsHub
+	conn *websocket.Conn
+	send chan storage.Event
+}
+
+func (c *WsClient) writePump() {
+	defer func() {
+		c.conn.Close()
+	}()
+	for event := range c.send {
+		c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+		err := c.conn.WriteJSON(event)
+		if err != nil {
+			c.hub.logger.Error("websocket write error", "error", err)
+			return
+		}
+	}
+}
+
 type WsHub struct {
 	logger     *slog.Logger
-	clients    map[*websocket.Conn]bool
+	clients    map[*WsClient]bool
 	broadcast  chan storage.Event
-	register   chan *websocket.Conn
-	unregister chan *websocket.Conn
+	register   chan *WsClient
+	unregister chan *WsClient
 	mu         sync.Mutex
 }
 
 func NewWsHub(logger *slog.Logger) *WsHub {
 	return &WsHub{
 		logger:     logger,
-		clients:    make(map[*websocket.Conn]bool),
-		broadcast:  make(chan storage.Event),
-		register:   make(chan *websocket.Conn),
-		unregister: make(chan *websocket.Conn),
+		clients:    make(map[*WsClient]bool),
+		broadcast:  make(chan storage.Event, sendBufferSize),
+		register:   make(chan *WsClient),
+		unregister: make(chan *WsClient),
 	}
 }
 
@@ -48,16 +73,17 @@ func (h *WsHub) Run() {
 			h.mu.Lock()
 			if _, ok := h.clients[client]; ok {
 				delete(h.clients, client)
-				client.Close()
+				close(client.send)
 			}
 			h.mu.Unlock()
 		case event := <-h.broadcast:
 			h.mu.Lock()
 			for client := range h.clients {
-				err := client.WriteJSON(event)
-				if err != nil {
-					h.logger.Error("websocket write error", "error", err)
-					client.Close()
+				select {
+				case client.send <- event:
+				default:
+					h.logger.Warn("websocket client buffer full, dropping client")
+					close(client.send)
 					delete(h.clients, client)
 				}
 			}
@@ -73,27 +99,35 @@ func (api *Api) ServeWs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if len(api.authorizedKeys) > 0 {
+		conn.SetReadDeadline(time.Now().Add(10 * time.Second))
+		var authMsg struct {
+			ApiKey string `json:"api_key"`
+		}
+		err = conn.ReadJSON(&authMsg)
+		if _, ok := api.authorizedKeys[authMsg.ApiKey]; err != nil || !ok {
+			api.logger.Warn("websocket auth failed", "error", err)
+			conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.ClosePolicyViolation, "Unauthorized"))
+			conn.Close()
+			return
+		}
+		conn.SetReadDeadline(time.Time{})
+	}
+
+	client := &WsClient{
+		hub:  api.hub,
+		conn: conn,
+		send: make(chan storage.Event, sendBufferSize),
+	}
+
+	api.hub.register <- client
+	go client.writePump()
+
 	go func() {
 		defer func() {
-			api.hub.unregister <- conn
+			api.hub.unregister <- client
+			conn.Close()
 		}()
-
-		if len(api.authorizedKeys) > 0 {
-			conn.SetReadDeadline(time.Now().Add(10 * time.Second))
-			var authMsg struct {
-				ApiKey string `json:"api_key"`
-			}
-			err = conn.ReadJSON(&authMsg)
-			if _, ok := api.authorizedKeys[authMsg.ApiKey]; err != nil || !ok {
-				api.logger.Warn("websocket auth failed", "error", err)
-				conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.ClosePolicyViolation, "Unauthorized"))
-				conn.Close()
-				return
-			}
-			conn.SetReadDeadline(time.Time{})
-		}
-
-		api.hub.register <- conn
 
 		for {
 			_, _, err := conn.ReadMessage()
@@ -108,5 +142,9 @@ func (api *Api) ServeWs(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *WsHub) BroadcastEvent(event storage.Event) {
-	h.broadcast <- event
+	select {
+	case h.broadcast <- event:
+	default:
+		h.logger.Warn("websocket broadcast channel full, dropping event")
+	}
 }
