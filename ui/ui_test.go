@@ -221,3 +221,183 @@ func TestProcessPendingDelayedTasks(t *testing.T) {
 	}
 }
 
+func TestCancelChore(t *testing.T) {
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "test.sqlite")
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+
+	s, err := storage.New(storage.Config{
+		DbPath: dbPath,
+	}, logger)
+	if err != nil {
+		t.Fatalf("Failed to initialize storage: %v", err)
+	}
+
+	cl := chores.NewChoresLogic(s, logger, chores.Config{})
+	ui := NewUi(s, logger, &cl, nil, Config{})
+
+	// Create a chore
+	chore, err := s.SaveChore(storage.Chore{
+		Name:             "Chore to cancel",
+		CreatorId:        "user_creator",
+		NecessaryWorkers: 1,
+		EstimatedTimeMin: 15,
+		DelayMin:         10,
+	})
+	if err != nil {
+		t.Fatalf("Failed to save chore: %v", err)
+	}
+
+	// Create an assignment
+	_, err = s.SaveChoreAssignment(storage.ChoreAssignment{
+		ChoreId: chore.ID,
+		UserId:  "worker_1",
+	})
+	if err != nil {
+		t.Fatalf("Failed to create chore assignment: %v", err)
+	}
+
+	// Create a delayed task
+	_, err = s.CreateDelayedTask(chore.ID, time.Now().Add(10*time.Minute), 10)
+	if err != nil {
+		t.Fatalf("Failed to create delayed task: %v", err)
+	}
+
+	// Cancel the chore
+	cancelled, err := ui.CancelChore(chore.ID)
+	if err != nil {
+		t.Fatalf("CancelChore failed: %v", err)
+	}
+	if cancelled.Cancelled == nil {
+		t.Fatal("Expected chore.Cancelled to be non-nil")
+	}
+
+	// Verify assignments removed
+	assignments, err := s.GetChoreAssignments(chore.ID)
+	if err != nil {
+		t.Fatalf("Failed to get assignments: %v", err)
+	}
+	if len(assignments) != 0 {
+		t.Fatalf("Expected 0 assignments after cancellation, got %d", len(assignments))
+	}
+
+	// Verify delayed task cancelled
+	dt, err := s.GetDelayedTaskForChore(chore.ID)
+	if err != nil {
+		t.Fatalf("Failed to get delayed task: %v", err)
+	}
+	if dt != nil {
+		t.Fatal("Expected delayed task to be removed after cancellation")
+	}
+
+	// Cancelling again should return error
+	_, err = ui.CancelChore(chore.ID)
+	if err == nil {
+		t.Fatal("Expected error when cancelling already cancelled chore, got nil")
+	}
+}
+
+func TestCancelChore_Completed(t *testing.T) {
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "test.sqlite")
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+
+	s, err := storage.New(storage.Config{
+		DbPath: dbPath,
+	}, logger)
+	if err != nil {
+		t.Fatalf("Failed to initialize storage: %v", err)
+	}
+
+	cl := chores.NewChoresLogic(s, logger, chores.Config{})
+	ui := NewUi(s, logger, &cl, nil, Config{})
+
+	now := time.Now()
+	chore, err := s.SaveChore(storage.Chore{
+		Name:             "Completed chore",
+		CreatorId:        "user_creator",
+		NecessaryWorkers: 1,
+		EstimatedTimeMin: 15,
+		Completed:        &now,
+	})
+	if err != nil {
+		t.Fatalf("Failed to save chore: %v", err)
+	}
+
+	_, err = ui.CancelChore(chore.ID)
+	if err == nil {
+		t.Fatal("Expected error when cancelling completed chore, got nil")
+	}
+}
+
+func TestPublishSelfReportedChore(t *testing.T) {
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "test.sqlite")
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+
+	s, err := storage.New(storage.Config{
+		DbPath: dbPath,
+	}, logger)
+	if err != nil {
+		t.Fatalf("Failed to initialize storage: %v", err)
+	}
+
+	cl := chores.NewChoresLogic(s, logger, chores.Config{})
+	ui := NewUi(s, logger, &cl, nil, Config{})
+
+	chore := storage.Chore{
+		Name:             "Watered plants",
+		CreatorId:        "plant_lover",
+		NecessaryWorkers: 1,
+		EstimatedTimeMin: 15,
+		SelfReported:     true,
+	}
+
+	published, assignments, err := ui.PublishChore(chore)
+	if err != nil {
+		t.Fatalf("PublishChore failed: %v", err)
+	}
+
+	if !published.SelfReported {
+		t.Fatal("Expected published chore SelfReported to be true")
+	}
+	if published.Completed == nil {
+		t.Fatal("Expected published chore Completed to be non-nil")
+	}
+	if len(assignments) != 1 {
+		t.Fatalf("Expected 1 assignment, got %d", len(assignments))
+	}
+	if assignments[0].UserId != "plant_lover" || assignments[0].Acked == nil || !assignments[0].Volunteered {
+		t.Fatalf("Expected acked volunteered assignment for plant_lover: %+v", assignments[0])
+	}
+
+	// Verify storage state
+	storedChore, err := s.GetChore(published.ID)
+	if err != nil {
+		t.Fatalf("Failed to get chore: %v", err)
+	}
+	if !storedChore.SelfReported || storedChore.Completed == nil {
+		t.Fatalf("Stored chore not marked as self-reported completed: %+v", storedChore)
+	}
+
+	storedAssignments, err := s.GetChoreAssignments(published.ID)
+	if err != nil {
+		t.Fatalf("Failed to get assignments: %v", err)
+	}
+	if len(storedAssignments) != 1 || storedAssignments[0].UserId != "plant_lover" || storedAssignments[0].Acked == nil {
+		t.Fatalf("Expected 1 acked assignment in storage: %+v", storedAssignments)
+	}
+
+	worklogs, err := s.GetWorkLogsForChore(published.ID)
+	if err != nil {
+		t.Fatalf("Failed to get worklogs: %v", err)
+	}
+	if len(worklogs) != 1 {
+		t.Fatalf("Expected 1 worklog, got %d", len(worklogs))
+	}
+	if worklogs[0].UserId != "plant_lover" || worklogs[0].TimeSpentMin != 15 || !worklogs[0].SelfReported {
+		t.Fatalf("Unexpected worklog in storage: %+v", worklogs[0])
+	}
+}
+
+

@@ -90,6 +90,8 @@ components:
           format: date-time
         DelayMin:
           type: integer
+        SelfReported:
+          type: boolean
     Assignment:
       type: object
       properties:

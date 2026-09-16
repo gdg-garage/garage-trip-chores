@@ -27,6 +27,7 @@ type Chore struct {
 	DelayMin              uint
 	necessaryCapabilities []string
 	AfterDeadlineReminded bool
+	SelfReported          bool
 }
 
 func (c *Chore) GetCapabilities() []string {

@@ -263,15 +263,21 @@ func (a *Api) SetupRoutes() *chi.Mux {
 			deadline = &d
 		}
 
+		creatorId := "API"
+		if input.Body.CreatorId != "" {
+			creatorId = input.Body.CreatorId
+		}
+
 		chore := storage.Chore{
 			Name:                 input.Body.Name,
 			NecessaryWorkers:     workers,
 			EstimatedTimeMin:     estTime,
 			AssignmentTimeoutMin: timeoutMin,
 			Deadline:             deadline,
-			CreatorId:            "API",
+			CreatorId:            creatorId,
 			Created:              time.Now(),
 			DelayMin:             input.Body.DelayMin,
+			SelfReported:         input.Body.SelfReported,
 		}
 		if len(input.Body.NecessaryCapabilities) > 0 {
 			chore.SetCapabilities(input.Body.NecessaryCapabilities)
@@ -621,6 +627,8 @@ type TaskData struct {
 	DelayMin uint `json:"delay_min,omitempty"`
 	// PublishAt is the scheduled time when the task will be published and assigned.
 	PublishAt *time.Time `json:"publish_at,omitempty"`
+	// SelfReported indicates if the task was completed immediately by creator.
+	SelfReported bool `json:"self_reported"`
 }
 
 type TasksResponse struct {
@@ -635,6 +643,8 @@ type TaskCreateInputBody struct {
 	Deadline              *time.Time `json:"deadline,omitempty"`
 	NecessaryCapabilities []string   `json:"necessary_capabilities,omitempty"`
 	DelayMin              uint       `json:"delay_min,omitempty" doc:"Delay in minutes before sending and scheduling the task"`
+	CreatorId             string     `json:"creator_id,omitempty" doc:"Creator ID (e.g. Discord user ID). Defaults to 'API' if omitted"`
+	SelfReported          bool       `json:"self_reported,omitempty" doc:"When true, task is marked as done immediately and assigned to creator"`
 }
 
 type CreateTaskInput struct {
@@ -799,5 +809,6 @@ func toTaskData(chore storage.Chore, assignments []storage.ChoreAssignment, work
 		WorkedMinTotal:        workedMinTotal,
 		DelayMin:              chore.DelayMin,
 		PublishAt:             pubAt,
+		SelfReported:          chore.SelfReported,
 	}
 }

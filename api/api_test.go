@@ -978,3 +978,123 @@ func TestCreateTaskWithDelay(t *testing.T) {
 	}
 }
 
+func TestCreateSelfReportedTask(t *testing.T) {
+	api, s, _, cleanup := setupTestApi(t)
+	defer cleanup()
+
+	handler := api.SetupRoutes()
+
+	// 1. Create a self-reported task with explicit creator_id
+	createReq := CreateTaskInput{
+		Body: TaskCreateInputBody{
+			Name:             "Cleaned the garage",
+			EstimatedTimeMin: 25,
+			CreatorId:        "user-volunteer",
+			SelfReported:     true,
+		},
+	}
+	body, _ := json.Marshal(createReq.Body)
+	req := httptest.NewRequest(http.MethodPost, "/tasks", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var created TaskData
+	if err := json.Unmarshal(w.Body.Bytes(), &created); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	if !created.SelfReported {
+		t.Fatalf("Expected created.SelfReported to be true, got false")
+	}
+	if created.CreatorId != "user-volunteer" {
+		t.Fatalf("Expected creator_id 'user-volunteer', got '%s'", created.CreatorId)
+	}
+	if created.Completed == nil {
+		t.Fatalf("Expected task to be marked completed immediately, got nil")
+	}
+	if len(created.Acked) != 1 || created.Acked[0] != "user-volunteer" {
+		t.Fatalf("Expected user-volunteer in acked, got %v", created.Acked)
+	}
+	if len(created.WorkLogs) != 1 {
+		t.Fatalf("Expected 1 worklog, got %d", len(created.WorkLogs))
+	}
+	wl := created.WorkLogs[0]
+	if wl.UserId != "user-volunteer" || wl.TimeSpentMin != 25 || !wl.SelfReported {
+		t.Fatalf("Unexpected worklog: %+v", wl)
+	}
+	if created.WorkedMinTotal != 25 {
+		t.Fatalf("Expected worked_min_total 25, got %d", created.WorkedMinTotal)
+	}
+
+	// Verify persistence in storage
+	storedChore, err := s.GetChore(created.ID)
+	if err != nil {
+		t.Fatalf("Failed to get chore from storage: %v", err)
+	}
+	if !storedChore.SelfReported {
+		t.Fatalf("Expected stored chore SelfReported to be true")
+	}
+	if storedChore.Completed == nil {
+		t.Fatalf("Expected stored chore Completed to be non-nil")
+	}
+
+	assignments, err := s.GetChoreAssignments(created.ID)
+	if err != nil {
+		t.Fatalf("Failed to get chore assignments: %v", err)
+	}
+	if len(assignments) != 1 || assignments[0].UserId != "user-volunteer" || assignments[0].Acked == nil {
+		t.Fatalf("Expected 1 acked assignment for user-volunteer: %+v", assignments)
+	}
+
+	worklogs, err := s.GetWorkLogsForChore(created.ID)
+	if err != nil {
+		t.Fatalf("Failed to get work logs: %v", err)
+	}
+	if len(worklogs) != 1 || worklogs[0].UserId != "user-volunteer" || !worklogs[0].SelfReported {
+		t.Fatalf("Expected 1 self-reported worklog: %+v", worklogs)
+	}
+
+	// 2. GET /tasks/{id} should return self_reported == true
+	reqOne := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/tasks/%d", created.ID), nil)
+	wOne := httptest.NewRecorder()
+	handler.ServeHTTP(wOne, reqOne)
+	if wOne.Code != http.StatusOK {
+		t.Fatalf("Expected status 200, got %d", wOne.Code)
+	}
+	var getOne TaskData
+	if err := json.Unmarshal(wOne.Body.Bytes(), &getOne); err != nil {
+		t.Fatalf("Failed to decode single task: %v", err)
+	}
+	if !getOne.SelfReported || getOne.Completed == nil || len(getOne.Acked) != 1 {
+		t.Fatalf("Expected self-reported completed task via GET /tasks/{id}: %+v", getOne)
+	}
+
+	// 3. Create a normal task (self_reported = false by default)
+	normalReq := CreateTaskInput{
+		Body: TaskCreateInputBody{
+			Name: "Normal task",
+		},
+	}
+	normBody, _ := json.Marshal(normalReq.Body)
+	reqNorm := httptest.NewRequest(http.MethodPost, "/tasks", bytes.NewBuffer(normBody))
+	reqNorm.Header.Set("Content-Type", "application/json")
+	wNorm := httptest.NewRecorder()
+	handler.ServeHTTP(wNorm, reqNorm)
+
+	var normalResp TaskData
+	if err := json.Unmarshal(wNorm.Body.Bytes(), &normalResp); err != nil {
+		t.Fatalf("Failed to decode normal task response: %v", err)
+	}
+	if normalResp.SelfReported {
+		t.Fatalf("Expected normal task to have SelfReported == false")
+	}
+	if normalResp.Completed != nil {
+		t.Fatalf("Expected normal task to have Completed == nil")
+	}
+}
+
