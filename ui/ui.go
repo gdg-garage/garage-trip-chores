@@ -83,7 +83,8 @@ func simpleInteractionResponse(content string) *discordgo.InteractionResponse {
 	return &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Flags: discordgo.MessageFlagsEphemeral | discordgo.MessageFlagsIsComponentsV2,
+			Content: content,
+			Flags:   discordgo.MessageFlagsEphemeral | discordgo.MessageFlagsIsComponentsV2,
 			Components: []discordgo.MessageComponent{
 				discordgo.TextDisplay{
 					Content: content,
@@ -97,7 +98,8 @@ func simpleContainerizedInteractionResponse(content string, color *int) *discord
 	return &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Flags: discordgo.MessageFlagsEphemeral | discordgo.MessageFlagsIsComponentsV2,
+			Content: content,
+			Flags:   discordgo.MessageFlagsEphemeral | discordgo.MessageFlagsIsComponentsV2,
 			Components: []discordgo.MessageComponent{
 				discordgo.Container{
 					AccentColor: color,
@@ -614,16 +616,27 @@ func (ui *Ui) cancelChore(buttonId string, s *discordgo.Session, i *discordgo.In
 		isDeferred = true
 	}
 
-	sendResp := func(r *discordgo.InteractionResponse) {
+	sendResp := func(content string, isError bool) {
 		if isDeferred {
 			var edit discordgo.WebhookEdit
-			if r.Data != nil && len(r.Data.Components) > 0 {
-				edit.Components = &r.Data.Components
+			if isError {
+				errContent := "⚠️ " + content
+				edit.Content = &errContent
+			} else {
+				edit.Content = &content
 			}
+			emptyComponents := []discordgo.MessageComponent{}
+			edit.Components = &emptyComponents
 			if _, respErr := s.InteractionResponseEdit(i.Interaction, &edit); respErr != nil {
 				ui.logger.Error("failed to edit cancel chore interaction response", "error", respErr, "chore_id", choreId)
 			}
 		} else {
+			var r *discordgo.InteractionResponse
+			if isError {
+				r = ui.errorInteractionResponse(content)
+			} else {
+				r = simpleContainerizedInteractionResponse(content, &ui.colors.RedColor)
+			}
 			r.Type = discordgo.InteractionResponseUpdateMessage
 			if respErr := s.InteractionRespond(i.Interaction, r); respErr != nil {
 				ui.logger.Error("failed to respond to cancel chore interaction", "error", respErr, "chore_id", choreId)
@@ -634,12 +647,12 @@ func (ui *Ui) cancelChore(buttonId string, s *discordgo.Session, i *discordgo.In
 	_, err = ui.CancelChore(choreId)
 	if err != nil {
 		ui.logger.Error("failed to cancel chore", "error", err, "chore_id", choreId)
-		sendResp(ui.errorInteractionResponse(err.Error()))
+		sendResp(err.Error(), true)
 		return
 	}
 
 	ui.logger.Info("Chore cancelled successfully", "chore_id", choreId, "user_id", userId)
-	sendResp(simpleContainerizedInteractionResponse(fmt.Sprintf("This chore `id: %d` has been removed.", choreId), &ui.colors.RedColor))
+	sendResp(fmt.Sprintf("This chore `id: %d` has been removed.", choreId), false)
 }
 
 func (ui *Ui) RejectChore(choreId uint, userId string) (storage.Chore, error) {
@@ -688,7 +701,7 @@ func (ui *Ui) rejectChore(buttonId string, s *discordgo.Session, i *discordgo.In
 	if respErr := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Flags: discordgo.MessageFlagsEphemeral | discordgo.MessageFlagsIsComponentsV2,
+			Flags: discordgo.MessageFlagsEphemeral,
 		},
 	}); respErr != nil {
 		ui.logger.Warn("failed to defer reject chore interaction, falling back to direct respond", "error", respErr, "chore_id", choreId)
@@ -697,22 +710,26 @@ func (ui *Ui) rejectChore(buttonId string, s *discordgo.Session, i *discordgo.In
 	}
 
 	sendResp := func(content string, isError bool) {
-		var resp *discordgo.InteractionResponse
-		if isError {
-			resp = ui.errorInteractionResponse(content)
-		} else {
-			resp = simpleInteractionResponse(content)
-		}
-
 		if isDeferred {
 			var edit discordgo.WebhookEdit
-			if resp.Data != nil && len(resp.Data.Components) > 0 {
-				edit.Components = &resp.Data.Components
+			if isError {
+				errContent := "⚠️ " + content
+				edit.Content = &errContent
+			} else {
+				edit.Content = &content
 			}
+			emptyComponents := []discordgo.MessageComponent{}
+			edit.Components = &emptyComponents
 			if _, respErr := s.InteractionResponseEdit(i.Interaction, &edit); respErr != nil {
 				ui.logger.Error("failed to edit reject chore interaction response", "error", respErr, "chore_id", choreId)
 			}
 		} else {
+			var resp *discordgo.InteractionResponse
+			if isError {
+				resp = ui.errorInteractionResponse(content)
+			} else {
+				resp = simpleInteractionResponse(content)
+			}
 			if respErr := s.InteractionRespond(i.Interaction, resp); respErr != nil {
 				ui.logger.Error("failed to respond to reject chore interaction", "error", respErr, "chore_id", choreId)
 			}
@@ -799,7 +816,7 @@ func (ui *Ui) ackChore(customID string, s *discordgo.Session, i *discordgo.Inter
 	if respErr := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Flags: discordgo.MessageFlagsEphemeral | discordgo.MessageFlagsIsComponentsV2,
+			Flags: discordgo.MessageFlagsEphemeral,
 		},
 	}); respErr != nil {
 		ui.logger.Warn("failed to defer ack chore interaction, falling back to direct respond", "error", respErr, "chore_id", choreId)
@@ -808,22 +825,26 @@ func (ui *Ui) ackChore(customID string, s *discordgo.Session, i *discordgo.Inter
 	}
 
 	sendResp := func(content string, isError bool) {
-		var resp *discordgo.InteractionResponse
-		if isError {
-			resp = ui.errorInteractionResponse(content)
-		} else {
-			resp = simpleInteractionResponse(content)
-		}
-
 		if isDeferred {
 			var edit discordgo.WebhookEdit
-			if resp.Data != nil && len(resp.Data.Components) > 0 {
-				edit.Components = &resp.Data.Components
+			if isError {
+				errContent := "⚠️ " + content
+				edit.Content = &errContent
+			} else {
+				edit.Content = &content
 			}
+			emptyComponents := []discordgo.MessageComponent{}
+			edit.Components = &emptyComponents
 			if _, respErr := s.InteractionResponseEdit(i.Interaction, &edit); respErr != nil {
 				ui.logger.Error("failed to edit ack chore interaction response", "error", respErr, "chore_id", choreId)
 			}
 		} else {
+			var resp *discordgo.InteractionResponse
+			if isError {
+				resp = ui.errorInteractionResponse(content)
+			} else {
+				resp = simpleInteractionResponse(content)
+			}
 			if respErr := s.InteractionRespond(i.Interaction, resp); respErr != nil {
 				ui.logger.Error("failed to respond to ack chore interaction", "error", respErr, "chore_id", choreId)
 			}
@@ -2095,7 +2116,7 @@ func (ui *Ui) helpedChore(d string, s *discordgo.Session, i *discordgo.Interacti
 	if respErr := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Flags: discordgo.MessageFlagsEphemeral | discordgo.MessageFlagsIsComponentsV2,
+			Flags: discordgo.MessageFlagsEphemeral,
 		},
 	}); respErr != nil {
 		ui.logger.Warn("failed to defer helped chore interaction, falling back to direct respond", "error", respErr, "chore_id", choreId)
@@ -2103,16 +2124,27 @@ func (ui *Ui) helpedChore(d string, s *discordgo.Session, i *discordgo.Interacti
 		isDeferred = true
 	}
 
-	sendResp := func(r *discordgo.InteractionResponse) {
+	sendResp := func(content string, isError bool) {
 		if isDeferred {
 			var edit discordgo.WebhookEdit
-			if r.Data != nil && len(r.Data.Components) > 0 {
-				edit.Components = &r.Data.Components
+			if isError {
+				errContent := "⚠️ " + content
+				edit.Content = &errContent
+			} else {
+				edit.Content = &content
 			}
+			emptyComponents := []discordgo.MessageComponent{}
+			edit.Components = &emptyComponents
 			if _, respErr := s.InteractionResponseEdit(i.Interaction, &edit); respErr != nil {
 				ui.logger.Error("failed to edit helped chore interaction response", "error", respErr, "chore_id", choreId)
 			}
 		} else {
+			var r *discordgo.InteractionResponse
+			if isError {
+				r = ui.errorInteractionResponse(content)
+			} else {
+				r = simpleContainerizedInteractionResponse(content, &ui.colors.GreenColor)
+			}
 			if respErr := s.InteractionRespond(i.Interaction, r); respErr != nil {
 				ui.logger.Error("failed to respond to helped chore interaction", "error", respErr, "chore_id", choreId)
 			}
@@ -2122,12 +2154,12 @@ func (ui *Ui) helpedChore(d string, s *discordgo.Session, i *discordgo.Interacti
 	_, err = ui.HelpedChore(choreId, userId)
 	if err != nil {
 		ui.logger.Error("failed to log work for chore", "error", err, "chore_id", choreId, "user_id", userId)
-		sendResp(simpleContainerizedInteractionResponse(fmt.Sprintf("You already have work logged for chore `id: %d`.", choreId), &ui.colors.RedColor))
+		sendResp(fmt.Sprintf("You already have work logged for chore `id: %d`.", choreId), true)
 		return
 	}
 
 	ui.logger.Info("Chore work logged successfully", "chore_id", choreId, "user_id", userId)
-	sendResp(simpleContainerizedInteractionResponse(fmt.Sprintf("Logged work for chore `id: %d`.", choreId), &ui.colors.GreenColor))
+	sendResp(fmt.Sprintf("Logged work for chore `id: %d`.", choreId), false)
 }
 
 func (ui *Ui) CompleteChore(choreId uint) (storage.Chore, error) {
@@ -2210,27 +2242,57 @@ func (ui *Ui) doneChore(d string, s *discordgo.Session, i *discordgo.Interaction
 		return
 	}
 
+	// Defer message update immediately to prevent Discord 3-second interaction timeout (code 10062)
+	isDeferred := false
+	if respErr := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseDeferredMessageUpdate,
+	}); respErr != nil {
+		ui.logger.Warn("failed to defer done chore interaction, falling back to direct respond", "error", respErr, "chore_id", choreId)
+	} else {
+		isDeferred = true
+	}
+
+	sendResp := func(content string, isError bool) {
+		if isDeferred {
+			var edit discordgo.WebhookEdit
+			if isError {
+				errContent := "⚠️ " + content
+				edit.Content = &errContent
+			} else {
+				edit.Content = &content
+			}
+			emptyComponents := []discordgo.MessageComponent{}
+			edit.Components = &emptyComponents
+			if _, respErr := s.InteractionResponseEdit(i.Interaction, &edit); respErr != nil {
+				ui.logger.Error("failed to edit done chore interaction response", "error", respErr, "chore_id", choreId)
+			}
+		} else {
+			var r *discordgo.InteractionResponse
+			if isError {
+				r = ui.errorInteractionResponse(content)
+			} else {
+				r = simpleContainerizedInteractionResponse(content, &ui.colors.GreenColor)
+			}
+			r.Type = discordgo.InteractionResponseUpdateMessage
+			if respErr := s.InteractionRespond(i.Interaction, r); respErr != nil {
+				ui.logger.Error("failed to respond to doneChore interaction", "error", respErr, "chore_id", choreId)
+			}
+		}
+	}
+
 	chore, err := ui.CompleteChore(choreId)
 	if err != nil {
 		if strings.Contains(err.Error(), "already been completed") {
 			ui.logger.Info("chore already completed when done button clicked", "chore_id", choreId)
-			r := simpleContainerizedInteractionResponse(fmt.Sprintf("This chore `id: %d` has already been completed.", choreId), &ui.colors.GreenColor)
-			r.Type = discordgo.InteractionResponseUpdateMessage
-			_ = s.InteractionRespond(i.Interaction, r)
+			sendResp(fmt.Sprintf("This chore `id: %d` has already been completed.", choreId), false)
 			return
 		}
 		ui.logger.Error("failed to complete chore", "error", err, "chore_id", choreId)
-		r := ui.errorInteractionResponse(err.Error())
-		r.Type = discordgo.InteractionResponseUpdateMessage
-		_ = s.InteractionRespond(i.Interaction, r)
+		sendResp(err.Error(), true)
 		return
 	}
 
-	r := simpleContainerizedInteractionResponse(fmt.Sprintf("This chore `id: %d` `%s` has been completed.", choreId, chore.Name), &ui.colors.GreenColor)
-	r.Type = discordgo.InteractionResponseUpdateMessage
-	if err := s.InteractionRespond(i.Interaction, r); err != nil {
-		ui.logger.Error("failed to respond to doneChore interaction", "error", err, "chore_id", choreId)
-	}
+	sendResp(fmt.Sprintf("This chore `id: %d` `%s` has been completed.", choreId, chore.Name), false)
 }
 
 func (ui *Ui) RunDelayedTaskScheduler(ctx context.Context, wg *sync.WaitGroup) {
