@@ -5,6 +5,7 @@ Generates statistical reports, metrics, visual charts, interactive HTML dashboar
 and attendee-facing PDF reports (English) for:
 1) Garage Trip 2026 (GT 7) Standalone Report
 2) Multi-Year Comparison & All-Time Hall of Fame (GT 6.9 2025 vs GT 7 2026)
+Includes chore clustering and categorization (Dishes, Cooking, Deliveries, Bar, Hookah, etc.)
 """
 
 import argparse
@@ -89,6 +90,28 @@ def get_short_name(uid, user_map):
         return nick
     return info.get("username", f"User {uid[-4:]}")
 
+def categorize_chore(name):
+    n = name.lower()
+    if any(k in n for k in ['dým', 'dym', 'shisha', 'hookah', 'uhlí', 'uhli', 'žhavič', 'zhavic', '💨']):
+        return 'Hookah & Shisha'
+    if any(k in n for k in ['píp', 'pip', 'výčep', 'vycep', 'pivo', 'kofol', 'spa water', 'bečk', 'beck', 'strongbow', 'frizzante', 'limetk', 'espresso', 'dariknemapivo', 'dark and stormy', 'led', 'led ❄️']):
+        return 'Bar & Drinks'
+    if any(k in n for k in ['myčk', 'myck', 'mick', 'nádobí', 'nadobi', 'dishwasher', 'sklo']):
+        return 'Dishes & Dishwasher'
+    if any(k in n for k in ['rohlík', 'rohlik', 'alzu', 'alza', 'rotter', 'pelmen', 'vyzvednout', 'převzít', 'prevzit', 'přinést večeři', 'prinest jidlo', 'přinést jidlo', 'přinést veřeři', 'vyvést oběd']):
+        return 'Driving & Deliveries'
+    if any(k in n for k in ['odpadk', 'koš', 'kos', 'pytl', 'krabice od pizzy', 'plasty']):
+        return 'Garbage & Recycling'
+    if any(k in n for k in ['palačin', 'palacin', 'gril', 'grill', 'špekáč', 'spekac', 'jidlo', 'jídlo', 'hrnc', 'lednic', 'snídan', 'snidan', 'oběd', 'obed', 'večeř', 'vecer', 'mrazák', 'mrazak', 'várnic', 'varnic', 'ohřev', 'chléb', 'chleb', 'hořčic', 'kečup', 'talíř', 'talir']):
+        return 'Cooking & Food Prep'
+    if any(k in n for k in ['saun', 'vířiv', 'výřiv', 'viriv', 'vyriv', 'parenting', 'kids', 'playground', 'room n. 3', 'pokoji 3']):
+        return 'Wellness & Parenting'
+    if any(k in n for k in ['vysát', 'vysat', 'vytřít', 'vytrit', 'podlah', 'stol', 'kuchyň', 'kuchyn', 'elektřin', 'elektrin', 'tiskárn', 'tiskarn', 'kavovar', 'fotbalk']):
+        return 'Cleaning & Maintenance'
+    if any(k in n for k in ['test', 'have fun', 'turnaj', 'panák', 'panak', 'flákanec', 'flakanec', 'snaja', 'svijany']):
+        return 'Fun & Bot Testing'
+    return 'General Cabin Chores'
+
 def fetch_year_data(con, sample_period_min, user_map, exclude_uids=None, max_presence_ts=None):
     if exclude_uids is None:
         exclude_uids = set()
@@ -134,6 +157,16 @@ def fetch_year_data(con, sample_period_min, user_map, exclude_uids=None, max_pre
         FROM chore_assignments
         GROUP BY user_id
     """, con)
+
+    # Detailed categorized work items
+    df_work_items = pd.read_sql_query("""
+        SELECT wl.id, wl.user_id, wl.time_spent_min, wl.self_reported, c.name as chore_name
+        FROM work_logs wl
+        JOIN chores c ON c.id = wl.chore_id
+        WHERE c.cancelled IS NULL
+    """, con)
+    df_work_items = df_work_items[~df_work_items["user_id"].isin(exclude_uids)].reset_index(drop=True)
+    df_work_items["category"] = df_work_items["chore_name"].apply(categorize_chore)
 
     # Merge
     df_users = pd.merge(df_presence, df_work, on="user_id", how="outer").fillna(0)
@@ -183,7 +216,7 @@ def fetch_year_data(con, sample_period_min, user_map, exclude_uids=None, max_pre
         ORDER BY total_min DESC
     """, con)
 
-    return df_users, df_daily, df_top_chores
+    return df_users, df_daily, df_top_chores, df_work_items
 
 def plot_pct_spent_working(df, mean_pct, std_pct, output_file):
     """
@@ -422,6 +455,124 @@ def plot_comprehensive_dashboard(df_users, df_daily, df_top_chores, mean_pct, st
     plt.close()
     print(f"Saved: {output_file}")
 
+def plot_category_distribution_2026(df_work_items, user_map, output_file):
+    """
+    Visualizes work contribution by chore category for 2026 (bar chart + donut).
+    """
+    plt.style.use("default")
+    cat_summary = df_work_items.groupby("category").agg(
+        total_min=("time_spent_min", "sum"),
+        sessions=("id", "count"),
+        workers=("user_id", "nunique")
+    ).sort_values(by="total_min", ascending=True)
+
+    # Identify top worker per category
+    top_workers = {}
+    for cat in cat_summary.index:
+        sub = df_work_items[df_work_items["category"] == cat].groupby("user_id")["time_spent_min"].sum().sort_values(ascending=False)
+        if len(sub) > 0:
+            top_u = sub.index[0]
+            top_m = sub.iloc[0]
+            name = get_short_name(top_u, user_map)
+            top_workers[cat] = f"{name} ({int(top_m)}m)"
+        else:
+            top_workers[cat] = "-"
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 7.5), dpi=300, gridspec_kw={"width_ratios": [1.3, 1]})
+    fig.patch.set_facecolor("white")
+
+    # Bar chart
+    y = np.arange(len(cat_summary))
+    bars = ax1.barh(y, cat_summary["total_min"], color="#1A73E8", height=0.6, zorder=3)
+    ax1.set_yticks(y)
+    ax1.set_yticklabels(cat_summary.index, fontsize=10.5, fontweight="bold")
+    ax1.set_xlabel("Total Work Minutes Spent", fontsize=11, fontweight="bold")
+    ax1.set_title("Work Contribution by Chore Category (2026)", fontsize=13, fontweight="bold", pad=12, loc="left")
+    ax1.grid(axis="x", color="#EEEEEE", zorder=1)
+
+    for s in ["top", "right"]: ax1.spines[s].set_visible(False)
+    for s in ["left", "bottom"]: ax1.spines[s].set_color("#CCCCCC")
+
+    tot_min = cat_summary["total_min"].sum()
+    for bar, cat in zip(bars, cat_summary.index):
+        w = bar.get_width()
+        tw = top_workers.get(cat, "")
+        pct = (w / tot_min) * 100.0 if tot_min > 0 else 0
+        ax1.text(w + 8, bar.get_y() + bar.get_height()/2.0, f"{int(w)}m ({pct:.1f}%) • Top: {tw}", va="center", fontsize=9, color="#202124", fontweight="500")
+
+    ax1.set_xlim(0, cat_summary["total_min"].max() * 1.45)
+
+    # Donut chart
+    wedges, texts, autotexts = ax2.pie(
+        cat_summary["total_min"],
+        labels=cat_summary.index,
+        autopct="%1.1f%%",
+        startangle=140,
+        pctdistance=0.8,
+        wedgeprops=dict(width=0.4, edgecolor="white", linewidth=2)
+    )
+    for t in texts: t.set_fontsize(8.5)
+    for at in autotexts:
+        at.set_fontsize(8)
+        at.set_fontweight("bold")
+    ax2.set_title(f"Category Share of Total Time ({tot_min/60.0:.1f}h total)", fontsize=13, fontweight="bold", pad=12)
+
+    plt.tight_layout()
+    plt.savefig(output_file, dpi=300)
+    plt.close()
+    print(f"Saved: {output_file}")
+
+def plot_category_comparison_yoy(df_items25, df_items26, output_file):
+    """
+    Grouped bar chart comparing time spent per category in 2025 vs 2026.
+    """
+    plt.style.use("default")
+    cat25 = df_items25.groupby("category")["time_spent_min"].sum()
+    cat26 = df_items26.groupby("category")["time_spent_min"].sum()
+
+    all_cats = sorted(list(set(cat25.index).union(set(cat26.index))), key=lambda c: cat26.get(c, 0) + cat25.get(c, 0), reverse=True)
+
+    df_yoy = pd.DataFrame({
+        "cat": all_cats,
+        "min_25": [cat25.get(c, 0) for c in all_cats],
+        "min_26": [cat26.get(c, 0) for c in all_cats]
+    }).sort_values(by="min_26", ascending=True)
+
+    fig, ax = plt.subplots(figsize=(14, 8.5), dpi=300)
+    fig.patch.set_facecolor("white")
+    ax.set_facecolor("white")
+
+    y = np.arange(len(df_yoy))
+    h = 0.36
+
+    ax.barh(y - h/2, df_yoy["min_25"], height=h, color="#90CAF9", label="2025 (GT 6.9)", zorder=3)
+    ax.barh(y + h/2, df_yoy["min_26"], height=h, color="#1A73E8", label="2026 (GT 7)", zorder=3)
+
+    ax.set_yticks(y)
+    ax.set_yticklabels(df_yoy["cat"], fontsize=11, fontweight="bold")
+    ax.set_xlabel("Total Work Minutes Spent", fontsize=11, fontweight="bold")
+    ax.set_title("Chore Categories: Year-over-Year Evolution (2025 vs 2026)", fontsize=14, fontweight="bold", pad=15, loc="left")
+    ax.grid(axis="x", color="#EEEEEE", zorder=1)
+
+    for s in ["top", "right"]: ax.spines[s].set_visible(False)
+    for s in ["left", "bottom"]: ax.spines[s].set_color("#CCCCCC")
+
+    for i, r in df_yoy.reset_index().iterrows():
+        m25, m26 = r["min_25"], r["min_26"]
+        delta = m26 - m25
+        d_str = f"{delta:+d}m"
+        max_m = max(m25, m26)
+        d_col = "#2E7D32" if delta > 10 else ("#C62828" if delta < -10 else "#555555")
+        ax.text(max_m + 8, y[i], f"{int(m26)}m vs {int(m25)}m ({d_str})", va="center", fontsize=9, fontweight="bold", color=d_col)
+
+    ax.set_xlim(0, max(df_yoy["min_26"].max(), df_yoy["min_25"].max()) * 1.25)
+    ax.legend(loc="lower right", frameon=True, facecolor="white", edgecolor="#DADCE0", fontsize=11)
+
+    plt.tight_layout()
+    plt.savefig(output_file, dpi=300)
+    plt.close()
+    print(f"Saved: {output_file}")
+
 def plot_yoy_comparison(df_both, mean25, mean26, output_file):
     """
     Grouped horizontal bar chart comparing 2025 vs 2026 % spent working with delta badges (English).
@@ -536,7 +687,6 @@ def plot_evolution_scatter(df_both, mean25, mean26, output_file):
     ax.fill_between([-0.1, mean25], -0.1, mean26, color="#F3E5F5", alpha=0.45, zorder=1) # Zen
     ax.fill_between([mean25, max_v], -0.1, mean26, color="#FFF3E0", alpha=0.45, zorder=1) # Vacationers
 
-    # English Labels
     ax.text(max_v - 0.1, max_v - 0.1, "HARDCORE WORKERS\n(Above avg both years)", ha="right", va="top", fontsize=11, fontweight="bold", color="#1B5E20")
     ax.text(0.05, max_v - 0.1, "COMEBACK KINGS\n(Significant improvement in 2026)", ha="left", va="top", fontsize=11, fontweight="bold", color="#0D47A1")
     ax.text(0.05, 0.05, "ZEN MODE\n(Calm & steady pace)", ha="left", va="bottom", fontsize=11, fontweight="bold", color="#4A148C")
@@ -642,12 +792,18 @@ def plot_macro_trends(stats25, stats26, output_file):
     plt.close()
     print(f"Saved: {output_file}")
 
-def generate_interactive_html_2026(df26, df_top26, stats26, output_file):
+def generate_interactive_html_2026(df26, df_work_items, df_top26, stats26, output_file, user_map):
     """
-    Generates standalone HTML dashboard for 2026 in English.
+    Generates standalone HTML dashboard for 2026 in English with category analysis.
     """
     top10 = df_top26.head(10).to_dict(orient="records")
     u26 = df26.to_dict(orient="records")
+
+    cat_summary = df_work_items.groupby("category").agg(
+        total_min=("time_spent_min", "sum"),
+        sessions=("id", "count"),
+        workers=("user_id", "nunique")
+    ).sort_values(by="total_min", ascending=False).reset_index()
 
     html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -753,6 +909,36 @@ def generate_interactive_html_2026(df26, df_top26, stats26, output_file):
         </div>
 
         <div class="card">
+            <h2>🏷️ Work by Chore Category (2026)</h2>
+            <img src="category_distribution_2026.png" class="chart-img">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Category</th>
+                        <th>Total Time</th>
+                        <th>Share (%)</th>
+                        <th>Sessions</th>
+                        <th>Workers</th>
+                    </tr>
+                </thead>
+                <tbody>"""
+    tot_min = cat_summary["total_min"].sum()
+    for _, r in cat_summary.iterrows():
+        pct = (r["total_min"] / tot_min) * 100.0 if tot_min > 0 else 0
+        html += f"""
+                    <tr>
+                        <td><b>{r['category']}</b></td>
+                        <td><b>{int(r['total_min'])} min</b> ({(r['total_min']/60.0):.1f}h)</td>
+                        <td>{pct:.1f}%</td>
+                        <td>{int(r['sessions'])}x</td>
+                        <td>{int(r['workers'])}</td>
+                    </tr>"""
+    html += f"""
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card">
             <h2>📊 Visual Charts (Garage Trip 2026)</h2>
             <div class="grid-2">
                 <div>
@@ -809,9 +995,9 @@ def generate_interactive_html_2026(df26, df_top26, stats26, output_file):
         f.write(html)
     print(f"Saved: {output_file}")
 
-def generate_interactive_html_comparison(df26, df_both, stats26, stats25, stats_comb, output_file):
+def generate_interactive_html_comparison(df26, df_both, df_items25, df_items26, stats26, stats25, stats_comb, output_file):
     """
-    Generates standalone multi-year comparison HTML dashboard in English.
+    Generates standalone multi-year comparison HTML dashboard in English with category trends.
     """
     both_json = df_both.sort_values(by="combined_pct", ascending=False).to_dict(orient="records")
 
@@ -923,6 +1109,11 @@ def generate_interactive_html_comparison(df26, df_both, stats26, stats25, stats_
         </div>
 
         <div class="card">
+            <h2>🏷️ Chore Categories: Two-Year Evolution</h2>
+            <img src="category_comparison_yoy.png" class="chart-img">
+        </div>
+
+        <div class="card">
             <h2>📊 Comparative Charts</h2>
             <div class="grid-2">
                 <div>
@@ -988,15 +1179,22 @@ def generate_interactive_html_comparison(df26, df_both, stats26, stats25, stats_
         f.write(html)
     print(f"Saved: {output_file}")
 
-def generate_pdf_report_2026(df26, df_top26, stats26, output_pdf, charts_dir):
+def generate_pdf_report_2026(df26, df_work_items26, df_top26, stats26, output_pdf, charts_dir, user_map):
     """
-    Generates standalone 4-page PDF report for Garage Trip 2026 (English).
+    Generates standalone 5-page PDF report for Garage Trip 2026 in English with category breakdown.
     """
     p_pct26 = os.path.abspath(os.path.join(charts_dir, "pct_spent_working.png"))
     p_dist26 = os.path.abspath(os.path.join(charts_dir, "distribution_histogram.png"))
     p_dash26 = os.path.abspath(os.path.join(charts_dir, "chores_dashboard.png"))
+    p_cat26 = os.path.abspath(os.path.join(charts_dir, "category_distribution_2026.png"))
 
     top10 = df_top26.head(10).to_dict(orient="records")
+
+    cat_summary = df_work_items26.groupby("category").agg(
+        total_min=("time_spent_min", "sum"),
+        sessions=("id", "count"),
+        workers=("user_id", "nunique")
+    ).sort_values(by="total_min", ascending=False).reset_index()
 
     html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -1160,7 +1358,54 @@ tr:nth-child(even) {{ background: #FAFAFA; }}
     </div>
 </div>
 
-<!-- PAGE 3: Comprehensive Dashboard -->
+<!-- PAGE 3: Categories & Specialists (NEW) -->
+<div class="page">
+    <h2>Chore Categories & Work Distribution (2026)</h2>
+    <p style="font-size:8pt; color:#555555; margin-bottom:2px;">Clustering all completed chores into functional domains reveals where cabin time was truly invested.</p>
+    <div class="img-center">
+        <img src="file://{p_cat26}" style="max-height: 270px;">
+    </div>
+
+    <h2>Category Breakdown & Discipline Champions</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Category</th>
+                <th>Total Time</th>
+                <th>Share</th>
+                <th>Sessions</th>
+                <th>Key Tasks & Champions</th>
+            </tr>
+        </thead>
+        <tbody>"""
+    tot_min = cat_summary["total_min"].sum()
+    for _, r in cat_summary.iterrows():
+        pct = (r["total_min"] / tot_min) * 100.0 if tot_min > 0 else 0
+        desc = ""
+        if r["category"] == "Cooking & Food Prep": desc = "Pancake marathon (270m), Rotter dinner • Top: tivvit (190m), Fisa (120m)"
+        elif r["category"] == "Dishes & Dishwasher": desc = "49 machine cycles • Top: Limenius (75m), Liennie.sh (60m)"
+        elif r["category"] == "Driving & Deliveries": desc = "Rotter, Pelmeně, Rohlík pickups • Top: Kuře (70m), Fisa (70m)"
+        elif r["category"] == "Bar & Drinks": desc = "Keg tap repairs, lime squeezing • Top: Dongalis (72m), Richi (42m)"
+        elif r["category"] == "Hookah & Shisha": desc = "Coals & bowl cleaning • Top: Oťas (125m), Dongalis (60m)"
+        elif r["category"] == "Cleaning & Maintenance": desc = "Main room vacuum & mop • Top: Rasťo (120m)"
+        elif r["category"] == "Garbage & Recycling": desc = "Bin runs & bag swaps • Top: Klára Vonšovská (25m), Richi (15m)"
+        else: desc = f"{int(r['workers'])} workers participating"
+
+        html += f"""
+            <tr>
+                <td><b>{r['category']}</b></td>
+                <td><b>{int(r['total_min'])} min</b></td>
+                <td>{pct:.1f}%</td>
+                <td>{int(r['sessions'])}x</td>
+                <td>{desc}</td>
+            </tr>"""
+
+    html += f"""
+        </tbody>
+    </table>
+</div>
+
+<!-- PAGE 4: Comprehensive Dashboard -->
 <div class="page">
     <h2>Comprehensive Weekly Chores Dashboard</h2>
     <p style="font-size:8pt; color:#555555; margin-bottom:2px;">Overview of worked minutes by participant, assignment reliability breakdown, activity timeline, and primary tasks.</p>
@@ -1169,7 +1414,7 @@ tr:nth-child(even) {{ background: #FAFAFA; }}
     </div>
 </div>
 
-<!-- PAGE 4: Leaderboard & Awards -->
+<!-- PAGE 5: Leaderboard & Awards -->
 <div class="page">
     <h2>Complete Participant Leaderboard (Garage Trip 2026)</h2>
     <table>
@@ -1223,7 +1468,7 @@ tr:nth-child(even) {{ background: #FAFAFA; }}
     </div>
     <div class="award-card" style="border-left-color: #EA4335;">
         <div class="award-title">🚨 408 Request Timeout Champion: @Klára Vonšovská (53 timeouts) & @jask (2x Refuse)</div>
-        <div class="award-desc">Klára ignored 53 out of 57 bot assignments (93% timeout rate). Meanwhile, jask earned defiant distinction as the only attendee to actively press 'Refuse'.</div>
+        <div class="award-desc">Klára ignored 53 out of 57 bot assignments (93% timeout rate). Meanwhile, jask demonstrated unwavering defiance as the only attendee to repeatedly hit 'Refuse'.</div>
     </div>
 </div>
 
@@ -1246,18 +1491,21 @@ tr:nth-child(even) {{ background: #FAFAFA; }}
         if os.path.exists(html_tmp):
             os.remove(html_tmp)
 
-def generate_pdf_report_comparison(df_both, stats26, stats25, stats_comb, output_pdf, charts_dir):
+def generate_pdf_report_comparison(df_both, df_items25, df_items26, stats26, stats25, stats_comb, output_pdf, charts_dir):
     """
-    Generates multi-year comparative 5-page PDF report (English).
+    Generates multi-year comparative 5-page PDF report in English with category evolution.
     """
     both_sorted = df_both.sort_values(by="combined_pct", ascending=False).reset_index(drop=True)
 
-    p_pct26 = os.path.abspath(os.path.join(charts_dir, "pct_spent_working.png"))
-    p_dist26 = os.path.abspath(os.path.join(charts_dir, "distribution_histogram.png"))
     p_yoy = os.path.abspath(os.path.join(charts_dir, "yoy_comparison.png"))
     p_scatter = os.path.abspath(os.path.join(charts_dir, "evolution_scatter.png"))
     p_agg = os.path.abspath(os.path.join(charts_dir, "multiyear_aggregate.png"))
     p_trends = os.path.abspath(os.path.join(charts_dir, "macro_trends.png"))
+    p_cat_yoy = os.path.abspath(os.path.join(charts_dir, "category_comparison_yoy.png"))
+
+    cat25 = df_items25.groupby("category")["time_spent_min"].sum()
+    cat26 = df_items26.groupby("category")["time_spent_min"].sum()
+    all_cats = sorted(list(set(cat25.index).union(set(cat26.index))), key=lambda c: cat26.get(c, 0) + cat25.get(c, 0), reverse=True)
 
     html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -1390,21 +1638,7 @@ tr:nth-child(even) {{ background: #FAFAFA; }}
     </div>
 </div>
 
-<!-- PAGE 2: 2026 Detail Charts -->
-<div class="page">
-    <h2>Garage Trip 2026: % Spent Working & Fairness Zone</h2>
-    <p style="font-size:8pt; color:#555555; margin-bottom:2px;">The red rectangle designates the ±1 standard deviation range from the mean ({stats26['mean_pct_working']:.2f}% ± {stats26['std_pct_working_sample']:.2f}%), covering 17 out of 22 attendees.</p>
-    <div class="img-center">
-        <img src="file://{p_pct26}" style="max-height: 275px;">
-    </div>
-
-    <h2>Frequency Density & Gaussian Fit (2026)</h2>
-    <div class="img-center">
-        <img src="file://{p_dist26}" style="max-height: 275px;">
-    </div>
-</div>
-
-<!-- PAGE 3: Comparative Charts -->
+<!-- PAGE 2: Comparative Charts -->
 <div class="page">
     <h2>Year-over-Year Comparison: 2025 vs 2026 (18 Attendees)</h2>
     <p style="font-size:8pt; color:#555555; margin-bottom:2px;">Performance comparison of all 18 returning participants, including percentage point deltas.</p>
@@ -1416,6 +1650,56 @@ tr:nth-child(even) {{ background: #FAFAFA; }}
     <div class="img-center">
         <img src="file://{p_scatter}" style="max-height: 275px;">
     </div>
+</div>
+
+<!-- PAGE 3: Category Evolution (NEW) -->
+<div class="page">
+    <h2>Chore Categories: Two-Year Evolution</h2>
+    <p style="font-size:8pt; color:#555555; margin-bottom:2px;">Comparing total time spent across key functional domains in 2025 vs 2026.</p>
+    <div class="img-center">
+        <img src="file://{p_cat_yoy}" style="max-height: 260px;">
+    </div>
+
+    <h2>Category Highlights & Two-Year Shifts</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Category</th>
+                <th>2025 Min</th>
+                <th>2026 Min</th>
+                <th>Combined</th>
+                <th>Trend & Multi-Year Specialists</th>
+            </tr>
+        </thead>
+        <tbody>"""
+
+    for cat in all_cats:
+        m25 = cat25.get(cat, 0)
+        m26 = cat26.get(cat, 0)
+        tot_c = m25 + m26
+        spec = ""
+        if cat == "Cooking & Food Prep": spec = "🥞 Massive growth (+57%) • All-Time Master: tivvit (315m combined)"
+        elif cat == "Dishes & Dishwasher": spec = "🍽️ Dominant discipline (995m total) • All-Time Master: Limenius (125m)"
+        elif cat == "Bar & Drinks": spec = "🍻 High volume (666m total) • All-Time Tap Master: Dongalis (187m)"
+        elif cat == "Hookah & Shisha": spec = "💨 Steady demand (465m total) • All-Time Shisha Master: Oťas (184m)"
+        elif cat == "Driving & Deliveries": spec = "🚗 Crucial logistics (359m in 2026) • Couriers: Kuře (70m), Fisa (70m)"
+        elif cat == "Cleaning & Maintenance": spec = "🧹 General care (298m total) • Janitor Supreme: Rasťo (120m)"
+        elif cat == "Garbage & Recycling": spec = "🗑️ Essential sanitation (155m total) • Sanitation Master: Richi (45m)"
+        elif cat == "Wellness & Parenting": spec = "👶 Playground & sauna (323m total) • Spa Attendant: Destil (163m)"
+        else: spec = "General chores"
+
+        html += f"""
+            <tr>
+                <td><b>{cat}</b></td>
+                <td>{int(m25)}m</td>
+                <td>{int(m26)}m</td>
+                <td><b>{int(tot_c)}m ({(tot_c/60.0):.1f}h)</b></td>
+                <td>{spec}</td>
+            </tr>"""
+
+    html += f"""
+        </tbody>
+    </table>
 </div>
 
 <!-- PAGE 4: All-Time Hall of Fame -->
@@ -1529,7 +1813,7 @@ def main():
     con26 = sqlite3.connect(args.db_2026)
     
     # 2026 Data: exclude Anetka per explicit instructions, end at 2026-09-19 00:00:00
-    df26, df_daily26, df_top26 = fetch_year_data(
+    df26, df_daily26, df_top26, df_items26 = fetch_year_data(
         con26,
         sample_period_min=args.sample_period_2026,
         user_map=user_map,
@@ -1550,6 +1834,13 @@ def main():
     total_acked26 = int(df26["acked_count"].sum())
     total_self26 = int(df26["self_reported_count"].sum())
 
+    # Category breakdown for 2026
+    cat_summary_26 = df_items26.groupby("category").agg(
+        total_min=("time_spent_min", "sum"),
+        sessions=("id", "count"),
+        workers=("user_id", "nunique")
+    ).sort_values(by="total_min", ascending=False).to_dict(orient="index")
+
     stats26 = {
         "year": 2026,
         "event": "Garage Trip 7",
@@ -1569,7 +1860,8 @@ def main():
         "total_chores": int(len(df_top26)),
         "total_chore_sessions": int(df26["chores_done"].sum()),
         "ack_rate_pct": round(total_acked26 / total_assign26 * 100.0, 1) if total_assign26 > 0 else 0,
-        "self_reported_sessions": total_self26
+        "self_reported_sessions": total_self26,
+        "categories": {c: {"total_min": int(v["total_min"]), "sessions": int(v["sessions"]), "workers": int(v["workers"])} for c, v in cat_summary_26.items()}
     }
 
     # 2. Load 2025 DB if available
@@ -1577,10 +1869,11 @@ def main():
     stats25 = {}
     df_both = pd.DataFrame()
     stats_comb = {}
+    df_items25 = pd.DataFrame()
 
     if has_2025:
         con25 = sqlite3.connect(args.db_2025)
-        df25, df_daily25, df_top25 = fetch_year_data(
+        df25, df_daily25, df_top25, df_items25 = fetch_year_data(
             con25,
             sample_period_min=args.sample_period_2025,
             user_map=user_map,
@@ -1595,6 +1888,12 @@ def main():
         total_acked25 = int(df25["acked_count"].sum())
         total_self25 = int(df25["self_reported_count"].sum())
 
+        cat_summary_25 = df_items25.groupby("category").agg(
+            total_min=("time_spent_min", "sum"),
+            sessions=("id", "count"),
+            workers=("user_id", "nunique")
+        ).sort_values(by="total_min", ascending=False).to_dict(orient="index")
+
         stats25 = {
             "year": 2025,
             "event": "Garage Trip 6.9",
@@ -1606,7 +1905,8 @@ def main():
             "total_worked_hours": round(float(df25["worked_min"].sum() / 60.0), 1),
             "total_chores": int(len(df_top25)),
             "ack_rate_pct": round(total_acked25 / total_assign25 * 100.0, 1) if total_assign25 > 0 else 0,
-            "self_reported_sessions": total_self25
+            "self_reported_sessions": total_self25,
+            "categories": {c: {"total_min": int(v["total_min"]), "sessions": int(v["sessions"]), "workers": int(v["workers"])} for c, v in cat_summary_25.items()}
         }
 
         # Multi-year merge
@@ -1641,6 +1941,8 @@ def main():
     p_pct26 = os.path.join(args.output_dir, "pct_spent_working.png")
     p_dist26 = os.path.join(args.output_dir, "distribution_histogram.png")
     p_dash26 = os.path.join(args.output_dir, "chores_dashboard.png")
+    p_cat26 = os.path.join(args.output_dir, "category_distribution_2026.png")
+    p_cat_yoy = os.path.join(args.output_dir, "category_comparison_yoy.png")
     p_yoy = os.path.join(args.output_dir, "yoy_comparison.png")
     p_agg = os.path.join(args.output_dir, "multiyear_aggregate.png")
     p_scatter = os.path.join(args.output_dir, "evolution_scatter.png")
@@ -1656,6 +1958,7 @@ def main():
     plot_pct_spent_working(df26, mean26, std_sample26, p_pct26)
     plot_distribution(df26, mean26, std_sample26, p_dist26)
     plot_comprehensive_dashboard(df26, df_daily26, df_top26, mean26, std_sample26, p_dash26)
+    plot_category_distribution_2026(df_items26, user_map, p_cat26)
 
     # 5. Generate Multi-Year Charts
     if has_2025 and len(df_both) > 0:
@@ -1663,6 +1966,7 @@ def main():
         plot_multiyear_aggregate(df_both, stats_comb["mean_pct"], stats_comb["std_pct"], p_agg)
         plot_evolution_scatter(df_both, stats25["mean_pct_working"], stats26["mean_pct_working"], p_scatter)
         plot_macro_trends(stats25, stats26, p_trends)
+        plot_category_comparison_yoy(df_items25, df_items26, p_cat_yoy)
 
         comp_data = {
             "comparison_title": "Garage Trip 6.9 (2025) vs Garage Trip 7 (2026)",
@@ -1683,22 +1987,22 @@ def main():
     print(f"Saved: {p_summary}")
 
     # Generate HTML reports
-    generate_interactive_html_2026(df26, df_top26, stats26, p_html_2026)
+    generate_interactive_html_2026(df26, df_items26, df_top26, stats26, p_html_2026, user_map)
     if has_2025 and len(df_both) > 0:
-        generate_interactive_html_comparison(df26, df_both, stats26, stats25, stats_comb, p_html_main)
+        generate_interactive_html_comparison(df26, df_both, df_items25, df_items26, stats26, stats25, stats_comb, p_html_main)
 
     # Generate PDF reports
     if not args.no_pdf:
-        generate_pdf_report_2026(df26, df_top26, stats26, p_pdf_2026, args.output_dir)
+        generate_pdf_report_2026(df26, df_items26, df_top26, stats26, p_pdf_2026, args.output_dir, user_map)
         if has_2025 and len(df_both) > 0:
-            generate_pdf_report_comparison(df_both, stats26, stats25, stats_comb, p_pdf_comp, args.output_dir)
+            generate_pdf_report_comparison(df_both, df_items25, df_items26, stats26, stats25, stats_comb, p_pdf_comp, args.output_dir)
 
     # Copy to artifacts directory
     artifact_dir = "/Users/tivvit/.gemini/antigravity/brain/8ba1b3f4-f875-4e49-81d1-57aed1679228"
     if os.path.exists(artifact_dir):
-        files_to_copy = [p_pct26, p_dist26, p_dash26, p_html_2026, p_html_main, p_summary, p_pdf_2026]
+        files_to_copy = [p_pct26, p_dist26, p_dash26, p_cat26, p_html_2026, p_html_main, p_summary, p_pdf_2026]
         if has_2025:
-            files_to_copy.extend([p_yoy, p_agg, p_scatter, p_trends, p_comp_summary, p_pdf_comp])
+            files_to_copy.extend([p_yoy, p_agg, p_scatter, p_trends, p_cat_yoy, p_comp_summary, p_pdf_comp])
         for src in files_to_copy:
             if os.path.exists(src):
                 dst = os.path.join(artifact_dir, os.path.basename(src))

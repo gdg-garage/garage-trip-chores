@@ -17,5 +17,52 @@
   "total_chores": 109,
   "total_chore_sessions": 171,
   "ack_rate_pct": 28.7,
-  "self_reported_sessions": 51
+  "self_reported_sessions": 51,
+  "categories": {
+    "Cooking & Food Prep": {
+      "total_min": 575,
+      "sessions": 18,
+      "workers": 13
+    },
+    "Dishes & Dishwasher": {
+      "total_min": 542,
+      "sessions": 49,
+      "workers": 16
+    },
+    "Driving & Deliveries": {
+      "total_min": 359,
+      "sessions": 23,
+      "workers": 13
+    },
+    "Bar & Drinks": {
+      "total_min": 324,
+      "sessions": 29,
+      "workers": 16
+    },
+    "Hookah & Shisha": {
+      "total_min": 250,
+      "sessions": 16,
+      "workers": 6
+    },
+    "Cleaning & Maintenance": {
+      "total_min": 168,
+      "sessions": 8,
+      "workers": 6
+    },
+    "Garbage & Recycling": {
+      "total_min": 75,
+      "sessions": 8,
+      "workers": 6
+    },
+    "Fun & Bot Testing": {
+      "total_min": 27,
+      "sessions": 16,
+      "workers": 11
+    },
+    "Wellness & Parenting": {
+      "total_min": 4,
+      "sessions": 4,
+      "workers": 2
+    }
+  }
 }
