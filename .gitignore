@@ -1,7 +1,8 @@
 config.yaml
 data
 data/
-data-prod
-data-prod/
+data-prod/*
+!data-prod/gt6.9-2025.sqlite
 *.sqlite
+!data-prod/*.sqlite
 
