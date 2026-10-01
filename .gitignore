@@ -1,8 +1,7 @@
 config.yaml
-data
-data/
-data-prod/*
-!data-prod/gt6.9-2025.sqlite
+data/*
+!data/discord_user_map.json
 *.sqlite
+data-prod/*
 !data-prod/*.sqlite
-
+.venv/

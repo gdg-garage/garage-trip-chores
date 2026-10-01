@@ -1,0 +1,226 @@
+{
+  "comparison_title": "Garage Trip 6.9 (2025) vs Garage Trip 7 (2026)",
+  "stats_2025": {
+    "year": 2025,
+    "event": "Garage Trip 6.9",
+    "users_count": 24,
+    "mean_pct_working": 1.04,
+    "std_pct_working_sample": 0.7,
+    "in_sd_range_count": 15,
+    "in_sd_range_pct": 62.5,
+    "total_worked_hours": 33.0,
+    "total_chores": 77,
+    "ack_rate_pct": 16.2,
+    "self_reported_sessions": 12
+  },
+  "stats_2026": {
+    "year": 2026,
+    "event": "Garage Trip 7",
+    "users_count": 22,
+    "mean_pct_working": 1.27,
+    "std_pct_working_sample": 0.68,
+    "std_pct_working_pop": 0.66,
+    "median_pct_working": 1.26,
+    "in_sd_range_count": 17,
+    "in_sd_range_pct": 77.3,
+    "most_average_user": "@Liennie.sh (Martin T.)",
+    "most_average_pct": 1.33,
+    "mean_worked_minutes": 105.6,
+    "median_worked_minutes": 81.0,
+    "total_worked_minutes": 2324.0,
+    "total_worked_hours": 38.7,
+    "total_chores": 109,
+    "total_chore_sessions": 171,
+    "ack_rate_pct": 28.7,
+    "self_reported_sessions": 51
+  },
+  "multiyear_combined": {
+    "returning_users_count": 18,
+    "mean_pct": 1.24,
+    "std_pct": 0.51,
+    "in_sd_count": 13,
+    "in_sd_pct": 72.2
+  },
+  "returning_attendees": [
+    {
+      "user_id": "416902340696604674",
+      "label": "@tivvit (vit listik)",
+      "combined_pct": 2.4249806223009633,
+      "total_min": 438.0,
+      "total_chores": 24.0,
+      "pct_25": 2.5135869565217392,
+      "pct_26": 2.340195016251354,
+      "pct_delta": -0.17339194027038518
+    },
+    {
+      "user_id": "492395765218672652",
+      "label": "@Fisa (Zbyněk Fišer)",
+      "combined_pct": 1.9709888162994131,
+      "total_min": 356.0,
+      "total_chores": 20.0,
+      "pct_25": 1.1322463768115942,
+      "pct_26": 2.7735644637053087,
+      "pct_delta": 1.6413180868937145
+    },
+    {
+      "user_id": "378532044558303233",
+      "label": "@Dongalis (Dominik N.)",
+      "combined_pct": 1.6997010297862918,
+      "total_min": 307.0,
+      "total_chores": 15.0,
+      "pct_25": 1.4153079710144927,
+      "pct_26": 1.971830985915493,
+      "pct_delta": 0.5565230149010003
+    },
+    {
+      "user_id": "706536354271723561",
+      "label": "@Oťas (Jan Otisk)",
+      "combined_pct": 1.6332632045177722,
+      "total_min": 295.0,
+      "total_chores": 23.0,
+      "pct_25": 1.3473731884057971,
+      "pct_26": 1.9068255687973996,
+      "pct_delta": 0.5594523803916025
+    },
+    {
+      "user_id": "1375919281652371568",
+      "label": "@Richi (Risa Bures)",
+      "combined_pct": 1.4935220729366603,
+      "total_min": 249.0,
+      "total_chores": 25.0,
+      "pct_25": 1.381340579710145,
+      "pct_26": 1.6198979591836735,
+      "pct_delta": 0.2385573794735285
+    },
+    {
+      "user_id": "1199012796420083733",
+      "label": "@Kuře (Martin Kolek)",
+      "combined_pct": 1.4339497287122134,
+      "total_min": 259.0,
+      "total_chores": 18.0,
+      "pct_25": 1.0416666666666665,
+      "pct_26": 1.80931744312026,
+      "pct_delta": 0.7676507764535936
+    },
+    {
+      "user_id": "492637868653543454",
+      "label": "@Limenius (tomáš lessy)",
+      "combined_pct": 1.3951943306389105,
+      "total_min": 252.0,
+      "total_chores": 24.0,
+      "pct_25": 1.3020833333333335,
+      "pct_26": 1.4842903575297943,
+      "pct_delta": 0.18220702419646084
+    },
+    {
+      "user_id": "1415037315130331247",
+      "label": "@Rasťo (Rasťo)",
+      "combined_pct": 1.3339653304442038,
+      "total_min": 197.0,
+      "total_chores": 10.0,
+      "pct_25": 0.45061283345349673,
+      "pct_26": 1.8655097613882863,
+      "pct_delta": 1.4148969279347896
+    },
+    {
+      "user_id": "708765241479004180",
+      "label": "@David V. (Destil)",
+      "combined_pct": 1.2895873320537428,
+      "total_min": 215.0,
+      "total_chores": 12.0,
+      "pct_25": 1.8682065217391304,
+      "pct_26": 0.6377551020408163,
+      "pct_delta": -1.230451419698314
+    },
+    {
+      "user_id": "922157776141156472",
+      "label": "@baradrb (Bára Drbohlavová)",
+      "combined_pct": 1.2238325281803542,
+      "total_min": 76.0,
+      "total_chores": 7.0,
+      "pct_25": 0.0,
+      "pct_26": 1.6033755274261603,
+      "pct_delta": 1.6033755274261603
+    },
+    {
+      "user_id": "434810143142707201",
+      "label": "@evllin (Eve)",
+      "combined_pct": 1.1737349130771786,
+      "total_min": 212.0,
+      "total_chores": 10.0,
+      "pct_25": 1.4719202898550725,
+      "pct_26": 0.8884073672806068,
+      "pct_delta": -0.5835129225744657
+    },
+    {
+      "user_id": "357218905485475840",
+      "label": "@curusarn (Simon)",
+      "combined_pct": 0.9799579227106633,
+      "total_min": 177.0,
+      "total_chores": 15.0,
+      "pct_25": 1.0756340579710144,
+      "pct_26": 0.8884073672806068,
+      "pct_delta": -0.18722669069040765
+    },
+    {
+      "user_id": "222645522794676225",
+      "label": "@Liennie.sh (Martin T.)",
+      "combined_pct": 0.8193998449784077,
+      "total_min": 148.0,
+      "total_chores": 15.0,
+      "pct_25": 0.28306159420289856,
+      "pct_26": 1.3326110509209101,
+      "pct_delta": 1.0495494567180117
+    },
+    {
+      "user_id": "392409045517991936",
+      "label": "@darik9383 (Darik)",
+      "combined_pct": 0.8055599431369452,
+      "total_min": 102.0,
+      "total_chores": 8.0,
+      "pct_25": 1.1322463768115942,
+      "pct_26": 0.05221932114882506,
+      "pct_delta": -1.0800270556627691
+    },
+    {
+      "user_id": "694093112750112790",
+      "label": "@kubik.kruty (Harry)",
+      "combined_pct": 0.7751079614660613,
+      "total_min": 140.0,
+      "total_chores": 11.0,
+      "pct_25": 0.6793478260869565,
+      "pct_26": 0.8667388949079089,
+      "pct_delta": 0.18739106882095236
+    },
+    {
+      "user_id": "598169878364553216",
+      "label": "@vojtech9284 (Aleš Franěk)",
+      "combined_pct": 0.692060679880412,
+      "total_min": 125.0,
+      "total_chores": 11.0,
+      "pct_25": 0.6227355072463768,
+      "pct_26": 0.7583965330444203,
+      "pct_delta": 0.1356610257980435
+    },
+    {
+      "user_id": "477952969808150538",
+      "label": "@jask (Jan Škrle)",
+      "combined_pct": 0.6717850287907869,
+      "total_min": 70.0,
+      "total_chores": 8.0,
+      "pct_25": 0.7395498392282959,
+      "pct_26": 0.6429548563611491,
+      "pct_delta": -0.09659498286714674
+    },
+    {
+      "user_id": "768891735215571006",
+      "label": "@clareii (Klára)",
+      "combined_pct": 0.45148895292987506,
+      "total_min": 47.0,
+      "total_chores": 5.0,
+      "pct_25": 0.3215434083601286,
+      "pct_26": 0.5068493150684932,
+      "pct_delta": 0.18530590670836455
+    }
+  ]
+}

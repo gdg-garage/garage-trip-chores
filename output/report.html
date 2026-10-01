@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Garage Trip Chores - Velké Srovnání 2025 vs 2026</title>
+    <style>
+        :root {
+            --primary: #1A73E8;
+            --success: #34A853;
+            --warning: #FBBC05;
+            --danger: #EA4335;
+            --bg: #F8F9FA;
+            --card-bg: #FFFFFF;
+            --text-dark: #202124;
+            --text-muted: #5F6368;
+            --border: #DADCE0;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text-dark);
+            line-height: 1.5;
+            padding: 24px;
+        }
+        .container { max-width: 1300px; margin: 0 auto; }
+        header {
+            background: linear-gradient(135deg, #0D47A1, #1A73E8);
+            color: white;
+            padding: 32px;
+            border-radius: 16px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 12px rgba(26,115,232,0.15);
+        }
+        header h1 { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
+        header p { font-size: 15px; opacity: 0.9; }
+        
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .kpi-card {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .kpi-title { font-size: 13px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; margin-bottom: 6px; }
+        .kpi-value { font-size: 26px; font-weight: 700; color: var(--text-dark); }
+        .kpi-sub { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+        
+        .card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .card h2 { font-size: 19px; font-weight: 600; margin-bottom: 16px; color: #1F2937; }
+        
+        table { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 10px; }
+        th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+        th { background-color: #F1F3F4; font-weight: 600; color: var(--text-dark); }
+        tr:hover { background-color: #F8F9FA; }
+        
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .badge-up { background-color: #E6F4EA; color: #137333; }
+        .badge-down { background-color: #FCE8E6; color: #C5221F; }
+        .badge-neutral { background-color: #F1F3F4; color: #5F6368; }
+
+        .chart-img {
+            width: 100%;
+            height: auto;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            margin-bottom: 16px;
+        }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🧹 Garage Trip Chores: Velké Srovnání 2025 vs 2026</h1>
+            <p>Souhrnný report o spravedlnosti dělby práce, evoluci flákačů a all-time síni slávy mezi Garage Trip 6.9 a Garage Trip 7.</p>
+        </header>
+
+        <div class="kpi-grid">
+            <div class="kpi-card">
+                <div class="kpi-title">Odpracovaný Čas (2026)</div>
+                <div class="kpi-value">38.7 h</div>
+                <div class="kpi-sub">+17% oproti 2025 (33.0 h)</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-title">Průměrné % Práce</div>
+                <div class="kpi-value">1.27%</div>
+                <div class="kpi-sub">2025: 1.04% | Delta: +0.23%</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-title">V Pásmu Férovosti (±1 SD)</div>
+                <div class="kpi-value">77.3%</div>
+                <div class="kpi-sub">17/22 lidí (2025: 62.5%)</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-title">Míra Potvrzení Úkolů</div>
+                <div class="kpi-value">28.7%</div>
+                <div class="kpi-sub">+80% skok (2025: 16.2%)</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-title">Mr. Average 2026</div>
+                <div class="kpi-value">@Liennie.sh (Martin T.)</div>
+                <div class="kpi-sub">1.33% (2025 král: Kuře 1.04%)</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>📊 Klíčové Grafy Dvouletého Srovnání</h2>
+            <div class="grid-2">
+                <div>
+                    <h3 style="margin-bottom:8px;">Meziroční Srovnání % Práce (18 Navrátilců)</h3>
+                    <img src="yoy_comparison.png" alt="YoY Comparison" class="chart-img">
+                </div>
+                <div>
+                    <h3 style="margin-bottom:8px;">Evoluce Účastníků (Kvadranty Dříčů & Skokanů)</h3>
+                    <img src="evolution_scatter.png" alt="Evolution Scatter" class="chart-img">
+                </div>
+            </div>
+            <div class="grid-2" style="margin-top:16px;">
+                <div>
+                    <h3 style="margin-bottom:8px;">All-Time Dvouleté Kombinované Pásmo Férovosti</h3>
+                    <img src="multiyear_aggregate.png" alt="Multiyear Aggregate" class="chart-img">
+                </div>
+                <div>
+                    <h3 style="margin-bottom:8px;">Vývoj Makro Metrik (2025 vs 2026)</h3>
+                    <img src="macro_trends.png" alt="Macro Trends" class="chart-img">
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>🏆 All-Time Síň Slávy: Dvouletý Kombinovaný Žebříček (18 Účastníků)</h2>
+            <p style="color:var(--text-muted); margin-bottom:12px;">Seřazeno podle celkového kombinovaného % času věnovaného práci přes oba ročníky (2025 + 2026).</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Účastník</th>
+                        <th>Kombinované %</th>
+                        <th>Celkem Práce</th>
+                        <th>Celkem Úkoly</th>
+                        <th>2025 %</th>
+                        <th>2026 %</th>
+                        <th>Delta %</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><b>1</b></td>
+                        <td><b>@tivvit (vit listik)</b></td>
+                        <td><b>2.42%</b></td>
+                        <td>438 min (7.3h)</td>
+                        <td>24</td>
+                        <td>2.51%</td>
+                        <td>2.34%</td>
+                        <td><span class="badge badge-down">-0.17%</span></td>
+                    </tr>
+                    <tr>
+                        <td><b>2</b></td>
+                        <td><b>@Fisa (Zbyněk Fišer)</b></td>
+                        <td><b>1.97%</b></td>
+                        <td>356 min (5.9h)</td>
+                        <td>20</td>
+                        <td>1.13%</td>
+                        <td>2.77%</td>
+                        <td><span class="badge badge-up">+1.64%</span></td>
+                    </tr>
+                    <tr>
+                        <td><b>3</b></td>
+                        <td><b>@Dongalis (Dominik N.)</b></td>
+                        <td><b>1.70%</b></td>
+                        <td>307 min (5.1h)</td>
+                        <td>15</td>
+                        <td>1.42%</td>
+                        <td>1.97%</td>
+                        <td><span class="badge badge-up">+0.56%</span></td>
+                    </tr>
+                    <tr>
+                        <td><b>4</b></td>
+                        <td><b>@Oťas (Jan Otisk)</b></td>
+                        <td><b>1.63%</b></td>
+                        <td>295 min (4.9h)</td>
+                        <td>23</td>
+                        <td>1.35%</td>
+                        <td>1.91%</td>
+                        <td><span class="badge badge-up">+0.56%</span></td>
+                    </tr>
+                    <tr>
+                        <td><b>5</b></td>
+                        <td><b>@Richi (Risa Bures)</b></td>
+                        <td><b>1.49%</b></td>
+                        <td>249 min (4.2h)</td>
+                        <td>25</td>
+                        <td>1.38%</td>
+                        <td>1.62%</td>
+                        <td><span class="badge badge-up">+0.24%</span></td>
+                    </tr>
+                    <tr>
+                        <td><b>6</b></td>
+                        <td><b>@Kuře (Martin Kolek)</b></td>
+                        <td><b>1.43%</b></td>
+                        <td>259 min (4.3h)</td>
+                        <td>18</td>
+                        <td>1.04%</td>
+                        <td>1.81%</td>
+                        <td><span class="badge badge-up">+0.77%</span></td>
+                    </tr>
+                    <tr>
+                        <td><b>7</b></td>
+                        <td><b>@Limenius (tomáš lessy)</b></td>
+                        <td><b>1.40%</b></td>
+                        <td>252 min (4.2h)</td>
+                        <td>24</td>
+                        <td>1.30%</td>
+                        <td>1.48%</td>
+                        <td><span class="badge badge-up">+0.18%</span></td>
+                    </tr>
+                    <tr>
+                        <td><b>8</b></td>
+                        <td><b>@Rasťo (Rasťo)</b></td>
+                        <td><b>1.33%</b></td>
+                        <td>197 min (3.3h)</td>
+                        <td>10</td>
+                        <td>0.45%</td>
+                        <td>1.87%</td>
+                        <td><span class="badge badge-up">+1.41%</span></td>
+                    </tr>
+                    <tr>
+                        <td><b>9</b></td>
+                        <td><b>@David V. (Destil)</b></td>
+                        <td><b>1.29%</b></td>
+                        <td>215 min (3.6h)</td>
+                        <td>12</td>
+                        <td>1.87%</td>
+                        <td>0.64%</td>
+                        <td><span class="badge badge-down">-1.23%</span></td>
+                    </tr>
+                    <tr>
+                        <td><b>10</b></td>
+                        <td><b>@baradrb (Bára Drbohlavová)</b></td>
+                        <td><b>1.22%</b></td>
+                        <td>76 min (1.3h)</td>
+                        <td>7</td>
+                        <td>0.00%</td>
+                        <td>1.60%</td>
+                        <td><span class="badge badge-up">+1.60%</span></td>
+                    </tr>
+                    <tr>
+                        <td><b>11</b></td>
+                        <td><b>@evllin (Eve)</b></td>
+                        <td><b>1.17%</b></td>
+                        <td>212 min (3.5h)</td>
+                        <td>10</td>
+                        <td>1.47%</td>
+                        <td>0.89%</td>
+                        <td><span class="badge badge-down">-0.58%</span></td>
+                    </tr>
+                    <tr>
+                        <td><b>12</b></td>
+                        <td><b>@curusarn (Simon)</b></td>
+                        <td><b>0.98%</b></td>
+                        <td>177 min (3.0h)</td>
+                        <td>15</td>
+                        <td>1.08%</td>
+                        <td>0.89%</td>
+                        <td><span class="badge badge-down">-0.19%</span></td>
+                    </tr>
+                    <tr>
+                        <td><b>13</b></td>
+                        <td><b>@Liennie.sh (Martin T.)</b></td>
+                        <td><b>0.82%</b></td>
+                        <td>148 min (2.5h)</td>
+                        <td>15</td>
+                        <td>0.28%</td>
+                        <td>1.33%</td>
+                        <td><span class="badge badge-up">+1.05%</span></td>
+                    </tr>
+                    <tr>
+                        <td><b>14</b></td>
+                        <td><b>@darik9383 (Darik)</b></td>
+                        <td><b>0.81%</b></td>
+                        <td>102 min (1.7h)</td>
+                        <td>8</td>
+                        <td>1.13%</td>
+                        <td>0.05%</td>
+                        <td><span class="badge badge-down">-1.08%</span></td>
+                    </tr>
+                    <tr>
+                        <td><b>15</b></td>
+                        <td><b>@kubik.kruty (Harry)</b></td>
+                        <td><b>0.78%</b></td>
+                        <td>140 min (2.3h)</td>
+                        <td>11</td>
+                        <td>0.68%</td>
+                        <td>0.87%</td>
+                        <td><span class="badge badge-up">+0.19%</span></td>
+                    </tr>
+                    <tr>
+                        <td><b>16</b></td>
+                        <td><b>@vojtech9284 (Aleš Franěk)</b></td>
+                        <td><b>0.69%</b></td>
+                        <td>125 min (2.1h)</td>
+                        <td>11</td>
+                        <td>0.62%</td>
+                        <td>0.76%</td>
+                        <td><span class="badge badge-up">+0.14%</span></td>
+                    </tr>
+                    <tr>
+                        <td><b>17</b></td>
+                        <td><b>@jask (Jan Škrle)</b></td>
+                        <td><b>0.67%</b></td>
+                        <td>70 min (1.2h)</td>
+                        <td>8</td>
+                        <td>0.74%</td>
+                        <td>0.64%</td>
+                        <td><span class="badge badge-down">-0.10%</span></td>
+                    </tr>
+                    <tr>
+                        <td><b>18</b></td>
+                        <td><b>@clareii (Klára)</b></td>
+                        <td><b>0.45%</b></td>
+                        <td>47 min (0.8h)</td>
+                        <td>5</td>
+                        <td>0.32%</td>
+                        <td>0.51%</td>
+                        <td><span class="badge badge-up">+0.19%</span></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</body>
+</html>

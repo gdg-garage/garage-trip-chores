@@ -1,0 +1,21 @@
+{
+  "year": 2026,
+  "event": "Garage Trip 7",
+  "users_count": 22,
+  "mean_pct_working": 1.27,
+  "std_pct_working_sample": 0.68,
+  "std_pct_working_pop": 0.66,
+  "median_pct_working": 1.26,
+  "in_sd_range_count": 17,
+  "in_sd_range_pct": 77.3,
+  "most_average_user": "@Liennie.sh (Martin T.)",
+  "most_average_pct": 1.33,
+  "mean_worked_minutes": 105.6,
+  "median_worked_minutes": 81.0,
+  "total_worked_minutes": 2324.0,
+  "total_worked_hours": 38.7,
+  "total_chores": 109,
+  "total_chore_sessions": 171,
+  "ack_rate_pct": 28.7,
+  "self_reported_sessions": 51
+}
