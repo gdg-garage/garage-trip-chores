@@ -1,15 +1,12 @@
 <!DOCTYPE html>
-<html lang="cs">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Garage Trip Chores - Velké Srovnání 2025 vs 2026</title>
+    <title>Garage Trip Chores - Multi-Year Comparison 2025 vs 2026</title>
     <style>
         :root {
             --primary: #1A73E8;
-            --success: #34A853;
-            --warning: #FBBC05;
-            --danger: #EA4335;
             --bg: #F8F9FA;
             --card-bg: #FFFFFF;
             --text-dark: #202124;
@@ -35,7 +32,6 @@
         }
         header h1 { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
         header p { font-size: 15px; opacity: 0.9; }
-        
         .kpi-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
@@ -49,10 +45,9 @@
             border: 1px solid var(--border);
             box-shadow: 0 1px 3px rgba(0,0,0,0.05);
         }
-        .kpi-title { font-size: 13px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; margin-bottom: 6px; }
+        .kpi-title { font-size: 13px; color: var(--text-muted); text-transform: uppercase; font-weight: 600; margin-bottom: 6px; }
         .kpi-value { font-size: 26px; font-weight: 700; color: var(--text-dark); }
         .kpi-sub { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
-        
         .card {
             background: var(--card-bg);
             border-radius: 12px;
@@ -62,30 +57,15 @@
             box-shadow: 0 1px 3px rgba(0,0,0,0.05);
         }
         .card h2 { font-size: 19px; font-weight: 600; margin-bottom: 16px; color: #1F2937; }
-        
         table { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 10px; }
         th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); }
         th { background-color: #F1F3F4; font-weight: 600; color: var(--text-dark); }
         tr:hover { background-color: #F8F9FA; }
-        
-        .badge {
-            display: inline-block;
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-size: 12px;
-            font-weight: 600;
-        }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 600; }
         .badge-up { background-color: #E6F4EA; color: #137333; }
         .badge-down { background-color: #FCE8E6; color: #C5221F; }
         .badge-neutral { background-color: #F1F3F4; color: #5F6368; }
-
-        .chart-img {
-            width: 100%;
-            height: auto;
-            border-radius: 8px;
-            border: 1px solid var(--border);
-            margin-bottom: 16px;
-        }
+        .chart-img { width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 16px; }
         .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
         @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } }
     </style>
@@ -93,73 +73,73 @@
 <body>
     <div class="container">
         <header>
-            <h1>🧹 Garage Trip Chores: Velké Srovnání 2025 vs 2026</h1>
-            <p>Souhrnný report o spravedlnosti dělby práce, evoluci flákačů a all-time síni slávy mezi Garage Trip 6.9 a Garage Trip 7.</p>
+            <h1>🧹 Garage Trip Chores: Multi-Year Comparison 2025 vs 2026</h1>
+            <p>Comprehensive two-year analysis of chore equity, attendee evolution, and all-time hall of fame (GT 6.9 & GT 7)</p>
         </header>
 
         <div class="kpi-grid">
             <div class="kpi-card">
-                <div class="kpi-title">Odpracovaný Čas (2026)</div>
+                <div class="kpi-title">Total Work Logged (2026)</div>
                 <div class="kpi-value">38.7 h</div>
-                <div class="kpi-sub">+17% oproti 2025 (33.0 h)</div>
+                <div class="kpi-sub">+17% vs 2025 (33.0 h)</div>
             </div>
             <div class="kpi-card">
-                <div class="kpi-title">Průměrné % Práce</div>
+                <div class="kpi-title">Mean % Spent Working</div>
                 <div class="kpi-value">1.27%</div>
                 <div class="kpi-sub">2025: 1.04% | Delta: +0.23%</div>
             </div>
             <div class="kpi-card">
-                <div class="kpi-title">V Pásmu Férovosti (±1 SD)</div>
+                <div class="kpi-title">In Fairness Range (±1 SD)</div>
                 <div class="kpi-value">77.3%</div>
-                <div class="kpi-sub">17/22 lidí (2025: 62.5%)</div>
+                <div class="kpi-sub">17/22 attendees (2025: 62.5%)</div>
             </div>
             <div class="kpi-card">
-                <div class="kpi-title">Míra Potvrzení Úkolů</div>
+                <div class="kpi-title">Chore Acceptance Rate</div>
                 <div class="kpi-value">28.7%</div>
-                <div class="kpi-sub">+80% skok (2025: 16.2%)</div>
+                <div class="kpi-sub">+80% jump (2025: 16.2%)</div>
             </div>
             <div class="kpi-card">
-                <div class="kpi-title">Mr. Average 2026</div>
-                <div class="kpi-value">@Liennie.sh (Martin T.)</div>
-                <div class="kpi-sub">1.33% (2025 král: Kuře 1.04%)</div>
+                <div class="kpi-title">All-Time Combined Std Dev</div>
+                <div class="kpi-value">±0.51%</div>
+                <div class="kpi-sub">Regression to the mean (was ±0.68%)</div>
             </div>
         </div>
 
         <div class="card">
-            <h2>📊 Klíčové Grafy Dvouletého Srovnání</h2>
+            <h2>📊 Comparative Charts</h2>
             <div class="grid-2">
                 <div>
-                    <h3 style="margin-bottom:8px;">Meziroční Srovnání % Práce (18 Navrátilců)</h3>
-                    <img src="yoy_comparison.png" alt="YoY Comparison" class="chart-img">
+                    <h3 style="margin-bottom:8px;">Year-over-Year Comparison (18 Returning Attendees)</h3>
+                    <img src="yoy_comparison.png" class="chart-img">
                 </div>
                 <div>
-                    <h3 style="margin-bottom:8px;">Evoluce Účastníků (Kvadranty Dříčů & Skokanů)</h3>
-                    <img src="evolution_scatter.png" alt="Evolution Scatter" class="chart-img">
+                    <h3 style="margin-bottom:8px;">Attendee Evolution (Behavioral Quadrants)</h3>
+                    <img src="evolution_scatter.png" class="chart-img">
                 </div>
             </div>
             <div class="grid-2" style="margin-top:16px;">
                 <div>
-                    <h3 style="margin-bottom:8px;">All-Time Dvouleté Kombinované Pásmo Férovosti</h3>
-                    <img src="multiyear_aggregate.png" alt="Multiyear Aggregate" class="chart-img">
+                    <h3 style="margin-bottom:8px;">All-Time Combined Fairness Band (2025 + 2026)</h3>
+                    <img src="multiyear_aggregate.png" class="chart-img">
                 </div>
                 <div>
-                    <h3 style="margin-bottom:8px;">Vývoj Makro Metrik (2025 vs 2026)</h3>
-                    <img src="macro_trends.png" alt="Macro Trends" class="chart-img">
+                    <h3 style="margin-bottom:8px;">Macro Trends Evolution</h3>
+                    <img src="macro_trends.png" class="chart-img">
                 </div>
             </div>
         </div>
 
         <div class="card">
-            <h2>🏆 All-Time Síň Slávy: Dvouletý Kombinovaný Žebříček (18 Účastníků)</h2>
-            <p style="color:var(--text-muted); margin-bottom:12px;">Seřazeno podle celkového kombinovaného % času věnovaného práci přes oba ročníky (2025 + 2026).</p>
+            <h2>🏆 All-Time Hall of Fame: Combined Two-Year Leaderboard (18 Attendees)</h2>
+            <p style="color:var(--text-muted); margin-bottom:12px;">Ranked by overall combined % of time spent working across both events (2025 + 2026).</p>
             <table>
                 <thead>
                     <tr>
                         <th>#</th>
-                        <th>Účastník</th>
-                        <th>Kombinované %</th>
-                        <th>Celkem Práce</th>
-                        <th>Celkem Úkoly</th>
+                        <th>Attendee</th>
+                        <th>Combined %</th>
+                        <th>Total Work</th>
+                        <th>Total Chores</th>
                         <th>2025 %</th>
                         <th>2026 %</th>
                         <th>Delta %</th>
