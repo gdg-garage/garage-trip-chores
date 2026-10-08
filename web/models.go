@@ -54,7 +54,6 @@ type ChoreCreateIn struct {
 	NecessaryCapabilities []string `json:"necessary_capabilities"`
 	DelayMin              uint     `json:"delay_min"`
 	SelfReported          bool     `json:"self_reported"`
-	AssigneeId            string   `json:"assignee_id"`
 	CreatorId             string   `json:"creator_id"`
 	TemplateKey           string   `json:"template_key"`
 }
@@ -133,8 +132,6 @@ type ScheduledTaskView struct {
 	EstimatedTimeMin      uint       `json:"estimated_time_min"`
 	AssignmentTimeoutMin  uint       `json:"assignment_timeout_min"`
 	NecessaryCapabilities []string   `json:"necessary_capabilities"`
-	AssigneeId            string     `json:"assignee_id,omitempty"`
-	AssigneeName          string     `json:"assignee_name,omitempty"`
 	CreatorId             string     `json:"creator_id"`
 	CreatorName           string     `json:"creator_name"`
 	Enabled               bool       `json:"enabled"`
@@ -152,7 +149,6 @@ type ScheduledTaskIn struct {
 	EstimatedTimeMin      uint     `json:"estimated_time_min"`
 	AssignmentTimeoutMin  uint     `json:"assignment_timeout_min"`
 	NecessaryCapabilities []string `json:"necessary_capabilities"`
-	AssigneeId            string   `json:"assignee_id,omitempty"`
 	CreatorId             string   `json:"creator_id,omitempty"`
 	Enabled               *bool    `json:"enabled,omitempty"`
 	TemplateKey           string   `json:"template_key,omitempty"`

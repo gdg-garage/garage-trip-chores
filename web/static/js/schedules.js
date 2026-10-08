@@ -4,9 +4,21 @@ let selectedSkills = new Set();
 let currentTab = "all";
 let allSchedules = [];
 let allTemplates = [];
+let allUsers = [];
+let currentUser = null;
 
 async function init() {
-  // Load skills
+  // 1. Setup cron controls & listeners IMMEDIATELY so buttons and preview work with zero delay
+  setupCronControls();
+
+  // 2. Setup filter tabs & form submit/cancel listeners
+  setupTabs();
+  const form = document.getElementById("schedule-form");
+  if (form) form.addEventListener("submit", saveSchedule);
+  const cancelBtn = document.getElementById("cancel-edit");
+  if (cancelBtn) cancelBtn.addEventListener("click", resetForm);
+
+  // 3. Load skills
   try {
     const sData = await API.get("/api/skills").catch(() => []);
     const skills = Array.isArray(sData) ? sData : (sData.skills || []);
@@ -27,22 +39,7 @@ async function init() {
     console.error("Failed to load skills", err);
   }
 
-  // Load assignees
-  try {
-    const uData = await API.get("/api/users").catch(() => ({}));
-    const users = Array.isArray(uData) ? uData : (uData.users || []);
-    const aSelect = document.getElementById("assignee");
-    if (aSelect) {
-      users.forEach((u) => {
-        const opt = el("option", { value: u.discord_id }, u.name || u.handle || u.discord_id);
-        aSelect.appendChild(opt);
-      });
-    }
-  } catch (err) {
-    console.error("Failed to load users", err);
-  }
-
-  // Load templates for quick-fill
+  // 4. Load templates for quick-fill
   try {
     const tData = await API.get("/api/templates").catch(() => []);
     allTemplates = Array.isArray(tData) ? tData : (tData.templates || []);
@@ -63,9 +60,12 @@ async function init() {
     console.error("Failed to load templates", err);
   }
 
-  let currentUser = null;
+  // 5. Load current user and users for tablet sessions
   try {
-    const me = await API.get("/api/me");
+    const [me, uData] = await Promise.all([
+      API.get("/api/me").catch(() => null),
+      API.get("/api/users").catch(() => ({})),
+    ]);
     currentUser = me;
     if (me && me.discord_id) {
       const creatorInput = document.getElementById("creator_id");
@@ -73,33 +73,36 @@ async function init() {
       const creatorDisplay = document.getElementById("creator-display");
       if (creatorDisplay) creatorDisplay.textContent = me.name || me.handle || me.discord_id;
     }
-  } catch (err) {
-    // Tablet session
-  }
 
-  // Populate creator dropdown (for tablet sessions)
-  const creatorSelect = document.getElementById("schedule-creator-select");
-  if (creatorSelect) {
-    users.forEach((u) => {
-      const opt = el("option", { value: u.discord_id }, u.name || u.handle || u.discord_id);
-      creatorSelect.appendChild(opt);
-    });
-    if (!currentUser) {
-      const wrap = document.getElementById("schedule-creator-wrap");
-      if (wrap) wrap.hidden = false;
-    }
-    creatorSelect.addEventListener("change", () => {
-      const val = creatorSelect.value;
-      const creatorInput = document.getElementById("creator_id");
-      if (creatorInput) creatorInput.value = val;
-      const creatorDisplay = document.getElementById("creator-display");
-      if (creatorDisplay) {
-        creatorDisplay.textContent = val ? creatorSelect.options[creatorSelect.selectedIndex].text : "Select your name";
+    allUsers = Array.isArray(uData) ? uData : (uData.users || []);
+    const creatorSelect = document.getElementById("schedule-creator-select");
+    if (creatorSelect) {
+      allUsers.forEach((u) => {
+        const opt = el("option", { value: u.discord_id }, u.name || u.handle || u.discord_id);
+        creatorSelect.appendChild(opt);
+      });
+      if (!currentUser) {
+        const wrap = document.getElementById("schedule-creator-wrap");
+        if (wrap) wrap.hidden = false;
       }
-    });
+      creatorSelect.addEventListener("change", () => {
+        const val = creatorSelect.value;
+        const creatorInput = document.getElementById("creator_id");
+        if (creatorInput) creatorInput.value = val;
+        const creatorDisplay = document.getElementById("creator-display");
+        if (creatorDisplay) {
+          creatorDisplay.textContent = val ? creatorSelect.options[creatorSelect.selectedIndex].text : "Select your name";
+        }
+      });
+    }
+  } catch (err) {
+    console.error("Failed loading user data", err);
   }
 
-  // Preset chips: clicking any preset only sets the cron_expr input value
+  await loadSchedules();
+}
+
+function setupCronControls() {
   const cronInput = document.getElementById("cron_expr");
   document.querySelectorAll(".cron-preset").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -112,18 +115,7 @@ async function init() {
   if (cronInput) {
     cronInput.addEventListener("input", updateCronPreview);
   }
-
-  // Filter tabs
-  setupTabs();
-
-  // Form listeners
-  const form = document.getElementById("schedule-form");
-  if (form) form.addEventListener("submit", saveSchedule);
-  const cancelBtn = document.getElementById("cancel-edit");
-  if (cancelBtn) cancelBtn.addEventListener("click", resetForm);
-
   updateCronPreview();
-  await loadSchedules();
 }
 
 function setupTabs() {
@@ -173,7 +165,7 @@ function prefillFromTemplate(t) {
 }
 
 function describeCron(expr) {
-  if (!expr) return "Cron";
+  if (!expr || !expr.trim()) return "Please enter a cron expression";
   const clean = expr.trim();
   const presets = {
     "0 9 * * *": "Every day at 09:00",
@@ -195,17 +187,29 @@ function describeCron(expr) {
   const parts = clean.split(/\s+/);
   if (parts.length === 5) {
     const [m, h, dom, mon, dow] = parts;
+    const pad = (n) => String(n).padStart(2, "0");
+    const dayNames = {
+      "0": "Sunday", "1": "Monday", "2": "Tuesday", "3": "Wednesday",
+      "4": "Thursday", "5": "Friday", "6": "Saturday", "7": "Sunday"
+    };
+
+    if (m.startsWith("*/") && h === "*" && dom === "*" && mon === "*" && dow === "*") {
+      const step = parseInt(m.slice(2), 10);
+      if (!isNaN(step)) return `Every ${step} minutes`;
+    }
+
+    if (!isNaN(m) && h.startsWith("*/") && dom === "*" && mon === "*" && dow === "*") {
+      const step = parseInt(h.slice(2), 10);
+      if (!isNaN(step)) return `Every ${step} hours (at minute ${pad(m)})`;
+    }
+
     if (!isNaN(m) && !isNaN(h) && dom === "*" && mon === "*") {
-      const pad = (n) => String(n).padStart(2, "0");
-      if (dow === "*") {
-        return `Every day at ${pad(h)}:${pad(m)}`;
-      }
-      if (dow === "1-5") {
-        return `Mon–Fri at ${pad(h)}:${pad(m)}`;
-      }
-      if (dow === "0,6" || dow === "6,0") {
-        return `Weekends at ${pad(h)}:${pad(m)}`;
-      }
+      const timeStr = `${pad(h)}:${pad(m)}`;
+      if (dow === "*") return `Every day at ${timeStr}`;
+      if (dow === "1-5") return `Mon–Fri at ${timeStr}`;
+      if (dow === "0,6" || dow === "6,0") return `Weekends at ${timeStr}`;
+      if (dayNames[dow]) return `Every ${dayNames[dow]} at ${timeStr}`;
+      return `Every day matching (${dow}) at ${timeStr}`;
     }
   }
 
@@ -338,10 +342,6 @@ function renderScheduleCard(s) {
     el("span", { class: "badge", style: "background:#212b3d;font-size:.8rem;padding:3px 8px;border-radius:4px" }, `⏳ ${s.assignment_timeout_min}m timeout`)
   );
 
-  if (s.assignee_id) {
-    specsRow.appendChild(el("span", { class: "badge", style: "background:#283a54;color:#8be9fd;font-size:.8rem;padding:3px 8px;border-radius:4px" }, `🎯 Direct: ${s.assignee_name || s.assignee_id}`));
-  }
-
   if (s.necessary_capabilities && s.necessary_capabilities.length) {
     s.necessary_capabilities.forEach((c) => {
       specsRow.appendChild(el("span", { class: "badge", style: "background:#332947;color:#bd93f9;font-size:.8rem;padding:3px 8px;border-radius:4px" }, `✨ ${c}`));
@@ -409,12 +409,6 @@ function editSchedule(s) {
   document.getElementById("template_key").value = s.template_key || "";
   document.getElementById("enabled").checked = s.enabled;
 
-  if (s.assignee_id) {
-    document.getElementById("assignee").value = s.assignee_id;
-  } else {
-    document.getElementById("assignee").value = "";
-  }
-
   document.getElementById("cron_expr").value = s.cron_expr || "0 9 * * *";
   updateCronPreview();
 
@@ -474,7 +468,6 @@ async function saveSchedule(ev) {
     necessary_workers: parseInt(document.getElementById("workers").value, 10) || 1,
     estimated_time_min: parseInt(document.getElementById("time").value, 10) || 10,
     assignment_timeout_min: parseInt(document.getElementById("timeout").value, 10) || 15,
-    assignee_id: document.getElementById("assignee").value || "",
     necessary_capabilities: [...selectedSkills],
     template_key: document.getElementById("template_key").value || "",
     enabled: document.getElementById("enabled").checked,

@@ -57,7 +57,6 @@ func (s *Storage) UpdateScheduledTask(task ScheduledTask) error {
 			"estimated_time_min":     task.EstimatedTimeMin,
 			"assignment_timeout_min": task.AssignmentTimeoutMin,
 			"necessary_capabilities": task.NecessaryCapabilities,
-			"assignee_id":            task.AssigneeId,
 			"creator_id":             task.CreatorId,
 			"creator_name":           task.CreatorName,
 			"enabled":                task.Enabled,
