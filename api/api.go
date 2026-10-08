@@ -118,7 +118,7 @@ func (a *Api) SetupRoutes() *chi.Mux {
 	router.Use(authMiddleware)
 
 	// Setup Huma
-	config := huma.DefaultConfig("Garage Trip Chores API", "1.0.0")
+	config := huma.DefaultConfig("Garage Trip Chores API", "3.0.0")
 	if len(a.authorizedKeys) > 0 {
 		config.Components.SecuritySchemes = map[string]*huma.SecurityScheme{
 			"bearerAuth": {

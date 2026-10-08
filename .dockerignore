@@ -1,10 +1,21 @@
-# Ignore git history
+# Ignore VCS history
 .git
 .gitignore
+.jj
 
-# Ignore local data and IDE settings
+# Ignore local virtualenvs and cache
+.venv/
+frontend/.venv/
+__pycache__/
+*.pyc
+
+# Ignore local data, output, and IDE settings
 data/
+data-prod/
+output/
 .vscode
+.idea
+.DS_Store
 
 # Ignore environment variables file
 .env

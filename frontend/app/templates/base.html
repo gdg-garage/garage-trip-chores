@@ -12,10 +12,7 @@
 </head>
 <body class="{% block body_class %}{% endblock %}">
   {% block nav %}
-  {# Prefer the tv. subdomain, but fall back to /dashboard on hosts that can't
-     serve a nested subdomain (e.g. *.fly.dev). #}
-  {% set _host = request.url.hostname or "" %}
-  {% set tv_href = "/dashboard" if _host.endswith(".fly.dev") else request.url.scheme ~ "://tv." ~ request.url.netloc %}
+  {% set tv_href = "/dashboard" %}
   <nav class="topnav">
     <a class="brand" href="/feed"><span class="logo">Garage Trip</span> Chores</a>
     <div class="navlinks">

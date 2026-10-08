@@ -42,6 +42,8 @@ function renderList(id, chores, emptyMsg) {
     const badges = el("div", { class: "badges" },
       el("span", { class: `badge size-${c.size}` }, `${c.size} · ${fmtMin(c.estimated_time_min)}`),
       c.urgent && !c.completed ? el("span", { class: "badge urgent" }, "URGENT") : null,
+      c.is_delayed ? el("span", { class: "badge delayed", style: "background:#442b6a;color:#d8b4fe" }, `⏳ in ${c.minutes_to_publish || 0}m`) : null,
+      c.self_reported ? el("span", { class: "badge", style: "background:#1e3a47;color:#7dd3fc" }, "⚡ self-reported") : null,
       ...(c.necessary_capabilities || []).map((s) => el("span", { class: "badge skill" }, s)),
       c.completed ? el("span", { class: "badge claimed" }, "✓ done") : null,
       c.completed ? el("span", { class: "badge" }, `⏱ ${fmtMin(c.total_time_min) || "0 min"} spent`) : null,

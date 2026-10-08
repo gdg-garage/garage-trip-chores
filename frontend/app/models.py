@@ -19,6 +19,14 @@ class ChoreCreateIn(BaseModel):
     template_key: Optional[str] = None
     # scale head-count chores (dishes/cooking) by number of people eating
     headcount: Optional[int] = None
+    # Delay in minutes before publishing and assigning
+    delay_min: int = Field(default=0, ge=0, le=10000)
+    # Mark as completed immediately by the creator
+    self_reported: bool = Field(default=False)
+    # Optional creator ID (e.g. Discord ID)
+    creator_id: Optional[str] = None
+    # Optional direct assignee ID
+    assignee_id: Optional[str] = None
 
 
 class ManualWorkIn(BaseModel):

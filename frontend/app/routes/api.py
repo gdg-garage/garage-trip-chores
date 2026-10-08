@@ -46,30 +46,33 @@ async def me(request: Request):
 
 @router.get("/me/manual-work")
 async def list_manual(uid: str = Depends(require_uid)):
-    """The user's off-book work: completed, self-acked tasks marked as manual,
-    read from the upstream task cache (no local storage)."""
-    entries = [
-        {
-            "id": t["id"],
-            "description": (t.get("name") or "")[len(MANUAL_MARK):].strip(),
-            "minutes": t.get("estimated_time_min", 0),
-            "created": t.get("completed"),
-        }
-        for t in upstream.tasks.values()
-        if t.get("completed")
-        and uid in (t.get("acked") or [])
-        and (t.get("name") or "").startswith(MANUAL_MARK)
-    ]
+    """The user's off-book work: completed self-reported tasks or manual mark tasks."""
+    entries = []
+    for t in upstream.tasks.values():
+        if not t.get("completed"):
+            continue
+        is_acked = uid in (t.get("acked") or [])
+        is_creator = t.get("creator_id") == uid
+        name = t.get("name") or ""
+        is_manual = name.startswith(MANUAL_MARK)
+        is_self_rep = bool(t.get("self_reported"))
+
+        if (is_acked or is_creator) and (is_manual or is_self_rep):
+            desc = name[len(MANUAL_MARK):].strip() if is_manual else name
+            entries.append({
+                "id": t["id"],
+                "description": desc,
+                "minutes": t.get("estimated_time_min", 0),
+                "created": t.get("completed"),
+                "self_reported": is_self_rep,
+            })
     entries.sort(key=lambda e: e["created"] or "", reverse=True)
     return {"entries": entries}
 
 
 @router.post("/me/manual-work")
 async def add_manual(body: ManualWorkIn, uid: str = Depends(require_uid)):
-    """Record off-book work upstream (the documented pattern): create a chore,
-    self-ack it, and mark it done — so the minutes land in the upstream stats and
-    flow into the leaderboard/workload like any other completed chore."""
-    task = None
+    """Record off-book work upstream with native self-reported task support."""
     try:
         task = await upstream.create_task({
             "name": f"{MANUAL_MARK} {body.description}",
@@ -77,16 +80,12 @@ async def add_manual(body: ManualWorkIn, uid: str = Depends(require_uid)):
             "estimated_time_min": body.minutes,
             "assignment_timeout_min": 15,
             "necessary_capabilities": None,
+            "self_reported": True,
+            "creator_id": uid,
         })
-        await upstream.ack(task["id"], uid)
-        await upstream.mark_done(task["id"])
     except Exception as exc:  # noqa: BLE001
-        if task:  # best-effort cleanup of a half-created task
-            try:
-                await upstream.delete_task(task["id"])
-            except Exception:  # noqa: BLE001
-                pass
         raise HTTPException(status_code=502, detail=f"Upstream log failed: {exc}")
+    await upstream.refresh_stats()
     await service.broadcast_local({"type": "workload_updated", "discord_id": uid})
     return {"entry": {"id": task["id"], "description": body.description, "minutes": body.minutes}}
 
@@ -134,9 +133,11 @@ async def delete_template(key: str):
 @router.get("/skills")
 async def skills():
     """Skill options for the chore/template capability pickers, sourced from the
-    guild's `skill::` Discord roles (the upstream convention). Falls back to the
-    capabilities present users report, then the built-in list for local dev."""
-    caps = await fetch_skill_capabilities()
+    upstream GET /skills endpoint, then the guild's `skill::` Discord roles,
+    then capabilities present users report, and finally the built-in list."""
+    caps = await upstream.get_skills()
+    if not caps:
+        caps = await fetch_skill_capabilities()
     if not caps:
         caps = sorted({c for u in upstream.users for c in (u.get("capabilities") or [])})
     return {"skills": caps or SKILLS}
@@ -189,6 +190,8 @@ async def chores():
 async def get_chore(task_id: int):
     task = upstream.tasks.get(task_id)
     if not task:
+        task = await upstream.refresh_task(task_id)
+    if not task:
         raise HTTPException(status_code=404, detail="Unknown chore")
     return {"chore": service.build_chore_view(task), "suggestions": service.suggestions_for(task_id)}
 
@@ -199,7 +202,8 @@ async def chore_suggestions(task_id: int):
 
 
 @router.post("/chores")
-async def create_chore(body: ChoreCreateIn):
+async def create_chore(body: ChoreCreateIn, request: Request):
+    uid = current_uid(request)
     template = store.get_template(body.template_key) if body.template_key else None
 
     # If created from a template, derive time (with head-count scaling) and caps.
@@ -225,6 +229,15 @@ async def create_chore(body: ChoreCreateIn):
     }
     if body.deadline:
         upstream_body["deadline"] = body.deadline
+    if body.delay_min and body.delay_min > 0:
+        upstream_body["delay_min"] = body.delay_min
+    if body.self_reported:
+        upstream_body["self_reported"] = True
+        upstream_body["creator_id"] = body.creator_id or uid or "UI"
+    elif body.creator_id or uid:
+        upstream_body["creator_id"] = body.creator_id or uid
+    if body.assignee_id:
+        upstream_body["assignee_id"] = body.assignee_id
 
     try:
         task = await upstream.create_task(upstream_body)
@@ -233,9 +246,13 @@ async def create_chore(body: ChoreCreateIn):
 
     store.set_chore_meta(task["id"], size=size_for(est), template_key=body.template_key)
     view = service.build_chore_view(task)
+    event_type = "task_done" if body.self_reported else "task_created"
     await service.broadcast_local(
-        {"type": "task_created", "chore": view, "suggestions": service.suggestions_for(task["id"])["top"]}
+        {"type": event_type, "chore": view, "suggestions": service.suggestions_for(task["id"])["top"]}
     )
+    if body.self_reported and (body.creator_id or uid):
+        await upstream.refresh_stats()
+        await service.broadcast_local({"type": "workload_updated", "discord_id": body.creator_id or uid})
     return {"chore": view}
 
 
@@ -336,6 +353,34 @@ async def done_chore(task_id: int):
         raise HTTPException(status_code=502, detail=f"Upstream done failed: {exc}")
     await service.broadcast_local({"type": "task_done", "chore": {"id": task_id}})
     return {"ok": True}
+
+
+@router.post("/chores/{task_id}/help")
+async def help_chore(task_id: int, uid: str = Depends(require_uid)):
+    """Log work on a completed task ('I helped' button) for the current user."""
+    if task_id not in upstream.tasks:
+        task = await upstream.refresh_task(task_id)
+        if not task:
+            raise HTTPException(status_code=404, detail="Unknown chore")
+    try:
+        await upstream.help(task_id, uid)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"Upstream help failed: {exc}")
+    task = upstream.tasks.get(task_id) or await upstream.refresh_task(task_id)
+    view = service.build_chore_view(task)
+    await service.broadcast_local({"type": "task_updated", "chore": view})
+    await service.broadcast_local({"type": "workload_updated", "discord_id": uid})
+    return {"ok": True, "chore": view}
+
+
+@router.post("/summary")
+async def trigger_summary():
+    """Trigger on-demand LLM summary of chores and publish to Discord."""
+    try:
+        res = await upstream.trigger_summary()
+        return res
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"Failed to trigger summary: {exc}")
 
 
 @router.delete("/chores/{task_id}")

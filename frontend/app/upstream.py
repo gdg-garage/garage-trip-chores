@@ -173,6 +173,40 @@ class UpstreamClient:
         resp.raise_for_status()
         return resp.json() if resp.content else {}
 
+    async def help(self, task_id: int, user_id: str) -> dict[str, Any]:
+        """Log work on a completed task ('I helped' button) for a user."""
+        resp = await self._http.post(f"/tasks/{task_id}/help", json={"user_id": user_id})
+        resp.raise_for_status()
+        await self.refresh_task(task_id)
+        await self.refresh_stats()
+        return resp.json() if resp.content else {}
+
+    async def get_skills(self) -> list[str]:
+        """Fetch canonical list of chore capabilities/skills from upstream."""
+        try:
+            resp = await self._http.get("/skills")
+            resp.raise_for_status()
+            return resp.json() or []
+        except Exception as exc:  # noqa: BLE001
+            log.warning("get_skills failed: %s", exc)
+            return []
+
+    async def trigger_summary(self) -> dict[str, Any]:
+        """Trigger on-demand LLM chore summary and post to Discord."""
+        resp = await self._http.post("/summary")
+        resp.raise_for_status()
+        return resp.json() if resp.content else {}
+
+    async def get_worklogs(self, task_id: int) -> list[dict[str, Any]]:
+        """Fetch all work logs for a chore."""
+        try:
+            resp = await self._http.get(f"/tasks/{task_id}/worklogs")
+            resp.raise_for_status()
+            return resp.json() or []
+        except Exception as exc:  # noqa: BLE001
+            log.warning("get_worklogs(%s) failed: %s", task_id, exc)
+            return []
+
     async def task_stats(self, task_id: int) -> dict[str, Any]:
         # The stats endpoint occasionally returns an empty body from a replica;
         # retry once before giving up so callers get real numbers.
@@ -245,7 +279,10 @@ class UpstreamClient:
         # Keep the task cache coherent with the event.
         if chore and isinstance(chore, dict) and "id" in chore:
             if event_type == "task_done":
-                self.tasks.pop(chore["id"], None)
+                if chore["id"] in self.tasks:
+                    self.tasks[chore["id"]]["completed"] = chore.get("completed") or datetime.now(timezone.utc).isoformat()
+                else:
+                    self.tasks[chore["id"]] = chore
             else:
                 self.tasks[chore["id"]] = chore
 

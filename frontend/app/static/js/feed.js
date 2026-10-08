@@ -132,6 +132,8 @@ function choreCard(c) {
 
   const badges = el("div", { class: "badges" },
     el("span", { class: `badge size-${c.size}` }, `${c.size} · ${fmtMin(c.estimated_time_min)}`),
+    c.is_delayed ? el("span", { class: "badge delayed", style: "background:#442b6a;color:#d8b4fe" }, `⏳ Starts in ${c.minutes_to_publish || 0}m`) : null,
+    c.self_reported ? el("span", { class: "badge", style: "background:#1e3a47;color:#7dd3fc" }, "⚡ Self-reported") : null,
     c.urgent ? el("span", { class: "badge urgent" }, "URGENT") : null,
     suggested ? el("span", { class: "badge suggest" }, "⭐ Suggested for you") : null,
     ...(c.necessary_capabilities || []).map((s) => el("span", { class: "badge skill" }, "needs " + s)),

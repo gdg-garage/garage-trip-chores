@@ -107,6 +107,8 @@ h2 { font-size: 1.15rem; margin: 1.2em 0 .5em; }
 .badge.size-medium { color: #ffd98a; }
 .badge.size-large { color: #ff9c9c; }
 .badge.urgent { background: var(--urgent); color: #fff; border-color: transparent; }
+.badge.delayed { background: #442b6a; color: #d8b4fe; border-color: #6b3ba7; }
+.badge.self-reported { background: #1e3a47; color: #7dd3fc; border-color: #2e5568; }
 .badge.skill { color: #c9b8ff; }
 .badge.suggest { background: var(--suggest); color: #fff; border-color: transparent; }
 .badge.claimed { color: var(--ok); }

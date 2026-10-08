@@ -1,42 +1,57 @@
 # Stage 1: Build the Go application
-FROM golang:1.25-alpine AS builder
+FROM golang:1.25-bookworm AS go-builder
 
-# Install build dependencies for CGO (required by go-sqlite3)
-RUN apk add --no-cache gcc musl-dev sqlite-dev
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    libc6-dev \
+    libsqlite3-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-# Set the working directory inside the container
 WORKDIR /app
 
-# Copy go.mod and go.sum to leverage Docker's layer caching.
-# This will only re-download dependencies if go.mod or go.sum has changed.
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Copy the rest of the application source code
 COPY . .
 
-# Build the application.
-# CGO_ENABLED=1 is required for the sqlite driver.
-RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o /app/main .
+RUN CGO_ENABLED=1 GOOS=linux go build -o /app/main .
 
-# Stage 2: Create the final, minimal image
-FROM alpine:latest
+# Stage 2: Install Python frontend dependencies with uv
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS py-builder
 
-# Install runtime dependencies.
-# - sqlite is needed by the application.
-# - ca-certificates is needed for making HTTPS requests (e.g., to Discord).
-# - procps provides 'pgrep' for the healthcheck.
-RUN apk add --no-cache sqlite ca-certificates procps
+WORKDIR /app/frontend
 
-# Set the working directory
+COPY frontend/pyproject.toml frontend/uv.lock ./
+RUN uv sync --frozen --no-dev
+
+# Stage 3: Unified production image
+FROM python:3.12-slim-bookworm
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    sqlite3 \
+    procps \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
-# Copy the built binary from the builder stage
-COPY --from=builder /app/main .
-COPY --from=builder /app/docs ./docs
+# Copy Go binary and documentation
+COPY --from=go-builder /app/main /app/main
+COPY --from=go-builder /app/docs /app/docs
 
-# The application creates a sqlite database in the 'data' directory.
-RUN mkdir data
+# Copy Python virtual environment and frontend application
+COPY --from=py-builder /app/frontend/.venv /app/frontend/.venv
+COPY frontend /app/frontend
 
-# Set the command to run the application
-CMD ["./main"]
+# Copy entrypoint script
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
+# Persistent directory for SQLite databases
+RUN mkdir -p /app/data
+
+ENV PORT=8080
+EXPOSE 8080
+
+ENTRYPOINT ["/app/entrypoint.sh"]

@@ -37,7 +37,9 @@ async function loadManual() {
   list.innerHTML = "";
   if (!entries.length) { list.appendChild(el("li", { class: "muted" }, "No entries yet.")); return; }
   entries.forEach((e) =>
-    list.appendChild(el("li", {}, el("span", {}, e.description), el("span", { class: "muted" }, `${e.minutes} min`))));
+    list.appendChild(el("li", {},
+      el("span", {}, (e.self_reported ? "⚡ " : "") + e.description),
+      el("span", { class: "muted" }, `${e.minutes} min`))));
 }
 
 async function addManual(ev) {

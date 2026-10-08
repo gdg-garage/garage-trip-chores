@@ -1,7 +1,7 @@
 asyncapi: 3.0.0
 info:
   title: Garage Trip Chores WebSocket API
-  version: 1.0.0
+  version: 3.0.0
   description: Real-time updates for chores and assignments.
 servers:
   dev:

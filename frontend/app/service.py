@@ -58,6 +58,14 @@ def build_chore_view(task: dict[str, Any]) -> dict[str, Any]:
         for cid in claimers
     ]
 
+    pub_at_dt = _parse_dt(task.get("publish_at"))
+    now = datetime.now(timezone.utc)
+    is_delayed = bool(pub_at_dt and pub_at_dt > now)
+    minutes_to_publish = round((pub_at_dt - now).total_seconds() / 60) if is_delayed else None
+
+    creator_id = task.get("creator_id")
+    creator_name = (directory.get(creator_id) or {}).get("name") or creator_id if creator_id else None
+
     return {
         "id": task["id"],
         "name": task.get("name"),
@@ -70,6 +78,15 @@ def build_chore_view(task: dict[str, Any]) -> dict[str, Any]:
         "completed": task.get("completed"),
         "cancelled": task.get("cancelled"),
         "created": task.get("created"),
+        "delay_min": task.get("delay_min", 0),
+        "publish_at": task.get("publish_at"),
+        "is_delayed": is_delayed,
+        "minutes_to_publish": minutes_to_publish,
+        "self_reported": bool(task.get("self_reported")),
+        "creator_id": creator_id,
+        "creator_name": creator_name,
+        "worklogs": task.get("worklogs") or [],
+        "worked_min_total": task.get("worked_min_total", 0),
         "size": size,
         "urgent": urgent,
         "spiciness": spiciness,
