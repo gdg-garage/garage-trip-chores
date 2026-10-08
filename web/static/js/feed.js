@@ -9,7 +9,7 @@ async function init() {
   state.myUid = me.discord_id;
   state.myName = profile.name || me.name;
   const greeting = document.getElementById("greeting");
-  if (greeting) greeting.textContent = `Hi ${state.myName} — grab a chore when you can 💪`;
+  if (greeting) greeting.textContent = `hi ${state.myName} — grab a chore when you can 💪 🧹`;
 
   connectWS(onMessage, (up) => {
     const c = document.getElementById("conn");
@@ -95,7 +95,7 @@ function assignRow(c) {
   const autoBtn = el("button", {
     class: "secondary small",
     onclick: (e) => autoAssignFeed(c.id, e.currentTarget),
-  }, "🎯 Auto-assign");
+  }, "🎯 auto::assign;");
 
   // Person chips — only when we have names from ranked data
   const namedChips = topPeople
@@ -134,24 +134,24 @@ function choreCard(c) {
 
   const badges = el("div", { class: "badges" },
     el("span", { class: `badge size-${c.size}` }, `${c.size} · ${fmtMin(c.estimated_time_min)}`),
-    c.is_delayed ? el("span", { class: "badge delayed", style: "background:#442b6a;color:#d8b4fe" }, `⏳ Starts in ${c.minutes_to_publish || 0}m`) : null,
-    c.self_reported ? el("span", { class: "badge", style: "background:#1e3a47;color:#7dd3fc" }, "⚡ Self-reported") : null,
-    c.urgent ? el("span", { class: "badge urgent" }, "URGENT") : null,
-    suggested ? el("span", { class: "badge suggest" }, "⭐ Suggested for you") : null,
-    ...(c.necessary_capabilities || []).map((s) => el("span", { class: "badge skill" }, "needs " + s)),
+    c.is_delayed ? el("span", { class: "badge delayed", style: "background:#442b6a;color:#d8b4fe" }, `⏳ starts_in::${c.minutes_to_publish || 0}m`) : null,
+    c.self_reported ? el("span", { class: "badge", style: "background:#1e3a47;color:#7dd3fc" }, "⚡ self_reported;") : null,
+    c.urgent ? el("span", { class: "badge urgent" }, "urgent::🔥") : null,
+    suggested ? el("span", { class: "badge suggest" }, "⭐ suggested::you;") : null,
+    ...(c.necessary_capabilities || []).map((s) => el("span", { class: "badge skill" }, "needs::" + s)),
     el("span", { class: "badge" }, `${c.claimed_count}/${c.necessary_workers} claimed`),
     c.minutes_to_deadline != null ? el("span", { class: "badge" }, `⏰ ${fmtMin(Math.max(0, c.minutes_to_deadline))} left`) : null,
   );
 
   const claimers = (c.claimers || []).length
-    ? el("p", { class: "muted", style: "margin:.3em 0 0;font-size:.85rem" }, "On it: " + c.claimers.map((p) => p.name).join(", "))
+    ? el("p", { class: "muted", style: "margin:.3em 0 0;font-size:.85rem;font-family:var(--main-font)" }, "on_it:: " + c.claimers.map((p) => p.name).join(", "))
     : null;
 
   const btn = iClaimed
-    ? el("button", { class: "secondary", onclick: () => unclaim(c.id) }, "✓ You're on it — tap to drop")
-    : el("button", { onclick: (e) => claim(c.id, e.currentTarget) }, "Claim it");
+    ? el("button", { class: "secondary", onclick: () => unclaim(c.id) }, "✓ on_it::tap_to_drop;")
+    : el("button", { onclick: (e) => claim(c.id, e.currentTarget) }, "claim::it; 🧹");
 
-  const done = el("button", { class: "ghost small", onclick: (e) => markDone(c.id, e.currentTarget) }, "Mark done");
+  const done = el("button", { class: "ghost small", onclick: (e) => markDone(c.id, e.currentTarget) }, "mark::done;");
 
   const assign = assignRow(c);
 

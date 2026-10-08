@@ -260,7 +260,7 @@ async function submit(ev) {
 function resetForm() {
   document.getElementById("chore-form").reset();
   document.getElementById("template_key").value = "";
-  document.getElementById("form-title").textContent = "Create a chore";
+  document.getElementById("form-title").textContent = "create::chore;";
   document.getElementById("headcount-wrap").hidden = true;
   document.getElementById("delay_custom").hidden = true;
   selectedSkills.clear();
@@ -299,18 +299,18 @@ async function loadCurrent() {
 
   box.innerHTML = "";
   if (!displayList.length) {
-    box.innerHTML = `<p class="muted">${currentFilter === "scheduled" ? "No scheduled chores queued." : "Board is empty."}</p>`;
+    box.innerHTML = `<p class="muted">${currentFilter === "scheduled" ? "no scheduled chores queued." : "board is empty. 🧹"}</p>`;
     return;
   }
 
   displayList.forEach((c) => {
     const badges = el("div", { class: "badges", style: "margin:4px 0" },
-      el("span", { class: `badge size-${c.size}` }, `${c.size} · ${fmtMin(c.estimated_time_min)}`),
-      c.is_delayed ? el("span", { class: "badge delayed", style: "background:#442b6a;color:#d8b4fe" }, `⏳ Scheduled: publishes in ${c.minutes_to_publish || 0}m`) : null,
-      c.self_reported ? el("span", { class: "badge", style: "background:#1e3a47;color:#7dd3fc" }, "⚡ Self-reported") : null,
-      c.urgent ? el("span", { class: "badge urgent" }, "URGENT") : null,
+      el("span", { class: `badge size-${c.size}` }, `size::${c.size} · ${fmtMin(c.estimated_time_min)}`),
+      c.is_delayed ? el("span", { class: "badge delayed", style: "background:#442b6a;color:#d8b4fe" }, `⏳ scheduled::in_${c.minutes_to_publish || 0}m;`) : null,
+      c.self_reported ? el("span", { class: "badge", style: "background:#1e3a47;color:#7dd3fc" }, "⚡ self_reported;") : null,
+      c.urgent ? el("span", { class: "badge urgent" }, "urgent::🔥") : null,
       el("span", { class: "badge" }, `${c.claimed_count}/${c.necessary_workers} claimed`),
-      ...(c.necessary_capabilities || []).map((s) => el("span", { class: "badge skill" }, "needs " + s)),
+      ...(c.necessary_capabilities || []).map((s) => el("span", { class: "badge skill" }, "needs::" + s)),
     );
 
     const row = el("div", { class: `card chore ${c.urgent ? "urgent" : ""} ${c.is_delayed ? "delayed" : ""}`, style: "margin-bottom:10px" },
@@ -318,9 +318,9 @@ async function loadCurrent() {
         el("div", {},
           el("h3", { style: "margin:0" }, el("a", { href: `/chores/${c.id}`, style: "color:inherit" }, c.name)),
           badges,
-          el("p", { class: "muted", style: "margin:.2em 0;font-size:.85rem" },
-            c.claimers?.length ? "On it: " + c.claimers.map((p) => p.name).join(", ") : "No workers assigned yet")),
-        el("button", { class: "danger small", onclick: () => del(c.id) }, "Delete")));
+          el("p", { class: "muted", style: "margin:.2em 0;font-size:.85rem;font-family:var(--main-font)" },
+            c.claimers?.length ? "on_it:: " + c.claimers.map((p) => p.name).join(", ") : "no workers assigned yet")),
+        el("button", { class: "danger small", onclick: () => del(c.id) }, "delete;")));
     box.appendChild(row);
   });
 }

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>{% block title %}Garage Trip Chores{% endblock %}</title>
+  <title>{% block title %}garage::trip::chores::🧹;{% endblock %}</title>
   <link rel="icon" type="image/x-icon" href="/static/img/favicon.ico" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -13,20 +13,25 @@
 <body class="{% block body_class %}{% endblock %}">
   {% block nav %}
   <nav class="topnav">
-    <a class="brand" href="/feed"><span class="logo">Garage Trip</span> Chores</a>
+    <a class="brand logo" href="/feed">garage::<span class="secondary-color">trip</span>::<span class="secondary-color">chores</span>::🧹</a>
     <div class="navlinks">
-      <a href="/feed" class="{% if active == 'feed' %}on{% endif %}">Chores</a>
-      <a href="/leaderboard" class="{% if active == 'leaderboard' %}on{% endif %}">Leaderboard</a>
-      <a href="/manage" class="{% if active == 'manage' %}on{% endif %}">Manage</a>
-      <a href="/schedules" class="{% if active == 'schedules' %}on{% endif %}">Schedules</a>
-      <a href="/profile" class="{% if active == 'profile' %}on{% endif %}">Profile</a>
-      <a href="/dashboard" class="{% if active == 'dashboard' %}on{% endif %}">TV</a>
+      <a href="/feed" class="{% if active == 'feed' %}on{% endif %}">/chores</a>
+      <a href="/leaderboard" class="{% if active == 'leaderboard' %}on{% endif %}">/leaderboard</a>
+      <a href="/manage" class="{% if active == 'manage' %}on{% endif %}">/manage</a>
+      <a href="/schedules" class="{% if active == 'schedules' %}on{% endif %}">/schedules</a>
+      <a href="/profile" class="{% if active == 'profile' %}on{% endif %}">/profile</a>
+      <a href="/dashboard" class="{% if active == 'dashboard' %}on{% endif %}">/tv</a>
     </div>
   </nav>
   {% endblock %}
   <main class="{% block main_class %}wrap{% endblock %}">
     {% block content %}{% endblock %}
   </main>
+  {% block footer %}
+  <footer class="footer">
+    &copy; garage::trip team &bull; <a href="https://garage-trip.cz" target="_blank" class="secondary-color">garage-trip.cz</a> &bull; g::🧹;
+  </footer>
+  {% endblock %}
   <script src="/static/js/common.js"></script>
   {% block scripts %}{% endblock %}
 </body>

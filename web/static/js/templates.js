@@ -33,25 +33,25 @@ async function load() {
   const templates = Array.isArray(tData) ? tData : (tData.templates || []);
   const box = document.getElementById("list");
   box.innerHTML = "";
-  if (!templates.length) { box.innerHTML = '<p class="muted">No templates yet.</p>'; return; }
+  if (!templates.length) { box.innerHTML = '<p class="muted">no templates yet. 🧹</p>'; return; }
   templates.forEach((t) => {
     const details = `${t.necessary_workers} worker(s) · ${fmtMin(t.estimated_time_min)}` +
       (t.scales_with_headcount ? ` (+${t.per_person_min}/person)` : "") +
-      (t.necessary_capabilities.length ? ` · needs ${t.necessary_capabilities.join(", ")}` : "");
+      (t.necessary_capabilities.length ? ` · needs::${t.necessary_capabilities.join(", ")}` : "");
     box.appendChild(el("div", { class: "card chore", style: "margin-bottom:10px" },
       el("div", { class: "row" },
         el("div", {},
           el("h3", { style: "margin:0" }, t.name),
-          el("p", { class: "muted", style: "margin:.2em 0" }, details)),
+          el("p", { class: "muted", style: "margin:.2em 0;font-family:var(--main-font);font-size:.85rem" }, details)),
         el("div", { class: "row", style: "gap:6px" },
-          el("button", { class: "secondary small", onclick: () => edit(t) }, "✏️ Edit"),
-          el("button", { class: "danger small", onclick: () => del(t) }, "Delete")))));
+          el("button", { class: "secondary small", onclick: () => edit(t) }, "✏️ edit;"),
+          el("button", { class: "danger small", onclick: () => del(t) }, "delete;")))));
   });
 }
 
 function edit(t) {
   document.getElementById("edit-key").value = t.key;
-  document.getElementById("form-title").textContent = "Edit: " + t.name;
+  document.getElementById("form-title").textContent = "edit::template; " + t.name;
   document.getElementById("name").value = t.name;
   document.getElementById("workers").value = t.necessary_workers;
   document.getElementById("time").value = t.estimated_time_min;
@@ -75,7 +75,7 @@ function edit(t) {
 function resetForm() {
   document.getElementById("tpl-form").reset();
   document.getElementById("edit-key").value = "";
-  document.getElementById("form-title").textContent = "Add a template";
+  document.getElementById("form-title").textContent = "add::template;";
   selectedSkills.clear(); scales = false;
   document.querySelectorAll("#skills .chip, #scales").forEach((c) => {
     c.classList.remove("on");

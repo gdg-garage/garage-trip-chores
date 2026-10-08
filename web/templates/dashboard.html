@@ -1,29 +1,30 @@
 {% extends "base.html" %}
-{% block title %}Dashboard — Garage Trip{% endblock %}
+{% block title %}tv::dashboard; 🧹 — garage::trip{% endblock %}
 {% block body_class %}tv{% endblock %}
 {% block nav %}{% endblock %}
 {% block main_class %}tv-wrap{% endblock %}
 {% block content %}
-<button id="mute" class="secondary mute-btn">🔊 Sound on</button>
+<button id="mute" class="secondary mute-btn">🔊 sound::on;</button>
 <div class="tv-head">
-  <h1><span class="logo">Garage Trip</span> Chores <span id="conn" class="conn down" style="font-size:1rem">● offline</span></h1>
+  <h1>garage::<span class="secondary-color">trip</span>::<span class="secondary-color">chores</span>::tv::🧹; <span id="conn" class="conn down" style="font-size:1rem">● offline</span></h1>
   <div class="tv-clock" id="clock"></div>
 </div>
 <div class="tv-grid">
   <div>
-    <h2>On the board</h2>
+    <h2>on_the_board::active;</h2>
     <div class="tv-chores" id="chores"></div>
-    <div id="empty" class="empty" hidden>🎉 All clear — nothing pending!</div>
+    <div id="empty" class="empty" hidden>🎉 all clear — nothing pending! 🧹</div>
   </div>
   <div>
     <div class="card">
-      <h2>Workload leaderboard</h2>
+      <h2>workload::leaderboard;</h2>
       <p class="muted" id="kids"></p>
       <ul class="leader" id="leader"></ul>
     </div>
   </div>
 </div>
 {% endblock %}
+{% block footer %}{% endblock %}
 {% block scripts %}
 <script src="/static/js/dashboard.js"></script>
 {% endblock %}

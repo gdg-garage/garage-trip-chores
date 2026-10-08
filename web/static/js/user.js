@@ -28,10 +28,10 @@ async function load() {
       `${d.performed.length} done · ${fmtMin(d.time_spent_min) || "0 min"} spent · ${d.performing.length} in progress`)));
 
   document.getElementById("sections").hidden = false;
-  document.getElementById("h-performing").textContent = `In progress (${d.performing.length})`;
-  document.getElementById("h-performed").textContent = `Completed (${d.performed.length})`;
-  renderList("performing", d.performing, "Not working on anything right now.");
-  renderList("performed", d.performed, "Nothing completed yet.");
+  document.getElementById("h-performing").textContent = `in_progress::chores; (${d.performing.length})`;
+  document.getElementById("h-performed").textContent = `completed::chores; (${d.performed.length})`;
+  renderList("performing", d.performing, "not working on anything right now.");
+  renderList("performed", d.performed, "nothing completed yet. 🧹");
 }
 
 function renderList(id, chores, emptyMsg) {
@@ -40,12 +40,12 @@ function renderList(id, chores, emptyMsg) {
   if (!chores.length) { box.appendChild(el("p", { class: "muted" }, emptyMsg)); return; }
   chores.forEach((c) => {
     const badges = el("div", { class: "badges" },
-      el("span", { class: `badge size-${c.size}` }, `${c.size} · ${fmtMin(c.estimated_time_min)}`),
-      c.urgent && !c.completed ? el("span", { class: "badge urgent" }, "URGENT") : null,
-      c.is_delayed ? el("span", { class: "badge delayed", style: "background:#442b6a;color:#d8b4fe" }, `⏳ in ${c.minutes_to_publish || 0}m`) : null,
-      c.self_reported ? el("span", { class: "badge", style: "background:#1e3a47;color:#7dd3fc" }, "⚡ self-reported") : null,
-      ...(c.necessary_capabilities || []).map((s) => el("span", { class: "badge skill" }, s)),
-      c.completed ? el("span", { class: "badge claimed" }, "✓ done") : null,
+      el("span", { class: `badge size-${c.size}` }, `size::${c.size} · ${fmtMin(c.estimated_time_min)}`),
+      c.urgent && !c.completed ? el("span", { class: "badge urgent" }, "urgent::🔥") : null,
+      c.is_delayed ? el("span", { class: "badge delayed", style: "background:#442b6a;color:#d8b4fe" }, `⏳ in_${c.minutes_to_publish || 0}m;`) : null,
+      c.self_reported ? el("span", { class: "badge", style: "background:#1e3a47;color:#7dd3fc" }, "⚡ self_reported;") : null,
+      ...(c.necessary_capabilities || []).map((s) => el("span", { class: "badge skill" }, "needs::" + s)),
+      c.completed ? el("span", { class: "badge claimed" }, "✓ done;") : null,
       c.completed ? el("span", { class: "badge" }, `⏱ ${fmtMin(c.total_time_min) || "0 min"} spent`) : null,
       c.completed ? el("button", { class: "ghost small", title: "Override time spent", onclick: () => editTime(c) }, "✎") : null);
     box.appendChild(el("div", { class: `card chore ${c.urgent && !c.completed ? "urgent" : ""} ${c.completed ? "done" : ""}` },

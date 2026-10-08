@@ -1,37 +1,37 @@
 {% extends "base.html" %}
-{% block title %}Profile — Garage Trip{% endblock %}
+{% block title %}my::profile; 🧹 — garage::trip{% endblock %}
 {% block content %}
 <div class="row" style="display:flex;justify-content:space-between;align-items:center">
-  <h1 style="margin:0">Your profile</h1>
-  <button id="signout" class="ghost small">Sign out</button>
+  <h1 style="margin:0">my::profile; 🧹</h1>
+  <button id="signout" class="ghost small">/sign_out;</button>
 </div>
 
 <div class="card">
-  <p style="margin:0 0 4px"><strong id="name"></strong> <span class="muted" id="handle"></span></p>
-  <p class="muted" style="font-size:.82rem;margin:0">Signed in with Discord — your name and skills come from your Discord roles.</p>
+  <p style="margin:0 0 4px"><strong id="name" class="secondary-color" style="font-family:var(--main-font);font-size:1.1rem"></strong> <span class="muted" id="handle"></span></p>
+  <p class="muted" style="font-size:.82rem;margin:0">signed in with discord — your name and skills come from your discord roles.</p>
 </div>
 
 <div class="card">
-  <h2>Your workload</h2>
-  <p class="muted">Balanced against everyone else — lower means you'll be suggested more.</p>
+  <h2>my::workload;</h2>
+  <p class="muted">balanced against everyone else — lower means you'll be suggested more.</p>
   <div id="workload"></div>
 </div>
 
 <div class="card">
-  <h2>Log out-of-scope work</h2>
-  <p class="muted">Did something not on the board (sauna duty, kid wrangling)? Log it so it counts toward your load.</p>
+  <h2>log::out_of_scope_work;</h2>
+  <p class="muted">did something not on the board (sauna duty, kid wrangling)? log it so it counts toward your load.</p>
   <form id="manual-form">
     <div class="grid2">
       <div>
-        <label for="desc">What did you do?</label>
-        <input id="desc" placeholder="e.g. Took care of the sauna" required />
+        <label for="desc">what_did_you_do::</label>
+        <input id="desc" placeholder="e.g. took care of the sauna" required />
       </div>
       <div>
-        <label for="mins">Minutes</label>
+        <label for="mins">minutes::</label>
         <input id="mins" type="number" min="1" max="1000" value="30" required />
       </div>
     </div>
-    <button type="submit" class="secondary" style="margin-top:12px">Add entry</button>
+    <button type="submit" class="secondary" style="margin-top:12px">add::entry; ➕</button>
   </form>
   <ul id="manual-list" class="leader" style="margin-top:12px"></ul>
 </div>

@@ -32,52 +32,52 @@ function renderDetail(c) {
   const hasWorked = Boolean(myWorklog);
 
   const badges = el("div", { class: "badges" },
-    el("span", { class: `badge size-${c.size}` }, `${c.size} · ${fmtMin(c.estimated_time_min)}`),
-    isDone ? el("span", { class: "badge claimed", style: "background:#0f5132;color:#d1e7dd;border-color:transparent" }, "✓ Completed") : null,
-    c.is_delayed ? el("span", { class: "badge delayed", style: "background:#442b6a;color:#d8b4fe" }, `⏳ Scheduled: in ${c.minutes_to_publish || 0}m`) : null,
-    c.self_reported ? el("span", { class: "badge", style: "background:#1e3a47;color:#7dd3fc" }, "⚡ Self-reported") : null,
-    c.urgent && !isDone ? el("span", { class: "badge urgent" }, "URGENT") : null,
+    el("span", { class: `badge size-${c.size}` }, `size::${c.size} · ${fmtMin(c.estimated_time_min)}`),
+    isDone ? el("span", { class: "badge claimed", style: "background:#0f5132;color:#d1e7dd;border-color:transparent" }, "✓ completed;") : null,
+    c.is_delayed ? el("span", { class: "badge delayed", style: "background:#442b6a;color:#d8b4fe" }, `⏳ scheduled::in_${c.minutes_to_publish || 0}m;`) : null,
+    c.self_reported ? el("span", { class: "badge", style: "background:#1e3a47;color:#7dd3fc" }, "⚡ self_reported;") : null,
+    c.urgent && !isDone ? el("span", { class: "badge urgent" }, "urgent::🔥") : null,
     el("span", { class: "badge" }, `${c.claimed_count}/${c.necessary_workers} claimed`),
-    ...(c.necessary_capabilities || []).map((s) => el("span", { class: "badge skill" }, "needs " + s)),
+    ...(c.necessary_capabilities || []).map((s) => el("span", { class: "badge skill" }, "needs::" + s)),
     c.minutes_to_deadline != null && !isDone ? el("span", { class: "badge" }, `⏰ ${fmtMin(Math.max(0, c.minutes_to_deadline))} left`) : null,
   );
 
   let claimers;
   if ((c.claimers || []).length) {
     claimers = el("div", { style: "margin:.4em 0" },
-      el("span", { class: "muted" }, isDone ? "Workers: " : "On it: "),
+      el("span", { class: "muted", style: "font-family:var(--main-font)" }, isDone ? "workers:: " : "on_it:: "),
       ...c.claimers.map((p) => el("span", { class: "assignee" },
         p.name,
         !isDone ? el("button", { class: "assignee-x", title: "Remove assignment", onclick: () => unassign(p.discord_id, p.name) }, "✕") : null)));
   } else {
-    claimers = el("p", { class: "muted" }, isDone ? "No workers recorded." : "Nobody yet — be the hero.");
+    claimers = el("p", { class: "muted" }, isDone ? "no workers recorded." : "nobody yet — be the hero. 🧹");
   }
 
   // Work logs section for completed chores
   let worklogsSection = null;
   if (isDone && (c.worklogs || []).length) {
-    worklogsSection = el("div", { style: "margin:8px 0;padding:10px;background:#151d2a;border-radius:10px;border:1px solid #38425f" },
-      el("strong", { style: "display:block;margin-bottom:6px" }, "Work logged:"),
-      ...c.worklogs.map((w) => el("div", { style: "display:flex;justify-content:space-between;align-items:center;padding:3px 0" },
-        el("span", {}, `${w.user_id === myUid ? "You" : w.user_id}${w.self_reported ? " (self-reported)" : ""}`),
+    worklogsSection = el("div", { style: "margin:8px 0;padding:12px;background:#14181f;border-radius:var(--radius-input);border:1px solid var(--panel-border)" },
+      el("strong", { style: "display:block;margin-bottom:6px;font-family:var(--main-font);font-size:.9rem" }, "work_logged::"),
+      ...c.worklogs.map((w) => el("div", { style: "display:flex;justify-content:space-between;align-items:center;padding:4px 0" },
+        el("span", {}, `${w.user_id === myUid ? "you" : w.user_id}${w.self_reported ? " (self-reported)" : ""}`),
         el("span", { class: "muted" },
           `${w.time_spent_min} min `,
-          (w.user_id === myUid || !myUid) ? el("button", { class: "ghost small", style: "padding:2px 6px;margin-left:6px", onclick: () => editTime(w.user_id, w.time_spent_min) }, "✎") : null))));
+          (w.user_id === myUid || !myUid) ? el("button", { class: "ghost small", style: "padding:2px 8px;margin-left:6px", onclick: () => editTime(w.user_id, w.time_spent_min) }, "✎") : null))));
   }
 
   // Action buttons
   const buttons = [];
   if (!isDone) {
     const btn = iClaimed
-      ? el("button", { class: "secondary", onclick: unclaim }, "✓ You're on it — tap to drop")
-      : el("button", { onclick: (e) => claim(e.target) }, "Claim it");
-    const done = el("button", { class: "ghost", onclick: markDone }, "Mark done");
-    const auto = c.fully_claimed ? null : el("button", { class: "secondary", onclick: (e) => autoAssign(e.target) }, "🎯 Auto-assign best fit");
+      ? el("button", { class: "secondary", onclick: unclaim }, "✓ on_it::tap_to_drop;")
+      : el("button", { onclick: (e) => claim(e.target) }, "claim::it; 🧹");
+    const done = el("button", { class: "ghost", onclick: markDone }, "mark::done;");
+    const auto = c.fully_claimed ? null : el("button", { class: "secondary", onclick: (e) => autoAssign(e.target) }, "🎯 auto::assign_best_fit;");
     buttons.push(btn, auto, done);
   } else {
     // Completed chore actions
     if (myUid && !hasWorked) {
-      buttons.push(el("button", { class: "secondary", onclick: iHelped }, "🤝 I helped on this chore"));
+      buttons.push(el("button", { class: "secondary", onclick: iHelped }, "🤝 i::helped_on_chore;"));
     }
   }
 

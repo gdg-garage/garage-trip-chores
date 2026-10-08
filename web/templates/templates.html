@@ -1,56 +1,56 @@
 {% extends "base.html" %}
-{% block title %}Templates — Garage Trip{% endblock %}
+{% block title %}chore::templates; 🧹 — garage::trip{% endblock %}
 {% block content %}
-<p style="margin:0 0 6px"><a href="/manage">← Back to manage</a></p>
-<h1>Chore templates</h1>
-<p class="muted">Presets that show up as quick-assign buttons on the Manage page.</p>
+<p style="margin:0 0 6px"><a href="/manage">← /manage</a></p>
+<h1>chore::templates; 🧹</h1>
+<p class="muted">presets that show up as quick-assign buttons on the manage page.</p>
 
 <div class="card">
-  <h2 id="form-title">Add a template</h2>
+  <h2 id="form-title">add::template;</h2>
   <form id="tpl-form">
     <input type="hidden" id="edit-key" />
-    <label for="name">Name</label>
-    <input id="name" required placeholder="e.g. Sauna heat-up" />
+    <label for="name">template::name;</label>
+    <input id="name" required placeholder="e.g. sauna heat-up" />
 
     <div class="grid2">
       <div>
-        <label for="workers">Workers needed</label>
+        <label for="workers">workers_needed::</label>
         <input id="workers" type="number" min="1" max="20" value="1" />
       </div>
       <div>
-        <label for="time">Base estimated time (min)</label>
+        <label for="time">estimated_time::(min)</label>
         <input id="time" type="number" min="1" max="1000" value="15" />
       </div>
     </div>
 
-    <label>Required skills</label>
+    <label>required_skills::</label>
     <div class="chiprow" id="skills"></div>
 
     <div class="grid2">
       <div>
-        <label for="timeout">Claim timeout (min)</label>
+        <label for="timeout">claim_timeout::(min)</label>
         <input id="timeout" type="number" min="1" max="1000" value="15" />
       </div>
       <div>
-        <label>Scales with head-count?</label>
-        <div class="chiprow"><button type="button" class="chip" id="scales" aria-pressed="false">🍽️ Grows per person</button></div>
+        <label>scales_with_headcount::</label>
+        <div class="chiprow"><button type="button" class="chip" id="scales" aria-pressed="false">🍽️ scales per person</button></div>
       </div>
     </div>
 
     <div id="perperson-wrap" hidden>
-      <label for="perperson">Extra minutes per person</label>
+      <label for="perperson">extra_minutes_per_person::</label>
       <input id="perperson" type="number" min="0" max="120" value="2" />
     </div>
 
     <div class="row" style="gap:8px;margin-top:16px">
-      <button type="submit">Save template</button>
-      <button type="button" id="cancel-edit" class="ghost" hidden>Cancel edit</button>
+      <button type="submit">save::template; 💾</button>
+      <button type="button" id="cancel-edit" class="ghost" hidden>cancel::edit;</button>
     </div>
   </form>
 </div>
 
 <div class="card">
-  <h2>Existing templates</h2>
+  <h2>existing::templates;</h2>
   <div id="list"></div>
 </div>
 {% endblock %}

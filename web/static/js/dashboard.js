@@ -22,7 +22,7 @@ function tickClock() {
 
 function toggleMute() {
   muted = !muted;
-  document.getElementById("mute").textContent = muted ? "🔇 Muted" : "🔊 Sound on";
+  document.getElementById("mute").textContent = muted ? "🔇 sound::muted;" : "🔊 sound::on;";
   if (!muted) ensureAudio(); // unlock audio on user gesture
 }
 
@@ -87,14 +87,14 @@ function card(c) {
   return el("div", { class: `card chore ${c.urgent ? "urgent" : ""}` },
     el("h3", {}, el("a", { href: `/chores/${c.id}`, style: "color:inherit" }, c.name)),
     el("div", { class: "badges" },
-      el("span", { class: `badge size-${c.size}` }, `${c.size} · ${fmtMin(c.estimated_time_min)}`),
-      c.is_delayed ? el("span", { class: "badge delayed", style: "background:#442b6a;color:#d8b4fe" }, `⏳ Scheduled (${c.minutes_to_publish || 0}m)`) : null,
-      c.self_reported ? el("span", { class: "badge", style: "background:#1e3a47;color:#7dd3fc" }, "⚡ Self-reported") : null,
-      c.urgent ? el("span", { class: "badge urgent" }, "URGENT") : null,
+      el("span", { class: `badge size-${c.size}` }, `size::${c.size} · ${fmtMin(c.estimated_time_min)}`),
+      c.is_delayed ? el("span", { class: "badge delayed", style: "background:#442b6a;color:#d8b4fe" }, `⏳ scheduled::in_${c.minutes_to_publish || 0}m;`) : null,
+      c.self_reported ? el("span", { class: "badge", style: "background:#1e3a47;color:#7dd3fc" }, "⚡ self_reported;") : null,
+      c.urgent ? el("span", { class: "badge urgent" }, "urgent::🔥") : null,
       el("span", { class: "badge" }, `${c.claimed_count}/${c.necessary_workers} claimed`),
-      ...(c.necessary_capabilities || []).map((s) => el("span", { class: "badge skill" }, s))),
+      ...(c.necessary_capabilities || []).map((s) => el("span", { class: "badge skill" }, "needs::" + s))),
     (c.claimers || []).length
-      ? el("p", { class: "on-it" }, "🙌 On it: ", el("strong", {}, c.claimers.map((p) => p.name).join(", ")))
+      ? el("p", { class: "on-it" }, "🙌 on_it:: ", el("strong", {}, c.claimers.map((p) => p.name).join(", ")))
       : null);
 }
 

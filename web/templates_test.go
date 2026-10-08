@@ -39,6 +39,7 @@ func TestTemplatesCompile(t *testing.T) {
 		"leaderboard.html",
 		"manage.html",
 		"profile.html",
+		"schedules.html",
 		"templates.html",
 		"user.html",
 	}

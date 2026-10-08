@@ -1,121 +1,121 @@
 {% extends "base.html" %}
-{% block title %}Manage — Garage Trip{% endblock %}
+{% block title %}manage::chores; 🧹 — garage::trip{% endblock %}
 {% block content %}
 <div class="row" style="display:flex;justify-content:space-between;align-items:center">
-  <h1 style="margin:0">Chore manager</h1>
-  <button id="btn-summary" class="secondary small" style="background:linear-gradient(135deg, #4b2575, #7a3ebb);color:#fff;border:none">✨ AI Summary to Discord</button>
+  <h1 style="margin:0">manage::chores; 🧹</h1>
+  <button id="btn-summary" class="secondary small" style="background:linear-gradient(135deg, #4b2575, #7a3ebb);color:#fff;border:none">✨ ai_summary::discord;</button>
 </div>
 
 <div class="card">
   <div class="row" style="display:flex;justify-content:space-between;align-items:center">
-    <h2 style="margin:0">Quick-assign from a template</h2>
+    <h2 style="margin:0">quick_assign::templates;</h2>
     <div style="display:flex;gap:8px">
-      <a href="/templates" class="btn secondary small" title="Add, edit or delete templates">✏️ Templates</a>
-      <a href="/schedules" class="btn secondary small" title="Recurring scheduled tasks">⏰ Schedules</a>
+      <a href="/templates" class="btn secondary small" title="Add, edit or delete templates">✏️ /templates</a>
+      <a href="/schedules" class="btn secondary small" title="Recurring scheduled tasks">⏰ /schedules</a>
     </div>
   </div>
-  <p class="muted">Tap a preset to load it below, tweak, then post it to the board.</p>
+  <p class="muted">tap a preset to load it below, tweak, then post it to the board.</p>
   <div class="chiprow" id="templates"></div>
 </div>
 
 <div class="card">
-  <h2 id="form-title">Create a chore</h2>
+  <h2 id="form-title">create::chore;</h2>
   <form id="chore-form">
     <input type="hidden" id="template_key" />
     <input type="hidden" id="creator_id" value="{% if user %}{{ user.DiscordId }}{% endif %}" />
 
-    <div id="creator-box" style="margin:0 0 14px;padding:8px 12px;background:#151d2a;border-radius:8px;border:1px solid #29344d;font-size:.85rem">
-      <span>👤 Creating as: <strong id="creator-name-display" style="color:#50fa7b">{% if user %}{{ user.Name }}{% else %}Current user{% endif %}</strong></span>
-      <div id="creator-picker-wrap" style="margin-top:6px" {% if user %}hidden{% endif %}>
-        <label for="creator-select" style="font-size:.82rem;margin-bottom:3px;display:block">Select attendee (credited for creating/doing this):</label>
+    <div id="creator-box" style="margin:0 0 14px;padding:10px 14px;background:#15191e;border-radius:var(--radius-input);border:1px solid var(--panel-border);font-size:.85rem;font-family:var(--main-font)">
+      <span>👤 creating_as:: <strong id="creator-name-display" class="secondary-color">{% if user %}{{ user.Name }}{% else %}current user{% endif %}</strong></span>
+      <div id="creator-picker-wrap" style="margin-top:8px" {% if user %}hidden{% endif %}>
+        <label for="creator-select" style="font-size:.82rem;margin-bottom:4px;display:block">select attendee (credited for creating/doing this):</label>
         <select id="creator-select" style="font-size:.85rem">
-          <option value="">-- Choose attendee --</option>
+          <option value="">-- choose attendee --</option>
         </select>
       </div>
     </div>
 
-    <div class="self-reported-box" style="margin:0 0 14px;padding:12px 14px;background:#151d2a;border-radius:10px;border:1px solid #38425f">
+    <div class="self-reported-box" style="margin:0 0 14px;padding:12px 14px;background:#15191e;border-radius:var(--radius-input);border:1px solid var(--panel-border)">
       <label style="display:flex;align-items:center;gap:10px;margin:0;cursor:pointer;font-weight:700">
         <input type="checkbox" id="self_reported" style="width:auto;margin:0;accent-color:var(--accent)" />
-        <span>⚡ Already completed (Self-reported by me)</span>
+        <span>⚡ self_reported::already_completed;</span>
       </label>
-      <p class="muted" style="margin:4px 0 0 28px;font-size:.82rem">Mark as done immediately upon posting. Estimated time will be logged to your work statistics.</p>
+      <p class="muted" style="margin:4px 0 0 28px;font-size:.82rem">mark as done immediately upon posting. estimated time will be logged to your work statistics.</p>
     </div>
 
-    <label for="name">Chore name</label>
-    <input id="name" required placeholder="e.g. Cooking dinner" />
+    <label for="name">chore::name;</label>
+    <input id="name" required placeholder="e.g. cooking dinner" />
 
     <div class="grid2">
       <div id="workers-wrap">
-        <label for="workers">Workers needed</label>
+        <label for="workers">workers_needed::</label>
         <input id="workers" type="number" min="1" max="20" value="1" />
       </div>
       <div>
-        <label for="time">Estimated time (min)</label>
+        <label for="time">estimated_time::(min)</label>
         <input id="time" type="number" min="1" max="1000" value="15" />
       </div>
     </div>
 
     <div class="grid2" id="assignee-delay-wrap">
       <div>
-        <label for="assignee">Assign directly to (optional)</label>
+        <label for="assignee">assign_directly::(optional)</label>
         <select id="assignee">
-          <option value="">Open (anyone can claim)</option>
+          <option value="">open (anyone can claim)</option>
         </select>
       </div>
       <div id="delay-wrap">
-        <label for="delay_sel">Delay publishing</label>
+        <label for="delay_sel">delay_publishing::</label>
         <select id="delay_sel">
-          <option value="0">Post immediately</option>
-          <option value="15">In 15 minutes</option>
-          <option value="30">In 30 minutes</option>
-          <option value="60">In 1 hour</option>
-          <option value="120">In 2 hours</option>
-          <option value="custom">Custom minutes…</option>
+          <option value="0">post immediately</option>
+          <option value="15">in 15 minutes</option>
+          <option value="30">in 30 minutes</option>
+          <option value="60">in 1 hour</option>
+          <option value="120">in 2 hours</option>
+          <option value="custom">custom minutes…</option>
         </select>
-        <input id="delay_custom" type="number" min="1" max="10000" placeholder="Custom minutes" style="margin-top:6px" hidden />
+        <input id="delay_custom" type="number" min="1" max="10000" placeholder="custom minutes" style="margin-top:6px" hidden />
       </div>
     </div>
 
     <div class="grid2" id="timeout-headcount-wrap">
       <div>
-        <label for="timeout">Reopen if unclaimed (min)</label>
+        <label for="timeout">reopen_if_unclaimed::(min)</label>
         <input id="timeout" type="number" min="1" max="1000" value="15" />
       </div>
       <div id="headcount-wrap" hidden>
-        <label for="headcount">People eating (incl. kids)</label>
+        <label for="headcount">people_eating::(incl. kids)</label>
         <input id="headcount" type="number" min="0" max="50" value="20" />
       </div>
     </div>
 
     <div id="skills-wrap">
-      <label>Required skills</label>
+      <label>required_skills::</label>
       <div class="chiprow" id="skills"></div>
     </div>
 
     <div class="grid2" id="deadline-urgency-wrap">
       <div>
-        <label for="deadline">Deadline (optional)</label>
+        <label for="deadline">deadline::(optional)</label>
         <input id="deadline" type="datetime-local" />
       </div>
       <div>
-        <label for="spiciness">Urgency: <span id="spiciness-val">not urgent</span></label>
+        <label for="spiciness">urgency:: <span id="spiciness-val">not urgent</span></label>
         <input id="spiciness" type="range" min="0" max="3" step="1" value="0" />
         <p class="muted" style="font-size:.82rem;margin:6px 0 0">🌶️ in the name flags priority — more peppers, more urgent.</p>
       </div>
     </div>
 
-    <button type="submit" id="btn-submit" style="margin-top:16px">Post chore to the board</button>
+    <button type="submit" id="btn-submit" style="margin-top:16px">post::chore; 🚀</button>
   </form>
 </div>
 
 <div class="card">
   <div class="row" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-    <h2 style="margin:0">Currently on the board</h2>
+    <h2 style="margin:0">on_the_board::active;</h2>
     <div class="chiprow" id="board-tabs" style="gap:6px">
-      <button type="button" class="chip on" id="tab-all">All (<span id="count-all">0</span>)</button>
-      <button type="button" class="chip" id="tab-active">Active (<span id="count-active">0</span>)</button>
-      <button type="button" class="chip" id="tab-scheduled">⏳ Scheduled (<span id="count-scheduled">0</span>)</button>
+      <button type="button" class="chip on" id="tab-all">all; (<span id="count-all">0</span>)</button>
+      <button type="button" class="chip" id="tab-active">active; (<span id="count-active">0</span>)</button>
+      <button type="button" class="chip" id="tab-scheduled">⏳ scheduled; (<span id="count-scheduled">0</span>)</button>
     </div>
   </div>
   <div id="current"></div>

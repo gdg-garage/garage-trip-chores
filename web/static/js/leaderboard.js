@@ -77,7 +77,7 @@ function render() {
         : el("span", { class: hasEffort ? "" : "muted" }, "#" + rank));
 
     const active = r.assigned_count
-      ? el("span", { class: "badge suggest", style: "margin-left:8px" }, `${r.assigned_count} in progress`)
+      ? el("span", { class: "badge suggest", style: "margin-left:8px" }, `${r.assigned_count} in_progress;`)
       : null;
 
     // Effort bar — the purple gradient motif, scaled to the leader. An empty

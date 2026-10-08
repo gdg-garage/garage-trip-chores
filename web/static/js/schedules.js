@@ -346,22 +346,21 @@ function renderScheduleCard(s) {
     style: "display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;margin-top:12px;padding-top:10px;border-top:1px solid #28334a"
   },
     el("button", {
-      class: "primary small",
-      style: "background:linear-gradient(135deg,#3b82f6,#2563eb);border:none",
+      class: "blue small",
       onclick: () => triggerNow(s)
-    }, "⚡ Run now"),
+    }, "⚡ run::now;"),
     el("button", {
       class: "secondary small",
       onclick: () => toggleActive(s)
-    }, s.enabled ? "⏸️ Pause" : "▶️ Resume"),
+    }, s.enabled ? "⏸️ pause;" : "▶️ resume;"),
     el("button", {
       class: "secondary small",
       onclick: () => editSchedule(s)
-    }, "✏️ Edit"),
+    }, "✏️ edit;"),
     el("button", {
       class: "danger small",
       onclick: () => deleteSchedule(s)
-    }, "Delete")
+    }, "delete;")
   );
 
   card.appendChild(headerRow);
@@ -392,7 +391,7 @@ function formatTimestamp(isoStr) {
 
 function editSchedule(s) {
   document.getElementById("edit-id").value = s.id;
-  document.getElementById("form-title").textContent = "Edit scheduled task: " + s.name;
+  document.getElementById("form-title").textContent = "edit::scheduled_task; " + s.name;
   document.getElementById("name").value = s.name;
   document.getElementById("description").value = s.description || "";
   document.getElementById("cron_expr").value = s.cron_expr;
@@ -431,7 +430,7 @@ function editSchedule(s) {
     creatorSel.value = s.creator_id;
   }
 
-  document.getElementById("btn-submit").textContent = "Update scheduled task";
+  document.getElementById("btn-submit").textContent = "update::schedule; ⏰";
   document.getElementById("cancel-edit").hidden = false;
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -440,8 +439,8 @@ function resetForm() {
   document.getElementById("schedule-form").reset();
   document.getElementById("edit-id").value = "";
   document.getElementById("template_key").value = "";
-  document.getElementById("form-title").textContent = "Add a scheduled task";
-  document.getElementById("btn-submit").textContent = "Save scheduled task";
+  document.getElementById("form-title").textContent = "add::scheduled_task;";
+  document.getElementById("btn-submit").textContent = "save::schedule; ⏰";
   document.getElementById("cancel-edit").hidden = true;
   document.getElementById("cron_expr").value = "0 9 * * *";
   document.getElementById("cron-preset").value = "0 9 * * *";

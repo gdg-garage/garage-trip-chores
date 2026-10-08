@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% block title %}Chore — Garage Trip{% endblock %}
+{% block title %}chore::details; 🧹 — garage::trip{% endblock %}
 {% block content %}
-<p style="margin:0 0 6px"><a href="/feed">← Back to chores</a></p>
-<div id="detail"><p class="muted">Loading…</p></div>
+<p style="margin:0 0 6px"><a href="/feed">← /chores</a></p>
+<div id="detail"><p class="muted">loading…</p></div>
 
 <div class="card">
-  <h2>Who should take this?</h2>
-  <p class="muted">Ranked by lowest workload. People who lack a required skill are greyed out. The top 3 (⭐) are notified.</p>
+  <h2>who_should::take_this;</h2>
+  <p class="muted">ranked by lowest workload. people who lack a required skill are greyed out. top 3 (⭐) are notified.</p>
   <ul class="leader" id="suggestions"></ul>
 </div>
 <script>window.TASK_ID = {{ task_id }};</script>

@@ -1,22 +1,22 @@
 {% extends "base.html" %}
-{% block title %}Leaderboard — Garage Trip{% endblock %}
+{% block title %}chores::leaderboard; 🧹 — garage::trip{% endblock %}
 {% block content %}
-<h1 class="lb-title">Leaderboard</h1>
-<p class="muted">Who's pulling their weight. Click a name to see their chores. Tap a column arrow to re-sort.</p>
+<h1 class="lb-title">chores::leaderboard; 🧹</h1>
+<p class="muted">who's pulling their weight. click a name to see their chores. tap a column arrow to re-sort.</p>
 
 <div class="card" style="padding:0;overflow:hidden">
   <table class="lb">
     <thead>
       <tr>
         <th class="rank-col">#</th>
-        <th data-sort="name" class="sortable">Name <span class="arrow"></span></th>
-        <th data-sort="worked_count" class="sortable num">Chores done <span class="arrow"></span></th>
-        <th data-sort="worked_min" class="sortable num">Time spent <span class="arrow"></span></th>
+        <th data-sort="name" class="sortable">attendee::name <span class="arrow"></span></th>
+        <th data-sort="worked_count" class="sortable num">chores::done <span class="arrow"></span></th>
+        <th data-sort="worked_min" class="sortable num">time::spent <span class="arrow"></span></th>
       </tr>
     </thead>
     <tbody id="rows"></tbody>
   </table>
-  <div id="empty" class="empty" hidden>No chores done yet — be the first!</div>
+  <div id="empty" class="empty" hidden>no chores done yet — be the first! 🧹</div>
 </div>
 {% endblock %}
 {% block scripts %}
