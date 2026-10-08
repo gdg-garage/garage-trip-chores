@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Chore — Garage Trip{% endblock %}
+{% block content %}
+<p style="margin:0 0 6px"><a href="/feed">← Back to chores</a></p>
+<div id="detail"><p class="muted">Loading…</p></div>
+
+<div class="card">
+  <h2>Who should take this?</h2>
+  <p class="muted">Ranked by lowest workload. People who lack a required skill are greyed out. The top 3 (⭐) are notified.</p>
+  <ul class="leader" id="suggestions"></ul>
+</div>
+<script>window.TASK_ID = {{ task_id }};</script>
+{% endblock %}
+{% block scripts %}
+<script src="/static/js/chore.js"></script>
+{% endblock %}

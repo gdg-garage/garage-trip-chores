@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Log in — Garage Trip Chores{% endblock %}
+{% block nav %}{% endblock %}
+{% block content %}
+<div class="card" style="margin-top:40px">
+  <h1>⛰️ Welcome to <span class="logo">Garage Trip</span></h1>
+  <p class="muted">Chore duty for the trip. Log in with the Discord account you use for the trip server.</p>
+
+  <a href="/auth/discord" class="btn" style="display:block;text-align:center;background:var(--discord);margin:14px 0 6px">
+    Log in with Discord
+  </a>
+
+  <details style="margin-top:14px">
+    <summary class="muted" style="cursor:pointer;font-size:.85rem">On the TV? Tablet login</summary>
+    <form method="post" action="/auth/tablet" style="margin-top:8px">
+      <input type="password" name="password" placeholder="Tablet password" required />
+      <button type="submit" class="secondary" style="margin-top:8px">Open dashboard</button>
+    </form>
+  </details>
+</div>
+{% endblock %}

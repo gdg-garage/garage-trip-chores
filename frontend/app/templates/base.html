@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>{% block title %}Garage Trip Chores{% endblock %}</title>
+  <link rel="icon" type="image/x-icon" href="/static/img/favicon.ico" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&display=swap" />
+  <link rel="stylesheet" href="/static/css/app.css" />
+</head>
+<body class="{% block body_class %}{% endblock %}">
+  {% block nav %}
+  {# Prefer the tv. subdomain, but fall back to /dashboard on hosts that can't
+     serve a nested subdomain (e.g. *.fly.dev). #}
+  {% set _host = request.url.hostname or "" %}
+  {% set tv_href = "/dashboard" if _host.endswith(".fly.dev") else request.url.scheme ~ "://tv." ~ request.url.netloc %}
+  <nav class="topnav">
+    <a class="brand" href="/feed"><span class="logo">Garage Trip</span> Chores</a>
+    <div class="navlinks">
+      <a href="/feed" class="{{ 'on' if active=='feed' }}">Chores</a>
+      <a href="/leaderboard" class="{{ 'on' if active=='leaderboard' }}">Leaderboard</a>
+      <a href="/manage" class="{{ 'on' if active=='manage' }}">Manage</a>
+      <a href="/profile" class="{{ 'on' if active=='profile' }}">Profile</a>
+      <a href="{{ tv_href }}" class="{{ 'on' if active=='dashboard' }}">TV</a>
+    </div>
+  </nav>
+  {% endblock %}
+  <main class="{% block main_class %}wrap{% endblock %}">
+    {% block content %}{% endblock %}
+  </main>
+  <script src="/static/js/common.js"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

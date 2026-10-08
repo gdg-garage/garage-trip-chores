@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Chores — Garage Trip{% endblock %}
+{% block content %}
+<div class="row" style="display:flex;justify-content:space-between;align-items:center">
+  <h1 style="margin:0">Open chores</h1>
+  <span id="conn" class="conn down" role="status" aria-live="polite">● offline</span>
+</div>
+<p class="muted" id="greeting"></p>
+<div id="chores"></div>
+<div id="empty" class="empty" hidden>🎉 Nothing to do right now. Enjoy the mountains!</div>
+{% endblock %}
+{% block scripts %}
+<script src="/static/js/feed.js"></script>
+{% endblock %}

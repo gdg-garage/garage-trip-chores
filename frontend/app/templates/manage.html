@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Manage — Garage Trip{% endblock %}
+{% block content %}
+<h1>Chore manager</h1>
+
+<div class="card">
+  <div class="row" style="display:flex;justify-content:space-between;align-items:center">
+    <h2 style="margin:0">Quick-assign from a template</h2>
+    <a href="/templates" class="btn secondary small" title="Add, edit or delete templates">✏️ Edit templates</a>
+  </div>
+  <p class="muted">Tap a preset to load it below, tweak, then post it to the board.</p>
+  <div class="chiprow" id="templates"></div>
+</div>
+
+<div class="card">
+  <h2 id="form-title">Create a chore</h2>
+  <form id="chore-form">
+    <input type="hidden" id="template_key" />
+    <label for="name">Chore name</label>
+    <input id="name" required placeholder="e.g. Cooking dinner" />
+
+    <div class="grid2">
+      <div>
+        <label for="workers">Workers needed</label>
+        <input id="workers" type="number" min="1" max="20" value="1" />
+      </div>
+      <div>
+        <label for="time">Estimated time (min)</label>
+        <input id="time" type="number" min="1" max="1000" value="15" />
+      </div>
+    </div>
+
+    <div class="grid2">
+      <div>
+        <label for="timeout">Reopen if unclaimed (min)</label>
+        <input id="timeout" type="number" min="1" max="1000" value="15" />
+      </div>
+      <div id="headcount-wrap" hidden>
+        <label for="headcount">People eating (incl. kids)</label>
+        <input id="headcount" type="number" min="0" max="50" value="20" />
+      </div>
+    </div>
+
+    <label>Required skills</label>
+    <div class="chiprow" id="skills"></div>
+
+    <div class="grid2">
+      <div>
+        <label for="deadline">Deadline (optional)</label>
+        <input id="deadline" type="datetime-local" />
+      </div>
+      <div>
+        <label for="spiciness">Urgency: <span id="spiciness-val">not urgent</span></label>
+        <input id="spiciness" type="range" min="0" max="3" step="1" value="0" />
+        <p class="muted" style="font-size:.82rem;margin:6px 0 0">🌶️ in the name flags priority — more peppers, more urgent.</p>
+      </div>
+    </div>
+
+    <button type="submit" style="margin-top:16px">Post chore to the board</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Currently on the board</h2>
+  <div id="current"></div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="/static/js/manage.js"></script>
+{% endblock %}

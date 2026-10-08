@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Templates — Garage Trip{% endblock %}
+{% block content %}
+<p style="margin:0 0 6px"><a href="/manage">← Back to manage</a></p>
+<h1>Chore templates</h1>
+<p class="muted">Presets that show up as quick-assign buttons on the Manage page.</p>
+
+<div class="card">
+  <h2 id="form-title">Add a template</h2>
+  <form id="tpl-form">
+    <input type="hidden" id="edit-key" />
+    <label for="name">Name</label>
+    <input id="name" required placeholder="e.g. Sauna heat-up" />
+
+    <div class="grid2">
+      <div>
+        <label for="workers">Workers needed</label>
+        <input id="workers" type="number" min="1" max="20" value="1" />
+      </div>
+      <div>
+        <label for="time">Base estimated time (min)</label>
+        <input id="time" type="number" min="1" max="1000" value="15" />
+      </div>
+    </div>
+
+    <label>Required skills</label>
+    <div class="chiprow" id="skills"></div>
+
+    <div class="grid2">
+      <div>
+        <label for="timeout">Claim timeout (min)</label>
+        <input id="timeout" type="number" min="1" max="1000" value="15" />
+      </div>
+      <div>
+        <label>Scales with head-count?</label>
+        <div class="chiprow"><button type="button" class="chip" id="scales" aria-pressed="false">🍽️ Grows per person</button></div>
+      </div>
+    </div>
+
+    <div id="perperson-wrap" hidden>
+      <label for="perperson">Extra minutes per person</label>
+      <input id="perperson" type="number" min="0" max="120" value="2" />
+    </div>
+
+    <div class="row" style="gap:8px;margin-top:16px">
+      <button type="submit">Save template</button>
+      <button type="button" id="cancel-edit" class="ghost" hidden>Cancel edit</button>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Existing templates</h2>
+  <div id="list"></div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="/static/js/templates.js"></script>
+{% endblock %}

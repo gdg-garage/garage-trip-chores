@@ -1,0 +1,12 @@
+.venv/
+.git/
+.idea/
+__pycache__/
+*.pyc
+*.db
+*.db-wal
+*.db-shm
+.env
+README.md
+DEPLOY.md
+fly.toml
