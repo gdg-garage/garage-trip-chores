@@ -69,15 +69,15 @@ function renderDetail(c) {
   const buttons = [];
   if (!isDone) {
     const btn = iClaimed
-      ? el("button", { class: "secondary", onclick: unclaim }, "✓ on_it::tap_to_drop;")
-      : el("button", { onclick: (e) => claim(e.target) }, "claim::it; 🧹");
-    const done = el("button", { class: "ghost", onclick: markDone }, "mark::done;");
-    const auto = c.fully_claimed ? null : el("button", { class: "secondary", onclick: (e) => autoAssign(e.target) }, "🎯 auto::assign_best_fit;");
+      ? el("button", { class: "secondary", onclick: unclaim }, "✓ on_it::tap_to_drop")
+      : el("button", { onclick: (e) => claim(e.target) }, "claim::it 🧹");
+    const done = el("button", { class: "ghost", onclick: markDone }, "mark::done");
+    const auto = c.fully_claimed ? null : el("button", { class: "secondary", onclick: (e) => autoAssign(e.target) }, "🎯 auto::assign_best_fit");
     buttons.push(btn, auto, done);
   } else {
     // Completed chore actions
     if (myUid && !hasWorked) {
-      buttons.push(el("button", { class: "secondary", onclick: iHelped }, "🤝 i::helped_on_chore;"));
+      buttons.push(el("button", { class: "secondary", onclick: iHelped }, "🤝 i::helped_on_chore"));
     }
   }
 

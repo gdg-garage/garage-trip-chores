@@ -320,7 +320,7 @@ async function loadCurrent() {
           badges,
           el("p", { class: "muted", style: "margin:.2em 0;font-size:.85rem;font-family:var(--main-font)" },
             c.claimers?.length ? "on_it:: " + c.claimers.map((p) => p.name).join(", ") : "no workers assigned yet")),
-        el("button", { class: "danger small", onclick: () => del(c.id) }, "delete;")));
+        el("button", { class: "danger small", onclick: () => del(c.id) }, "delete")));
     box.appendChild(row);
   });
 }

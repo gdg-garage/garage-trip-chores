@@ -44,8 +44,8 @@ async function load() {
           el("h3", { style: "margin:0" }, t.name),
           el("p", { class: "muted", style: "margin:.2em 0;font-family:var(--main-font);font-size:.85rem" }, details)),
         el("div", { class: "row", style: "gap:6px" },
-          el("button", { class: "secondary small", onclick: () => edit(t) }, "✏️ edit;"),
-          el("button", { class: "danger small", onclick: () => del(t) }, "delete;")))));
+          el("button", { class: "secondary small", onclick: () => edit(t) }, "✏️ edit"),
+          el("button", { class: "danger small", onclick: () => del(t) }, "delete")))));
   });
 }
 

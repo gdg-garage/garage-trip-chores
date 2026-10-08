@@ -348,19 +348,19 @@ function renderScheduleCard(s) {
     el("button", {
       class: "blue small",
       onclick: () => triggerNow(s)
-    }, "⚡ run::now;"),
+    }, "⚡ run::now"),
     el("button", {
       class: "secondary small",
       onclick: () => toggleActive(s)
-    }, s.enabled ? "⏸️ pause;" : "▶️ resume;"),
+    }, s.enabled ? "⏸️ pause" : "▶️ resume"),
     el("button", {
       class: "secondary small",
       onclick: () => editSchedule(s)
-    }, "✏️ edit;"),
+    }, "✏️ edit"),
     el("button", {
       class: "danger small",
       onclick: () => deleteSchedule(s)
-    }, "delete;")
+    }, "delete")
   );
 
   card.appendChild(headerRow);
@@ -430,7 +430,7 @@ function editSchedule(s) {
     creatorSel.value = s.creator_id;
   }
 
-  document.getElementById("btn-submit").textContent = "update::schedule; ⏰";
+  document.getElementById("btn-submit").textContent = "update::schedule ⏰";
   document.getElementById("cancel-edit").hidden = false;
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -440,7 +440,7 @@ function resetForm() {
   document.getElementById("edit-id").value = "";
   document.getElementById("template_key").value = "";
   document.getElementById("form-title").textContent = "add::scheduled_task;";
-  document.getElementById("btn-submit").textContent = "save::schedule; ⏰";
+  document.getElementById("btn-submit").textContent = "save::schedule ⏰";
   document.getElementById("cancel-edit").hidden = true;
   document.getElementById("cron_expr").value = "0 9 * * *";
   document.getElementById("cron-preset").value = "0 9 * * *";

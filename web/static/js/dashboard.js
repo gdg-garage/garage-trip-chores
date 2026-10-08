@@ -22,7 +22,7 @@ function tickClock() {
 
 function toggleMute() {
   muted = !muted;
-  document.getElementById("mute").textContent = muted ? "🔇 sound::muted;" : "🔊 sound::on;";
+  document.getElementById("mute").textContent = muted ? "🔇 sound::muted" : "🔊 sound::on";
   if (!muted) ensureAudio(); // unlock audio on user gesture
 }
 

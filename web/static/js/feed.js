@@ -133,7 +133,7 @@ function assignRow(c) {
   const autoBtn = el("button", {
     class: "secondary small",
     onclick: (e) => autoAssignFeed(c.id, e.currentTarget),
-  }, "🎯 auto::assign;");
+  }, "🎯 auto::assign");
 
   // Person chips — only when we have names from ranked data or user cache
   const namedChips = topPeople
@@ -188,10 +188,10 @@ function choreCard(c) {
     : null;
 
   const btn = iClaimed
-    ? el("button", { class: "secondary", onclick: () => unclaim(c.id) }, "✓ on_it::tap_to_drop;")
-    : el("button", { onclick: (e) => claim(c.id, e.currentTarget) }, "claim::it; 🧹");
+    ? el("button", { class: "secondary", onclick: () => unclaim(c.id) }, "✓ on_it::tap_to_drop")
+    : el("button", { onclick: (e) => claim(c.id, e.currentTarget) }, "claim::it 🧹");
 
-  const done = el("button", { class: "ghost small", onclick: (e) => markDone(c.id, e.currentTarget) }, "mark::done;");
+  const done = el("button", { class: "ghost small", onclick: (e) => markDone(c.id, e.currentTarget) }, "mark::done");
 
   const assign = assignRow(c);
 
