@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -473,6 +474,106 @@ func TestChoreCreatorIDHandling(t *testing.T) {
 	}
 	if meResp.DiscordId != authedUser.DiscordId || meResp.Name != authedUser.Name || meResp.Profile.Name != authedUser.Name {
 		t.Fatalf("unexpected /api/me response: %+v", meResp)
+	}
+}
+
+func TestChoreActionsWebAPI(t *testing.T) {
+	_, router := setupTestWeb(t)
+
+	// Create chore
+	choreIn := ChoreCreateIn{
+		Name:             "Scrub pots",
+		EstimatedTimeMin: 30,
+		NecessaryWorkers: 1,
+	}
+	body, _ := json.Marshal(choreIn)
+	req := httptest.NewRequest(http.MethodPost, "/api/chores", bytes.NewReader(body))
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("failed to create chore: %d", rr.Code)
+	}
+	var chore ChoreView
+	json.NewDecoder(rr.Body).Decode(&chore)
+
+	userA := &UserInfo{DiscordId: "user_a", Name: "Alice"}
+	userB := &UserInfo{DiscordId: "user_b", Name: "Bob"}
+
+	// 1. Claim chore by userA
+	req = httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/chores/%d/claim", chore.ID), nil)
+	req = req.WithContext(context.WithValue(req.Context(), UserContextKey, userA))
+	rr = httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("claim failed: %d - %s", rr.Code, rr.Body.String())
+	}
+	var claimResp struct {
+		Ack   string    `json:"ack"`
+		Chore ChoreView `json:"chore"`
+	}
+	json.NewDecoder(rr.Body).Decode(&claimResp)
+	if claimResp.Ack == "" || len(claimResp.Chore.Claimers) != 1 || claimResp.Chore.Claimers[0].DiscordId != userA.DiscordId {
+		t.Fatalf("unexpected claim response: %+v", claimResp)
+	}
+
+	// 2. Unclaim chore by userA
+	req = httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/chores/%d/unclaim", chore.ID), nil)
+	req = req.WithContext(context.WithValue(req.Context(), UserContextKey, userA))
+	rr = httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("unclaim failed: %d - %s", rr.Code, rr.Body.String())
+	}
+	var unclaimResp struct {
+		Ack   string    `json:"ack"`
+		Chore ChoreView `json:"chore"`
+	}
+	json.NewDecoder(rr.Body).Decode(&unclaimResp)
+	if len(unclaimResp.Chore.Claimers) != 0 {
+		t.Fatalf("expected 0 claimers after unclaim, got %d", len(unclaimResp.Chore.Claimers))
+	}
+
+	// 3. Assign chore to userB
+	assignBody, _ := json.Marshal(AssignIn{DiscordId: userB.DiscordId})
+	req = httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/chores/%d/assign", chore.ID), bytes.NewReader(assignBody))
+	rr = httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("assign failed: %d - %s", rr.Code, rr.Body.String())
+	}
+	var assignResp struct {
+		Ack   string    `json:"ack"`
+		Chore ChoreView `json:"chore"`
+	}
+	json.NewDecoder(rr.Body).Decode(&assignResp)
+	if len(assignResp.Chore.Claimers) != 1 || assignResp.Chore.Claimers[0].DiscordId != userB.DiscordId {
+		t.Fatalf("unexpected assign response: %+v", assignResp)
+	}
+
+	// 4. Report time spent
+	timeBody, _ := json.Marshal(ChoreTimeIn{DiscordId: userB.DiscordId, TimeSpentMin: 45})
+	req = httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/chores/%d/time", chore.ID), bytes.NewReader(timeBody))
+	rr = httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("report time failed: %d - %s", rr.Code, rr.Body.String())
+	}
+	var timeResp struct {
+		Ack   string    `json:"ack"`
+		Chore ChoreView `json:"chore"`
+	}
+	json.NewDecoder(rr.Body).Decode(&timeResp)
+	if timeResp.Chore.WorkedMinTotal != 45 {
+		t.Fatalf("expected 45 worked min total, got %d", timeResp.Chore.WorkedMinTotal)
+	}
+
+	// 5. Unassign userB
+	unassignBody, _ := json.Marshal(AssignIn{DiscordId: userB.DiscordId})
+	req = httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/chores/%d/unassign", chore.ID), bytes.NewReader(unassignBody))
+	rr = httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("unassign failed: %d - %s", rr.Code, rr.Body.String())
 	}
 }
 

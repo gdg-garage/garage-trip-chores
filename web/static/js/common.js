@@ -140,3 +140,44 @@ function announce(msg) {
 }
 
 const fmtMin = (m) => (m == null ? "" : m >= 60 ? `${Math.round(m / 6) / 10} h` : `${m} min`);
+
+// Mobile navigation menu toggle
+document.addEventListener("DOMContentLoaded", () => {
+  const toggle = document.getElementById("nav-toggle");
+  const navlinks = document.getElementById("navlinks");
+  if (!toggle || !navlinks) return;
+
+  function closeMenu() {
+    navlinks.classList.remove("open");
+    toggle.setAttribute("aria-expanded", "false");
+    toggle.textContent = "☰";
+  }
+
+  function toggleMenu() {
+    const isOpen = navlinks.classList.toggle("open");
+    toggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+    toggle.textContent = isOpen ? "✕" : "☰";
+  }
+
+  toggle.addEventListener("click", (e) => {
+    e.stopPropagation();
+    toggleMenu();
+  });
+
+  navlinks.querySelectorAll("a").forEach((a) => {
+    a.addEventListener("click", () => closeMenu());
+  });
+
+  document.addEventListener("click", (e) => {
+    if (navlinks.classList.contains("open") && !navlinks.contains(e.target) && e.target !== toggle) {
+      closeMenu();
+    }
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && navlinks.classList.contains("open")) {
+      closeMenu();
+    }
+  });
+});
+

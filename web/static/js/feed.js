@@ -1,21 +1,59 @@
 // Chore feed: live list, claim with funny ack, urgent + suggested highlighting.
-const state = { chores: new Map(), suggestions: new Map(), myUid: null, myName: null };
+const state = { chores: new Map(), suggestions: new Map(), usersMap: new Map(), myUid: null, myName: null };
 // suggestions Map stores full objects: { top: [discord_id,…], ranked: [{discord_id, name,…}] }
+const _pendingSuggestions = new Set();
 
 async function init() {
   const me = await API.get("/api/me").catch(() => null);
-  if (!me || (!me.discord_id && !me.name && !me.profile)) { location.href = "/"; return; }
-  const profile = me.profile || me;
-  state.myUid = me.discord_id;
-  state.myName = profile.name || me.name;
   const greeting = document.getElementById("greeting");
-  if (greeting) greeting.textContent = `hi ${state.myName} — grab a chore when you can 💪 🧹`;
+  if (me && (me.discord_id || me.name || me.profile)) {
+    const profile = me.profile || me;
+    state.myUid = me.discord_id;
+    state.myName = profile.name || me.name;
+    if (greeting) greeting.textContent = `hi ${state.myName} — grab a chore when you can 💪 🧹`;
+  } else {
+    state.myUid = null;
+    state.myName = null;
+    if (greeting) greeting.textContent = "welcome — grab a chore when you can 💪 🧹";
+  }
+
+  // Load chores and users immediately via HTTP so the list renders even if WS is slow or disconnected
+  await Promise.all([loadChores(), loadUsers()]);
 
   connectWS(onMessage, (up) => {
     const c = document.getElementById("conn");
-    c.className = "conn " + (up ? "up" : "down");
-    c.textContent = up ? "● live" : "● offline";
+    if (c) {
+      c.className = "conn " + (up ? "up" : "down");
+      c.textContent = up ? "● live" : "● offline";
+    }
   });
+}
+
+async function loadChores() {
+  try {
+    const res = await API.get("/api/chores?active=true");
+    const list = Array.isArray(res) ? res : (res?.chores || []);
+    list.forEach((c) => {
+      if (c && c.id != null && c.active !== false) state.chores.set(c.id, c);
+    });
+    render();
+  } catch (err) {
+    console.warn("Failed to load initial chores via HTTP", err);
+  }
+}
+
+async function loadUsers() {
+  try {
+    const res = await API.get("/api/users");
+    const list = Array.isArray(res) ? res : (res?.users || []);
+    list.forEach((u) => {
+      if (u.discord_id) {
+        state.usersMap.set(u.discord_id, u.name || u.handle || u.discord_id);
+      }
+    });
+  } catch (err) {
+    console.debug("Failed to fetch users", err);
+  }
 }
 
 function _storeSuggestions(id, raw) {
@@ -79,12 +117,12 @@ function _topSuggestions(choreId) {
   // sug may be {top, ranked} (from task events) or just a top array (snapshot)
   const top = Array.isArray(sug) ? sug : (sug?.top || []);
   const ranked = sug?.ranked || [];
-  // Build name-lookup from ranked when available
+  // Build name-lookup from ranked when available, fallback to cached users
   const byId = Object.fromEntries(ranked.map((p) => [p.discord_id, p.name]));
   return top
     .filter((id) => id !== state.myUid)          // don't suggest yourself
     .slice(0, 3)
-    .map((id) => ({ discord_id: id, name: byId[id] || null }));
+    .map((id) => ({ discord_id: id, name: byId[id] || state.usersMap.get(id) || null }));
 }
 
 function assignRow(c) {
@@ -97,7 +135,7 @@ function assignRow(c) {
     onclick: (e) => autoAssignFeed(c.id, e.currentTarget),
   }, "🎯 auto::assign;");
 
-  // Person chips — only when we have names from ranked data
+  // Person chips — only when we have names from ranked data or user cache
   const namedChips = topPeople
     .filter((p) => p.name)                         // skip if name not yet resolved
     .map((p) => el("button", {
@@ -106,9 +144,9 @@ function assignRow(c) {
       onclick: (e) => assignToFeed(c.id, p.discord_id, p.name, e.currentTarget),
     }, p.name.split(" ")[0].slice(0, 12)));         // first name, max 12 chars
 
-  if (namedChips.length === 0 && topPeople.length > 0) {
-    // Have top ids but no names yet (snapshot-only state) — show only auto-assign
-    // and fetch ranked data to hydrate chips on next broadcast
+  if (namedChips.length === 0 && topPeople.length > 0 && !_pendingSuggestions.has(c.id)) {
+    // Have top ids but no names yet — show only auto-assign
+    // and fetch ranked data once to hydrate chips
     _fetchSuggestions(c.id);
   }
 
@@ -117,13 +155,15 @@ function assignRow(c) {
 }
 
 async function _fetchSuggestions(choreId) {
-  // Lazily fetch ranked suggestions when only top-ids are in state (snapshot case).
-  // The result updates state so the next render shows named chips.
+  if (_pendingSuggestions.has(choreId)) return;
+  _pendingSuggestions.add(choreId);
   try {
     const sug = await API.get(`/api/chores/${choreId}/suggestions`);
     state.suggestions.set(choreId, sug);
     render();
-  } catch {}
+  } catch (err) {
+    console.debug("Suggestions fetch failed for chore", choreId, err);
+  }
 }
 
 function choreCard(c) {
@@ -166,34 +206,51 @@ function choreCard(c) {
 }
 
 async function claim(id, btn) {
+  if (!state.myUid) {
+    showToast("Please log in with Discord to claim chores.", { error: true });
+    return;
+  }
   btn.disabled = true;
   try {
-    const { ack } = await API.post(`/api/chores/${id}/claim`);
-    showToast(ack);
+    const res = await API.post(`/api/chores/${id}/claim`);
+    showToast(res?.ack || "You're on it! 💪 🧹");
   } catch (e) { showError(e); btn.disabled = false; }
 }
+
 async function unclaim(id) {
+  if (!state.myUid) {
+    showToast("Please log in with Discord.", { error: true });
+    return;
+  }
   if (!confirm("Drop this chore? It'll go back on the board for someone else.")) return;
-  try { await API.post(`/api/chores/${id}/unclaim`); } catch (e) { showError(e); }
+  try {
+    const res = await API.post(`/api/chores/${id}/unclaim`);
+    showToast(res?.ack || "Chore dropped. Back on the board! 🧹");
+  } catch (e) { showError(e); }
 }
+
 async function markDone(id, btn) {
   if (!confirm("Mark this chore done? This can't be undone.")) return;
   if (btn) btn.disabled = true;
-  try { await API.post(`/api/chores/${id}/done`); showToast("Nice — chore done! 🎊"); }
-  catch (e) { showError(e); if (btn) btn.disabled = false; }
+  try {
+    await API.post(`/api/chores/${id}/done`);
+    showToast("Nice — chore done! 🎊");
+  } catch (e) { showError(e); if (btn) btn.disabled = false; }
 }
+
 async function autoAssignFeed(id, btn) {
   btn.disabled = true;
   try {
     const r = await API.post(`/api/chores/${id}/assign`, {});
-    showToast(r.ack);
+    showToast(r.ack || "Chore assigned ✓");
   } catch (e) { showError(e); btn.disabled = false; }
 }
+
 async function assignToFeed(id, discord_id, name, btn) {
   btn.disabled = true;
   try {
     const r = await API.post(`/api/chores/${id}/assign`, { discord_id });
-    showToast(r.ack);
+    showToast(r.ack || `Assigned to ${name} ✓`);
   } catch (e) { showError(e); btn.disabled = false; }
 }
 

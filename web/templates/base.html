@@ -13,8 +13,14 @@
 <body class="{% block body_class %}{% endblock %}">
   {% block nav %}
   <nav class="topnav">
-    <a class="brand logo" href="/feed">garage::<span class="secondary-color">trip</span>::<span class="secondary-color">chores</span>::🧹</a>
-    <div class="navlinks">
+    <div class="nav-brand-bar">
+      <a class="brand logo" href="/feed" title="garage::trip::chores">
+        <span class="brand-full">garage::<span class="secondary-color">trip</span>::<span class="secondary-color">chores</span>::🧹</span>
+        <span class="brand-short">g::<span class="secondary-color">chores</span>::🧹</span>
+      </a>
+      <button type="button" class="nav-toggle" id="nav-toggle" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+    </div>
+    <div class="navlinks" id="navlinks">
       <a href="/feed" class="{% if active == 'feed' %}on{% endif %}">/chores</a>
       <a href="/leaderboard" class="{% if active == 'leaderboard' %}on{% endif %}">/leaderboard</a>
       <a href="/manage" class="{% if active == 'manage' %}on{% endif %}">/manage</a>

@@ -3,6 +3,7 @@ package web
 import (
 	"encoding/json"
 	"fmt"
+	"math/rand/v2"
 	"net/http"
 	"sort"
 	"strconv"
@@ -13,6 +14,32 @@ import (
 	"github.com/gdg-garage/garage-trip-chores/storage"
 	"github.com/gdg-garage/garage-trip-chores/ui"
 )
+
+var funnyAckMessages = []string{
+	"🦸 Chore hero incoming! Thanks, %s!",
+	"🎉 %s said yes to the mess!",
+	"🧹 %s is on it like a bonnet!",
+	"💪 Absolute legend, %s. The dishes tremble.",
+	"🚀 %s launched into action!",
+	"🏆 Garage Trip MVP: %s!",
+	"🔥 %s grabbed it before anyone else could blink.",
+	"🧽 Scrub-a-dub, %s to the rescue!",
+	"🥇 %s just earned some serious chore cred.",
+	"😎 Cool, calm, and cleaning: that's %s.",
+	"🎯 %s claimed it. Bullseye.",
+	"🙌 The mountain thanks you, %s!",
+	"⚡ Lightning-fast %s strikes again.",
+	"🐝 Busy as a bee, %s buzzes off to work.",
+	"🎈 Party's over, chore's on — go %s!",
+}
+
+func getFunnyAck(name string) string {
+	if name == "" {
+		name = "friend"
+	}
+	idx := rand.IntN(len(funnyAckMessages))
+	return fmt.Sprintf(funnyAckMessages[idx], name)
+}
 
 func writeJSON(rw http.ResponseWriter, status int, data any) {
 	rw.Header().Set("Content-Type", "application/json")
@@ -782,12 +809,276 @@ func (w *Web) handleClaimChore(rw http.ResponseWriter, r *http.Request) {
 	assignments, _ := w.storage.GetChoreAssignments(uint(id))
 	view := w.BuildChoreView(chore, worklogs, assignments, nil, dir)
 
+	sug := w.SuggestionsFor(chore)
 	w.BroadcastWS(map[string]any{
-		"type":  "task_claimed",
+		"type":        "task_claimed",
+		"chore":       view,
+		"by":          u.DiscordId,
+		"suggestions": sug.Top,
+	})
+
+	name := u.Name
+	if name == "" {
+		name = u.Handle
+	}
+	ack := getFunnyAck(name)
+
+	writeJSON(rw, http.StatusOK, map[string]any{
+		"ack":   ack,
+		"chore": view,
+	})
+}
+
+func (w *Web) handleUnclaimChore(rw http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		writeError(rw, http.StatusBadRequest, "Invalid chore ID")
+		return
+	}
+
+	u := w.GetCurrentUser(r)
+	if u == nil {
+		writeError(rw, http.StatusUnauthorized, "Not logged in")
+		return
+	}
+
+	chore, err := w.storage.GetChore(uint(id))
+	if err != nil {
+		writeError(rw, http.StatusNotFound, "Chore not found")
+		return
+	}
+
+	if w.ui != nil {
+		_, _ = w.ui.RejectChore(uint(id), u.DiscordId)
+	} else {
+		ass, aErr := w.storage.GetChoreAssignment(uint(id), u.DiscordId)
+		if aErr == nil {
+			ass.Refuse()
+			_, _ = w.storage.SaveChoreAssignment(ass)
+		}
+	}
+
+	chore, _ = w.storage.GetChore(uint(id))
+	dir := w.BuildPersonDirectory()
+	worklogs, _ := w.storage.GetWorkLogsForChore(uint(id))
+	assignments, _ := w.storage.GetChoreAssignments(uint(id))
+	view := w.BuildChoreView(chore, worklogs, assignments, nil, dir)
+
+	sug := w.SuggestionsFor(chore)
+	w.BroadcastWS(map[string]any{
+		"type":        "task_claimed",
+		"chore":       view,
+		"by":          u.DiscordId,
+		"suggestions": sug.Top,
+	})
+
+	writeJSON(rw, http.StatusOK, map[string]any{
+		"ack":   "Dropped chore. Back on the board! 🧹",
+		"chore": view,
+	})
+}
+
+type AssignIn struct {
+	DiscordId string `json:"discord_id"`
+}
+
+func (w *Web) handleAssignChore(rw http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		writeError(rw, http.StatusBadRequest, "Invalid chore ID")
+		return
+	}
+
+	chore, err := w.storage.GetChore(uint(id))
+	if err != nil {
+		writeError(rw, http.StatusNotFound, "Chore not found")
+		return
+	}
+
+	var in AssignIn
+	_ = json.NewDecoder(r.Body).Decode(&in)
+
+	assigneeId := strings.TrimSpace(in.DiscordId)
+	if assigneeId == "" {
+		sug := w.SuggestionsFor(chore)
+		if len(sug.Top) == 0 {
+			writeError(rw, http.StatusConflict, "No eligible person available to auto-assign.")
+			return
+		}
+		assigneeId = sug.Top[0]
+	}
+
+	now := time.Now()
+	as, _ := w.storage.GetChoreAssignments(uint(id))
+	found := false
+	for _, a := range as {
+		if a.UserId == assigneeId {
+			found = true
+			a.Acked = &now
+			_, _ = w.storage.SaveChoreAssignment(a)
+			break
+		}
+	}
+	if !found {
+		newA := storage.ChoreAssignment{
+			UserId:      assigneeId,
+			ChoreId:     uint(id),
+			Created:     now,
+			Acked:       &now,
+			Volunteered: false,
+		}
+		_, _ = w.storage.SaveChoreAssignment(newA)
+	}
+
+	chore, _ = w.storage.GetChore(uint(id))
+	dir := w.BuildPersonDirectory()
+	worklogs, _ := w.storage.GetWorkLogsForChore(uint(id))
+	assignments, _ := w.storage.GetChoreAssignments(uint(id))
+	view := w.BuildChoreView(chore, worklogs, assignments, nil, dir)
+
+	name := assigneeId
+	if u, ok := dir[assigneeId]; ok && u.Name != "" {
+		name = u.Name
+	}
+
+	sug := w.SuggestionsFor(chore)
+	w.BroadcastWS(map[string]any{
+		"type":        "task_claimed",
+		"chore":       view,
+		"by":          assigneeId,
+		"suggestions": sug.Top,
+	})
+
+	writeJSON(rw, http.StatusOK, map[string]any{
+		"chore":    view,
+		"assigned": map[string]string{"discord_id": assigneeId, "name": name},
+		"ack":      fmt.Sprintf("Assigned to %s ✓", name),
+	})
+}
+
+func (w *Web) handleUnassignChore(rw http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		writeError(rw, http.StatusBadRequest, "Invalid chore ID")
+		return
+	}
+
+	var in AssignIn
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil || strings.TrimSpace(in.DiscordId) == "" {
+		writeError(rw, http.StatusBadRequest, "discord_id is required")
+		return
+	}
+	targetId := strings.TrimSpace(in.DiscordId)
+
+	if w.ui != nil {
+		_, _ = w.ui.RejectChore(uint(id), targetId)
+	} else {
+		ass, aErr := w.storage.GetChoreAssignment(uint(id), targetId)
+		if aErr == nil {
+			ass.Refuse()
+			_, _ = w.storage.SaveChoreAssignment(ass)
+		}
+	}
+
+	chore, _ := w.storage.GetChore(uint(id))
+	dir := w.BuildPersonDirectory()
+	worklogs, _ := w.storage.GetWorkLogsForChore(uint(id))
+	assignments, _ := w.storage.GetChoreAssignments(uint(id))
+	view := w.BuildChoreView(chore, worklogs, assignments, nil, dir)
+
+	name := targetId
+	if u, ok := dir[targetId]; ok && u.Name != "" {
+		name = u.Name
+	}
+
+	sug := w.SuggestionsFor(chore)
+	w.BroadcastWS(map[string]any{
+		"type":        "task_claimed",
+		"chore":       view,
+		"by":          targetId,
+		"suggestions": sug.Top,
+	})
+
+	writeJSON(rw, http.StatusOK, map[string]any{
+		"chore": view,
+		"ack":   fmt.Sprintf("Unassigned %s ✓", name),
+	})
+}
+
+type ChoreTimeIn struct {
+	DiscordId    string `json:"discord_id"`
+	TimeSpentMin uint   `json:"time_spent_min"`
+}
+
+func (w *Web) handleChoreTime(rw http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		writeError(rw, http.StatusBadRequest, "Invalid chore ID")
+		return
+	}
+
+	var in ChoreTimeIn
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		writeError(rw, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+
+	targetUID := strings.TrimSpace(in.DiscordId)
+	if targetUID == "" {
+		u := w.GetCurrentUser(r)
+		if u == nil {
+			writeError(rw, http.StatusBadRequest, "discord_id required")
+			return
+		}
+		targetUID = u.DiscordId
+	}
+
+	logs, _ := w.storage.GetWorkLogsForChore(uint(id))
+	var existing *storage.WorkLog
+	for _, l := range logs {
+		if l.UserId == targetUID {
+			existing = &l
+			break
+		}
+	}
+
+	if existing != nil {
+		existing.TimeSpentMin = in.TimeSpentMin
+		_, err = w.storage.SaveWorkLog(*existing)
+	} else {
+		newLog := storage.WorkLog{
+			UserId:       targetUID,
+			ChoreId:      uint(id),
+			TimeSpentMin: in.TimeSpentMin,
+			SelfReported: true,
+		}
+		_, err = w.storage.SaveWorkLog(newLog)
+	}
+
+	if err != nil {
+		writeError(rw, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	chore, _ := w.storage.GetChore(uint(id))
+	dir := w.BuildPersonDirectory()
+	worklogs, _ := w.storage.GetWorkLogsForChore(uint(id))
+	assignments, _ := w.storage.GetChoreAssignments(uint(id))
+	view := w.BuildChoreView(chore, worklogs, assignments, nil, dir)
+
+	w.BroadcastWS(map[string]any{
+		"type":  "workload_updated",
 		"chore": view,
 	})
 
-	writeJSON(rw, http.StatusOK, view)
+	writeJSON(rw, http.StatusOK, map[string]any{
+		"chore": view,
+		"ack":   "Time updated ✓",
+	})
 }
 
 func (w *Web) handleDoneChore(rw http.ResponseWriter, r *http.Request) {

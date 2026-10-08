@@ -95,13 +95,13 @@ func (w *Web) handleWS(rw http.ResponseWriter, r *http.Request) {
 
 	// Send initial snapshot
 	chores, _ := w.ListChoreViews(true)
-	suggestionsMap := make(map[uint][]string)
+	suggestionsMap := make(map[uint]SuggestionsResult)
 	for _, c := range chores {
 		sug := w.SuggestionsFor(storage.Chore{
 			ID:                    c.ID,
 			NecessaryCapabilities: stringsJoin(c.NecessaryCapabilities, ","),
 		})
-		suggestionsMap[c.ID] = sug.Top
+		suggestionsMap[c.ID] = sug
 	}
 
 	snapshot := map[string]any{
