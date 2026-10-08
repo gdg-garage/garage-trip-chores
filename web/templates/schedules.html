@@ -27,25 +27,17 @@
     <label for="description">description::notes; (optional)</label>
     <input id="description" placeholder="e.g. kitchen, bar and bathroom trash cans" />
 
-    <div class="grid2">
-      <div>
-        <label for="cron-preset">frequency::preset;</label>
-        <select id="cron-preset">
-          <option value="0 9 * * *">every morning at 09:00</option>
-          <option value="0 8 * * *">every morning at 08:00</option>
-          <option value="0 13 * * *">every afternoon at 13:00</option>
-          <option value="0 17 * * *">every afternoon at 17:00</option>
-          <option value="0 20 * * *">every evening at 20:00</option>
-          <option value="0 23 * * *">every night at 23:00</option>
-          <option value="0 */2 * * *">every 2 hours</option>
-          <option value="custom">custom cron expression…</option>
-        </select>
-      </div>
-      <div>
-        <label for="cron_expr">cron::expression; (min hour dom mon dow)</label>
-        <input id="cron_expr" required value="0 9 * * *" placeholder="e.g. 0 9 * * *" />
-      </div>
+    <label for="cron_expr">cron::expression; (min hour dom mon dow)</label>
+    <div class="chiprow" style="margin-bottom:8px">
+      <span class="muted" style="align-self:center;font-size:.82rem">presets::</span>
+      <button type="button" class="chip cron-preset" data-cron="0 9 * * *">🌅 09:00</button>
+      <button type="button" class="chip cron-preset" data-cron="0 13 * * *">☀️ 13:00</button>
+      <button type="button" class="chip cron-preset" data-cron="0 20 * * *">🌙 20:00</button>
+      <button type="button" class="chip cron-preset" data-cron="0 23 * * *">🌃 23:00</button>
+      <button type="button" class="chip cron-preset" data-cron="0 */2 * * *">⏱️ every 2h</button>
+      <button type="button" class="chip cron-preset" data-cron="0 0 * * *">📅 midnight</button>
     </div>
+    <input id="cron_expr" required value="0 9 * * *" placeholder="e.g. 0 9 * * *" />
 
     <div id="cron-helper" class="muted" style="font-size:.85rem;margin:4px 0 14px;padding:8px 12px;background:#14181f;border-radius:var(--radius-input);border:1px solid var(--panel-border);font-family:var(--main-font)">
       <span>⏰ <strong id="cron-desc-preview" style="color:var(--c-white)">every day at 09:00</strong></span>

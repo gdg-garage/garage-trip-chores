@@ -129,7 +129,6 @@ type ScheduledTaskView struct {
 	Name                  string     `json:"name"`
 	Description           string     `json:"description,omitempty"`
 	CronExpr              string     `json:"cron_expr"`
-	CronDescription       string     `json:"cron_description"`
 	NecessaryWorkers      uint       `json:"necessary_workers"`
 	EstimatedTimeMin      uint       `json:"estimated_time_min"`
 	AssignmentTimeoutMin  uint       `json:"assignment_timeout_min"`

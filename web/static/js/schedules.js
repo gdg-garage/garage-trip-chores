@@ -99,22 +99,18 @@ async function init() {
     });
   }
 
-  // Preset selector
-  const presetSel = document.getElementById("cron-preset");
+  // Preset chips: clicking any preset only sets the cron_expr input value
   const cronInput = document.getElementById("cron_expr");
-  if (presetSel && cronInput) {
-    presetSel.addEventListener("change", () => {
-      if (presetSel.value !== "custom") {
-        cronInput.value = presetSel.value;
+  document.querySelectorAll(".cron-preset").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (cronInput) {
+        cronInput.value = btn.dataset.cron;
         updateCronPreview();
       }
     });
-    cronInput.addEventListener("input", () => {
-      // Check if matches any preset
-      const match = Array.from(presetSel.options).find((opt) => opt.value === cronInput.value.trim());
-      presetSel.value = match ? match.value : "custom";
-      updateCronPreview();
-    });
+  });
+  if (cronInput) {
+    cronInput.addEventListener("input", updateCronPreview);
   }
 
   // Filter tabs
@@ -176,50 +172,62 @@ function prefillFromTemplate(t) {
   showToast(`Loaded "${t.name}" settings into form`);
 }
 
-function updateCronPreview() {
-  const expr = document.getElementById("cron_expr").value.trim();
-  const preview = document.getElementById("cron-desc-preview");
-  if (!preview) return;
-
+function describeCron(expr) {
+  if (!expr) return "Cron";
+  const clean = expr.trim();
   const presets = {
-    "0 9 * * *": "Every morning at 09:00",
-    "0 8 * * *": "Every morning at 08:00",
-    "0 13 * * *": "Every afternoon at 13:00",
-    "0 17 * * *": "Every afternoon at 17:00",
-    "0 20 * * *": "Every evening at 20:00",
-    "0 23 * * *": "Every night at 23:00",
+    "0 9 * * *": "Every day at 09:00",
+    "0 8 * * *": "Every day at 08:00",
+    "0 13 * * *": "Every day at 13:00",
+    "0 17 * * *": "Every day at 17:00",
+    "0 20 * * *": "Every day at 20:00",
+    "0 23 * * *": "Every day at 23:00",
     "0 */2 * * *": "Every 2 hours",
     "0 0 * * *": "Every day at midnight",
     "@daily": "Every day at midnight",
     "@hourly": "Every hour",
   };
 
-  if (presets[expr]) {
-    preview.textContent = presets[expr];
-    return;
+  if (presets[clean]) {
+    return presets[clean];
   }
 
-  const parts = expr.split(/\s+/);
+  const parts = clean.split(/\s+/);
   if (parts.length === 5) {
     const [m, h, dom, mon, dow] = parts;
     if (!isNaN(m) && !isNaN(h) && dom === "*" && mon === "*") {
       const pad = (n) => String(n).padStart(2, "0");
       if (dow === "*") {
-        preview.textContent = `Every day at ${pad(h)}:${pad(m)}`;
-        return;
+        return `Every day at ${pad(h)}:${pad(m)}`;
       }
       if (dow === "1-5") {
-        preview.textContent = `Mon–Fri at ${pad(h)}:${pad(m)}`;
-        return;
+        return `Mon–Fri at ${pad(h)}:${pad(m)}`;
       }
       if (dow === "0,6" || dow === "6,0") {
-        preview.textContent = `Weekends at ${pad(h)}:${pad(m)}`;
-        return;
+        return `Weekends at ${pad(h)}:${pad(m)}`;
       }
     }
   }
 
-  preview.textContent = "Cron: " + expr;
+  return "Cron: " + clean;
+}
+
+function updateCronPreview() {
+  const cronInput = document.getElementById("cron_expr");
+  const preview = document.getElementById("cron-desc-preview");
+  if (!cronInput) return;
+  const expr = cronInput.value.trim();
+
+  if (preview) {
+    preview.textContent = describeCron(expr);
+  }
+
+  // Toggle active state on matching preset chip
+  document.querySelectorAll(".cron-preset").forEach((chip) => {
+    const on = chip.dataset.cron === expr;
+    chip.classList.toggle("on", on);
+    chip.setAttribute("aria-pressed", on ? "true" : "false");
+  });
 }
 
 async function loadSchedules() {
@@ -303,7 +311,7 @@ function renderScheduleCard(s) {
     el("div", {},
       el("span", { class: "muted" }, "⏰ Schedule: "),
       el("code", { style: "background:#222d42;padding:2px 6px;border-radius:4px;font-family:monospace" }, s.cron_expr),
-      el("span", { style: "color:#8be9fd;margin-left:6px" }, `(${s.cron_description || "Cron"})`)
+      el("span", { style: "color:#8be9fd;margin-left:6px" }, `(${describeCron(s.cron_expr)})`)
     ),
     el("div", {},
       el("span", { class: "muted" }, "👤 Creator: "),
@@ -407,10 +415,7 @@ function editSchedule(s) {
     document.getElementById("assignee").value = "";
   }
 
-  // Match preset or set custom
-  const presetSel = document.getElementById("cron-preset");
-  const match = Array.from(presetSel.options).find((opt) => opt.value === s.cron_expr.trim());
-  presetSel.value = match ? match.value : "custom";
+  document.getElementById("cron_expr").value = s.cron_expr || "0 9 * * *";
   updateCronPreview();
 
   selectedSkills = new Set(s.necessary_capabilities || []);
@@ -443,7 +448,6 @@ function resetForm() {
   document.getElementById("btn-submit").textContent = "save::schedule ⏰";
   document.getElementById("cancel-edit").hidden = true;
   document.getElementById("cron_expr").value = "0 9 * * *";
-  document.getElementById("cron-preset").value = "0 9 * * *";
 
   selectedSkills.clear();
   document.querySelectorAll("#skills .chip").forEach((chip) => {

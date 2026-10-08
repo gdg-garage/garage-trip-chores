@@ -3,8 +3,6 @@ package ui
 import (
 	"context"
 	"fmt"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -34,52 +32,6 @@ func ParseCronNext(cronExpr string, from time.Time, loc *time.Location) (*time.T
 	return &next, nil
 }
 
-func DescribeCron(cronExpr string) string {
-	expr := strings.TrimSpace(cronExpr)
-	switch expr {
-	case "@daily", "0 0 * * *":
-		return "Every day at midnight"
-	case "@hourly", "0 * * * *":
-		return "Every hour"
-	case "0 8 * * *":
-		return "Every day at 08:00"
-	case "0 9 * * *":
-		return "Every day at 09:00"
-	case "0 13 * * *":
-		return "Every day at 13:00"
-	case "0 17 * * *":
-		return "Every day at 17:00"
-	case "0 20 * * *":
-		return "Every day at 20:00"
-	case "0 23 * * *":
-		return "Every day at 23:00"
-	case "0 */2 * * *":
-		return "Every 2 hours"
-	case "*/30 * * * *":
-		return "Every 30 minutes"
-	case "*/15 * * * *":
-		return "Every 15 minutes"
-	}
-
-	parts := strings.Fields(expr)
-	if len(parts) == 5 {
-		min, hour, dom, mon, dow := parts[0], parts[1], parts[2], parts[3], parts[4]
-		m, errM := strconv.Atoi(min)
-		h, errH := strconv.Atoi(hour)
-		if errM == nil && errH == nil && dom == "*" && mon == "*" {
-			if dow == "*" {
-				return fmt.Sprintf("Every day at %02d:%02d", h, m)
-			}
-			if dow == "1-5" {
-				return fmt.Sprintf("Mon–Fri at %02d:%02d", h, m)
-			}
-			if dow == "0,6" || dow == "6,0" {
-				return fmt.Sprintf("Weekends at %02d:%02d", h, m)
-			}
-		}
-	}
-	return "Cron: " + expr
-}
 
 func (ui *Ui) ExecuteScheduledTask(taskID uint) (*storage.Chore, error) {
 	task, err := ui.storage.GetScheduledTask(taskID)

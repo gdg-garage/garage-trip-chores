@@ -257,7 +257,6 @@ func (w *Web) buildScheduledTaskView(t storage.ScheduledTask) ScheduledTaskView 
 		Name:                  t.Name,
 		Description:           t.Description,
 		CronExpr:              t.CronExpr,
-		CronDescription:       ui.DescribeCron(t.CronExpr),
 		NecessaryWorkers:      t.NecessaryWorkers,
 		EstimatedTimeMin:      t.EstimatedTimeMin,
 		AssignmentTimeoutMin:  t.AssignmentTimeoutMin,

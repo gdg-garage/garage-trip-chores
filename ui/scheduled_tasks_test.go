@@ -35,20 +35,4 @@ func TestCronHelpers(t *testing.T) {
 	if err == nil {
 		t.Fatal("Expected error for invalid cron syntax")
 	}
-
-	// Test DescribeCron
-	desc := DescribeCron("0 9 * * *")
-	if desc != "Every day at 09:00" {
-		t.Fatalf("Expected 'Every day at 09:00', got '%s'", desc)
-	}
-
-	desc = DescribeCron("0 13 * * *")
-	if desc != "Every day at 13:00" {
-		t.Fatalf("Expected 'Every day at 13:00', got '%s'", desc)
-	}
-
-	desc = DescribeCron("0 */2 * * *")
-	if desc != "Every 2 hours" {
-		t.Fatalf("Expected 'Every 2 hours', got '%s'", desc)
-	}
 }
