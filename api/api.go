@@ -17,6 +17,7 @@ import (
 	"github.com/gdg-garage/garage-trip-chores/llm"
 	"github.com/gdg-garage/garage-trip-chores/storage"
 	"github.com/gdg-garage/garage-trip-chores/ui"
+	"github.com/gdg-garage/garage-trip-chores/web"
 )
 
 var userMentionRegex = regexp.MustCompile(`<@!?(\d+)>`)
@@ -37,10 +38,15 @@ type Api struct {
 	conf           Config
 	hub            *WsHub
 	authorizedKeys map[string]struct{}
+	web            *web.Web
 }
 
 func (a *Api) SetSummarizer(s *llm.Summarizer) {
 	a.summarizer = s
+}
+
+func (a *Api) SetWeb(w *web.Web) {
+	a.web = w
 }
 
 func NewApi(s *storage.Storage, logger *slog.Logger, c *chores.ChoresLogic, ui *ui.Ui, conf Config) *Api {
@@ -115,7 +121,11 @@ func (a *Api) SetupRoutes() *chi.Mux {
 		})
 	}
 
-	router.Use(authMiddleware)
+	if a.web != nil {
+		router.Use(a.web.AuthMiddleware)
+	} else {
+		router.Use(authMiddleware)
+	}
 
 	// Setup Huma
 	config := huma.DefaultConfig("Garage Trip Chores API", "3.0.0")
@@ -134,13 +144,15 @@ func (a *Api) SetupRoutes() *chi.Mux {
 	}
 	api := humachi.New(router, config)
 
-	// Websocket endpoint doesn't need Huma (it's standard HTTP upgrade)
-	router.Get("/ws", func(w http.ResponseWriter, r *http.Request) {
-		a.ServeWs(w, r)
-	})
-	router.Get("/api/ws", func(w http.ResponseWriter, r *http.Request) {
-		a.ServeWs(w, r)
-	})
+	if a.web == nil {
+		// Websocket endpoint doesn't need Huma (it's standard HTTP upgrade)
+		router.Get("/ws", func(w http.ResponseWriter, r *http.Request) {
+			a.ServeWs(w, r)
+		})
+		router.Get("/api/ws", func(w http.ResponseWriter, r *http.Request) {
+			a.ServeWs(w, r)
+		})
+	}
 
 	router.Get("/ws/asyncapi.yaml", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "docs/asyncapi.yaml")
@@ -614,6 +626,10 @@ func (a *Api) SetupRoutes() *chi.Mux {
 			},
 		}, nil
 	})
+
+	if a.web != nil {
+		a.web.RegisterRoutes(router)
+	}
 
 	return router
 }

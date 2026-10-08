@@ -17,6 +17,7 @@ import (
 	"github.com/gdg-garage/garage-trip-chores/reminders"
 	"github.com/gdg-garage/garage-trip-chores/storage"
 	"github.com/gdg-garage/garage-trip-chores/ui"
+	"github.com/gdg-garage/garage-trip-chores/web"
 	_ "time/tzdata"
 )
 
@@ -71,8 +72,22 @@ func main() {
 	llmScheduler := llm.NewScheduler(llmSummarizer, logger, conf.LLM)
 	go llmScheduler.Run(ctx, &wg)
 
+	webConf := conf.Web
+	if len(webConf.ApiKeys) == 0 {
+		webConf.ApiKeys = conf.Api.ApiKeys
+	}
+	webUI, err := web.New(s, logger, &cl, uiServer, webConf)
+	if err != nil {
+		logger.Error("Error initializing web UI", "error", err)
+	} else {
+		webUI.SetSummarizer(llmSummarizer)
+	}
+
 	apiServer := api.NewApi(s, logger, &cl, uiServer, conf.Api)
 	apiServer.SetSummarizer(llmSummarizer)
+	if webUI != nil {
+		apiServer.SetWeb(webUI)
+	}
 	go apiServer.Run(ctx)
 
 	<-sc

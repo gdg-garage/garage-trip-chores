@@ -12,15 +12,14 @@
 </head>
 <body class="{% block body_class %}{% endblock %}">
   {% block nav %}
-  {% set tv_href = "/dashboard" %}
   <nav class="topnav">
     <a class="brand" href="/feed"><span class="logo">Garage Trip</span> Chores</a>
     <div class="navlinks">
-      <a href="/feed" class="{{ 'on' if active=='feed' }}">Chores</a>
-      <a href="/leaderboard" class="{{ 'on' if active=='leaderboard' }}">Leaderboard</a>
-      <a href="/manage" class="{{ 'on' if active=='manage' }}">Manage</a>
-      <a href="/profile" class="{{ 'on' if active=='profile' }}">Profile</a>
-      <a href="{{ tv_href }}" class="{{ 'on' if active=='dashboard' }}">TV</a>
+      <a href="/feed" class="{% if active == 'feed' %}on{% endif %}">Chores</a>
+      <a href="/leaderboard" class="{% if active == 'leaderboard' %}on{% endif %}">Leaderboard</a>
+      <a href="/manage" class="{% if active == 'manage' %}on{% endif %}">Manage</a>
+      <a href="/profile" class="{% if active == 'profile' %}on{% endif %}">Profile</a>
+      <a href="/dashboard" class="{% if active == 'dashboard' %}on{% endif %}">TV</a>
     </div>
   </nav>
   {% endblock %}

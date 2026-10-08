@@ -12,6 +12,7 @@ import (
 	"github.com/gdg-garage/garage-trip-chores/reminders"
 	"github.com/gdg-garage/garage-trip-chores/storage"
 	"github.com/gdg-garage/garage-trip-chores/ui"
+	"github.com/gdg-garage/garage-trip-chores/web"
 	"github.com/spf13/viper"
 )
 
@@ -24,6 +25,7 @@ type Config struct {
 	Reminder reminders.Config
 	Api      api.Config
 	LLM      llm.Config
+	Web      web.Config
 }
 
 func New() (*Config, error) {
@@ -55,6 +57,26 @@ func New() (*Config, error) {
 	viper.SetDefault("llm.model", "gemini-3.7-flash")
 	viper.SetDefault("llm.discordchannelid", "")
 	viper.SetDefault("llm.servicetier", "flex")
+
+	viper.SetDefault("web.discordclientid", "")
+	viper.SetDefault("web.discordclientsecret", "")
+	viper.SetDefault("web.discordcallbackurl", "")
+	viper.SetDefault("web.discordpaidrole", "")
+	viper.SetDefault("web.discordadminrole", "")
+	viper.SetDefault("web.sessionsecret", "")
+	viper.SetDefault("web.tabletpassword", "garagetrip")
+	viper.SetDefault("web.authrequired", true)
+	viper.SetDefault("web.childrencount", 5)
+
+	_ = viper.BindEnv("web.discordclientid", "DISCORD_CLIENT_ID")
+	_ = viper.BindEnv("web.discordclientsecret", "DISCORD_CLIENT_SECRET")
+	_ = viper.BindEnv("web.discordcallbackurl", "DISCORD_CALLBACK_URL")
+	_ = viper.BindEnv("web.discordpaidrole", "DISCORD_PAID_ROLE")
+	_ = viper.BindEnv("web.discordadminrole", "DISCORD_ADMIN_ROLE")
+	_ = viper.BindEnv("web.sessionsecret", "SESSION_SECRET")
+	_ = viper.BindEnv("web.tabletpassword", "TABLET_PASSWORD")
+	_ = viper.BindEnv("web.authrequired", "AUTH_REQUIRED")
+	_ = viper.BindEnv("web.childrencount", "CHILDREN_COUNT")
 
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")

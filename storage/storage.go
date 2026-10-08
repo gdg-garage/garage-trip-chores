@@ -29,7 +29,7 @@ func dbConnect(conf Config, logger *slog.Logger) (*gorm.DB, error) {
 	}
 
 	// Migrate the schema
-	db.AutoMigrate(&Chore{}, &WorkLog{}, &ChoreAssignment{}, &PresenceLog{}, &LLMSummaryLog{}, &DelayedTask{})
+	db.AutoMigrate(&Chore{}, &WorkLog{}, &ChoreAssignment{}, &PresenceLog{}, &LLMSummaryLog{}, &DelayedTask{}, &ChoreTemplate{}, &UserProfile{})
 
 	// Mark legacy orphaned/unscheduled preview chores as draft
 	db.Model(&Chore{}).Where("(draft = ? OR draft IS NULL) AND (message_id = '' OR message_id IS NULL) AND completed IS NULL AND (self_reported = ? OR self_reported IS NULL) AND id NOT IN (SELECT chore_id FROM delayed_tasks) AND id NOT IN (SELECT chore_id FROM chore_assignments)", false, false).Update("draft", true)
@@ -65,13 +65,17 @@ func New(conf Config, logger *slog.Logger) (*Storage, error) {
 		logger.Warn("Discord token is not set, running in offline/headless mode")
 	}
 
-	return &Storage{
+	st := &Storage{
 		db:      db,
 		logger:  logger,
 		discord: dg,
 		conf:    conf,
 		Events:  NewEventBus(),
-	}, nil
+	}
+	if err := st.SeedDefaultTemplates(); err != nil {
+		logger.Warn("Failed to seed default chore templates", "error", err)
+	}
+	return st, nil
 }
 
 func (s *Storage) GetDiscord() *discordgo.Session {

@@ -30,6 +30,7 @@ type Chore struct {
 	AfterDeadlineReminded bool
 	SelfReported          bool
 	Draft                 bool `gorm:"default:false"`
+	TemplateKey           string `json:"template_key,omitempty"`
 }
 
 func (c *Chore) GetCapabilities() []string {
@@ -187,5 +188,27 @@ type DelayedTask struct {
 	DelayMin   uint       `gorm:"not null" json:"delay_min"`
 	CreatedAt  time.Time  `json:"created_at"`
 	ExecutedAt *time.Time `json:"executed_at,omitempty"`
+}
+
+type ChoreTemplate struct {
+	Key                   string    `gorm:"primaryKey" json:"key"`
+	Name                  string    `gorm:"not null" json:"name"`
+	NecessaryWorkers      uint      `gorm:"not null;default:1" json:"necessary_workers"`
+	EstimatedTimeMin      uint      `gorm:"not null;default:10" json:"estimated_time_min"`
+	AssignmentTimeoutMin uint      `gorm:"not null;default:15" json:"assignment_timeout_min"`
+	NecessaryCapabilities string    `gorm:"not null;default:'[]'" json:"necessary_capabilities"`
+	ScalesWithHeadcount   bool      `gorm:"not null;default:false" json:"scales_with_headcount"`
+	PerPersonMin          uint      `gorm:"not null;default:0" json:"per_person_min"`
+	SortOrder             int       `gorm:"not null;default:0" json:"sort_order"`
+	CreatedAt             time.Time `json:"created_at"`
+	UpdatedAt             time.Time `json:"updated_at"`
+}
+
+type UserProfile struct {
+	DiscordId     string    `gorm:"primaryKey" json:"discord_id"`
+	Name          string    `gorm:"not null" json:"name"`
+	DiscordHandle string    `gorm:"not null" json:"discord_handle"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
 }
 
