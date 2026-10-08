@@ -101,11 +101,14 @@ function card(c) {
 async function loadLeader() {
   // Workload comes from /stats, names from /users — each from its own upstream
   // source, joined here by discord_id.
-  const [{ stats }, { users, children_count }] = await Promise.all([
+  const [statsData, usersData] = await Promise.all([
     API.get("/api/stats"),
     API.get("/api/users"),
   ]);
-  const nameById = new Map(users.map((u) => [u.discord_id, u.handle || u.discord_id]));
+  const stats = (statsData && statsData.stats) ? statsData.stats : (statsData || {});
+  const users = Array.isArray(usersData) ? usersData : (usersData?.users || []);
+  const children_count = usersData?.children_count || 0;
+  const nameById = new Map(users.map((u) => [u.discord_id, u.name || u.handle || u.discord_id]));
   const people = Object.entries(stats)
     .map(([id, s]) => ({ name: nameById.get(id) || id, workload_min: Math.round((s.total_min || 0) * 10) / 10 }))
     .sort((a, b) => b.workload_min - a.workload_min);

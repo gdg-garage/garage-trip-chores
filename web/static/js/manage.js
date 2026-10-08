@@ -9,13 +9,14 @@ function renderSpiciness(n) {
 }
 
 async function init() {
-  const [{ templates: tpls }, { skills }, { users: uList }] = await Promise.all([
-    API.get("/api/templates"),
-    API.get("/api/skills"),
-    API.get("/api/users").catch(() => ({ users: [] })),
+  const [tData, sData, uData] = await Promise.all([
+    API.get("/api/templates").catch(() => []),
+    API.get("/api/skills").catch(() => []),
+    API.get("/api/users").catch(() => []),
   ]);
-  templates = tpls;
-  users = uList || [];
+  templates = Array.isArray(tData) ? tData : (tData.templates || []);
+  skills = Array.isArray(sData) ? sData : (sData.skills || []);
+  users = Array.isArray(uData) ? uData : (uData.users || []);
 
   const tbox = document.getElementById("templates");
   templates.forEach((t) => tbox.appendChild(el("button", { type: "button", class: "chip", onclick: () => loadTemplate(t) }, t.name)));
@@ -30,7 +31,7 @@ async function init() {
   const assigneeSelect = document.getElementById("assignee");
   if (assigneeSelect) {
     users.forEach((u) => {
-      const opt = el("option", { value: u.discord_id }, u.handle || u.discord_id);
+      const opt = el("option", { value: u.discord_id }, u.name || u.handle || u.discord_id);
       assigneeSelect.appendChild(opt);
     });
   }

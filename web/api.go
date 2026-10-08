@@ -213,7 +213,7 @@ func (w *Web) handleGetSkills(rw http.ResponseWriter, r *http.Request) {
 	if skills == nil {
 		skills = []string{}
 	}
-	writeJSON(rw, http.StatusOK, map[string]any{"skills": skills})
+	writeJSON(rw, http.StatusOK, skills)
 }
 
 func (w *Web) handleGetStats(rw http.ResponseWriter, r *http.Request) {

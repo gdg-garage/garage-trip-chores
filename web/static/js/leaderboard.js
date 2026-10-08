@@ -15,7 +15,7 @@ async function init() {
 
 async function load() {
   const data = await API.get("/api/leaderboard");
-  rows = data.rows;
+  rows = Array.isArray(data) ? data : (data.rows || []);
   render();
 }
 

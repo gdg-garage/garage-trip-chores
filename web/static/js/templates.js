@@ -3,7 +3,8 @@ let selectedSkills = new Set();
 let scales = false;
 
 async function init() {
-  const { skills } = await API.get("/api/skills");
+  const sData = await API.get("/api/skills").catch(() => []);
+  const skills = Array.isArray(sData) ? sData : (sData.skills || []);
   const sbox = document.getElementById("skills");
   skills.forEach((s) => {
     const chip = el("button", { type: "button", class: "chip", "aria-pressed": "false", onclick: () => toggleSkill(chip, s) }, s);
@@ -28,7 +29,8 @@ function toggleSkill(chip, s) {
 }
 
 async function load() {
-  const { templates } = await API.get("/api/templates");
+  const tData = await API.get("/api/templates").catch(() => []);
+  const templates = Array.isArray(tData) ? tData : (tData.templates || []);
   const box = document.getElementById("list");
   box.innerHTML = "";
   if (!templates.length) { box.innerHTML = '<p class="muted">No templates yet.</p>'; return; }
