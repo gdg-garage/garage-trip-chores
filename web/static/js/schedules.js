@@ -63,6 +63,42 @@ async function init() {
     console.error("Failed to load templates", err);
   }
 
+  let currentUser = null;
+  try {
+    const me = await API.get("/api/me");
+    currentUser = me;
+    if (me && me.discord_id) {
+      const creatorInput = document.getElementById("creator_id");
+      if (creatorInput) creatorInput.value = me.discord_id;
+      const creatorDisplay = document.getElementById("creator-display");
+      if (creatorDisplay) creatorDisplay.textContent = me.name || me.handle || me.discord_id;
+    }
+  } catch (err) {
+    // Tablet session
+  }
+
+  // Populate creator dropdown (for tablet sessions)
+  const creatorSelect = document.getElementById("schedule-creator-select");
+  if (creatorSelect) {
+    users.forEach((u) => {
+      const opt = el("option", { value: u.discord_id }, u.name || u.handle || u.discord_id);
+      creatorSelect.appendChild(opt);
+    });
+    if (!currentUser) {
+      const wrap = document.getElementById("schedule-creator-wrap");
+      if (wrap) wrap.hidden = false;
+    }
+    creatorSelect.addEventListener("change", () => {
+      const val = creatorSelect.value;
+      const creatorInput = document.getElementById("creator_id");
+      if (creatorInput) creatorInput.value = val;
+      const creatorDisplay = document.getElementById("creator-display");
+      if (creatorDisplay) {
+        creatorDisplay.textContent = val ? creatorSelect.options[creatorSelect.selectedIndex].text : "Select your name";
+      }
+    });
+  }
+
   // Preset selector
   const presetSel = document.getElementById("cron-preset");
   const cronInput = document.getElementById("cron_expr");
@@ -385,9 +421,14 @@ function editSchedule(s) {
     chip.setAttribute("aria-pressed", on ? "true" : "false");
   });
 
+  document.getElementById("creator_id").value = s.creator_id || "";
   const creatorDisplay = document.getElementById("creator-display");
   if (creatorDisplay) {
     creatorDisplay.textContent = s.creator_name || s.creator_id;
+  }
+  const creatorSel = document.getElementById("schedule-creator-select");
+  if (creatorSel && s.creator_id) {
+    creatorSel.value = s.creator_id;
   }
 
   document.getElementById("btn-submit").textContent = "Update scheduled task";
@@ -418,6 +459,11 @@ async function saveSchedule(ev) {
   ev.preventDefault();
 
   const editId = document.getElementById("edit-id").value;
+  const creatorId = document.getElementById("creator_id")?.value ||
+                    document.getElementById("schedule-creator-select")?.value ||
+                    currentUser?.discord_id ||
+                    "";
+
   const body = {
     name: document.getElementById("name").value.trim(),
     description: document.getElementById("description").value.trim(),
@@ -429,6 +475,7 @@ async function saveSchedule(ev) {
     necessary_capabilities: [...selectedSkills],
     template_key: document.getElementById("template_key").value || "",
     enabled: document.getElementById("enabled").checked,
+    creator_id: creatorId,
   };
 
   try {

@@ -3,11 +3,13 @@ const state = { chores: new Map(), suggestions: new Map(), myUid: null, myName: 
 // suggestions Map stores full objects: { top: [discord_id,…], ranked: [{discord_id, name,…}] }
 
 async function init() {
-  const { profile, discord_id } = await API.get("/api/me");
-  if (!profile) { location.href = "/"; return; }
-  state.myUid = discord_id;
-  state.myName = profile.name;
-  document.getElementById("greeting").textContent = `Hi ${profile.name} — grab a chore when you can 💪`;
+  const me = await API.get("/api/me").catch(() => null);
+  if (!me || (!me.discord_id && !me.name && !me.profile)) { location.href = "/"; return; }
+  const profile = me.profile || me;
+  state.myUid = me.discord_id;
+  state.myName = profile.name || me.name;
+  const greeting = document.getElementById("greeting");
+  if (greeting) greeting.textContent = `Hi ${state.myName} — grab a chore when you can 💪`;
 
   connectWS(onMessage, (up) => {
     const c = document.getElementById("conn");

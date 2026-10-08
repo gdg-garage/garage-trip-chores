@@ -2,6 +2,7 @@ package web
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -368,4 +369,111 @@ func TestScheduledTasksWebAPI(t *testing.T) {
 		t.Fatalf("expected 404 after deletion, got %d", rr.Code)
 	}
 }
+
+func TestChoreCreatorIDHandling(t *testing.T) {
+	webInstance, router := setupTestWeb(t)
+
+	// 1. Self-reported chore without CreatorId when unauthenticated should return 400 Bad Request
+	body, _ := json.Marshal(ChoreCreateIn{
+		Name:             "Self-reported without user",
+		EstimatedTimeMin: 15,
+		SelfReported:     true,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/chores", bytes.NewReader(body))
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 Bad Request for self-reported chore without creator_id, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	// 2. Self-reported chore with CreatorId (e.g. tablet attendee picker)
+	dongalisID := "378532044558303233"
+	body, _ = json.Marshal(ChoreCreateIn{
+		Name:             "Self-reported with chosen user",
+		EstimatedTimeMin: 25,
+		SelfReported:     true,
+		CreatorId:        dongalisID,
+	})
+	req = httptest.NewRequest(http.MethodPost, "/api/chores", bytes.NewReader(body))
+	rr = httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 for self-reported chore with creator_id, got %d: %s", rr.Code, rr.Body.String())
+	}
+	var createdSelf ChoreView
+	if err := json.NewDecoder(rr.Body).Decode(&createdSelf); err != nil {
+		t.Fatalf("failed to decode chore: %v", err)
+	}
+	if createdSelf.CreatorId != dongalisID {
+		t.Fatalf("expected CreatorId %s, got %s", dongalisID, createdSelf.CreatorId)
+	}
+	if createdSelf.CreatorName != "Dongalis (Dominik N.)" {
+		t.Fatalf("expected CreatorName 'Dongalis (Dominik N.)', got '%s'", createdSelf.CreatorName)
+	}
+
+	// Check worklog was recorded for Dongalis
+	worklogs, err := webInstance.storage.GetWorkLogsForChore(createdSelf.ID)
+	if err != nil {
+		t.Fatalf("failed to get worklogs: %v", err)
+	}
+	if len(worklogs) == 0 {
+		t.Fatalf("expected worklog created for self-reported chore, got 0")
+	}
+	if worklogs[0].UserId != dongalisID || worklogs[0].TimeSpentMin != 25 {
+		t.Fatalf("unexpected worklog: %+v", worklogs[0])
+	}
+
+	// 3. Authenticated session: ensure creator_id is enforced to logged-in user
+	authedUser := &UserInfo{
+		DiscordId: "999888777",
+		Name:      "Alice In Wonderland",
+		Handle:    "alice",
+		IsAdmin:   false,
+	}
+	// Even if request payload sends spoofed creator_id, non-admin session overrides with authedUser
+	body, _ = json.Marshal(ChoreCreateIn{
+		Name:             "Clean fireplace",
+		EstimatedTimeMin: 10,
+		CreatorId:        "imposter_id",
+	})
+	req = httptest.NewRequest(http.MethodPost, "/api/chores", bytes.NewReader(body))
+	req = req.WithContext(context.WithValue(req.Context(), UserContextKey, authedUser))
+	rr = httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 for authed chore creation, got %d: %s", rr.Code, rr.Body.String())
+	}
+	var createdAuthed ChoreView
+	if err := json.NewDecoder(rr.Body).Decode(&createdAuthed); err != nil {
+		t.Fatalf("failed to decode chore: %v", err)
+	}
+	if createdAuthed.CreatorId != authedUser.DiscordId {
+		t.Fatalf("expected CreatorId to be enforced to %s, got %s", authedUser.DiscordId, createdAuthed.CreatorId)
+	}
+
+	// 4. Test GET /api/me returns both flat fields and profile wrapper
+	req = httptest.NewRequest(http.MethodGet, "/api/me", nil)
+	req = req.WithContext(context.WithValue(req.Context(), UserContextKey, authedUser))
+	rr = httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 for /api/me, got %d", rr.Code)
+	}
+	var meResp struct {
+		DiscordId string `json:"discord_id"`
+		Name      string `json:"name"`
+		Handle    string `json:"handle"`
+		Profile   struct {
+			Name          string `json:"name"`
+			DiscordHandle string `json:"discord_handle"`
+		} `json:"profile"`
+	}
+	if err := json.NewDecoder(rr.Body).Decode(&meResp); err != nil {
+		t.Fatalf("failed to decode /api/me response: %v", err)
+	}
+	if meResp.DiscordId != authedUser.DiscordId || meResp.Name != authedUser.Name || meResp.Profile.Name != authedUser.Name {
+		t.Fatalf("unexpected /api/me response: %+v", meResp)
+	}
+}
+
 

@@ -36,6 +36,42 @@ async function init() {
     });
   }
 
+  let currentUser = null;
+  try {
+    const me = await API.get("/api/me");
+    currentUser = me;
+    if (me && me.discord_id) {
+      const creatorInput = document.getElementById("creator_id");
+      if (creatorInput) creatorInput.value = me.discord_id;
+      const creatorDisplay = document.getElementById("creator-name-display");
+      if (creatorDisplay) creatorDisplay.textContent = me.name || me.handle || me.discord_id;
+    }
+  } catch (err) {
+    // Not logged in or tablet session
+  }
+
+  // Populate creator dropdown (for tablet sessions)
+  const creatorSelect = document.getElementById("creator-select");
+  if (creatorSelect) {
+    users.forEach((u) => {
+      const opt = el("option", { value: u.discord_id }, u.name || u.handle || u.discord_id);
+      creatorSelect.appendChild(opt);
+    });
+    if (!currentUser) {
+      const pickerWrap = document.getElementById("creator-picker-wrap");
+      if (pickerWrap) pickerWrap.hidden = false;
+    }
+    creatorSelect.addEventListener("change", () => {
+      const val = creatorSelect.value;
+      const creatorInput = document.getElementById("creator_id");
+      if (creatorInput) creatorInput.value = val;
+      const creatorDisplay = document.getElementById("creator-name-display");
+      if (creatorDisplay) {
+        creatorDisplay.textContent = val ? creatorSelect.options[creatorSelect.selectedIndex].text : "Select your name";
+      }
+    });
+  }
+
   const spice = document.getElementById("spiciness");
   spice.addEventListener("input", (e) => renderSpiciness(+e.currentTarget.value));
   document.getElementById("chore-form").addEventListener("submit", submit);
@@ -182,6 +218,15 @@ async function submit(ev) {
   const assigneeId = selfReported ? null : (document.getElementById("assignee")?.value || null);
   const deadlineRaw = selfReported ? null : document.getElementById("deadline").value;
 
+  const creatorId = document.getElementById("creator_id")?.value ||
+                    document.getElementById("creator-select")?.value ||
+                    "";
+
+  if (selfReported && !creatorId) {
+    showToast("Please select who completed this chore", { error: true });
+    return;
+  }
+
   const body = {
     name: document.getElementById("name").value.trim(),
     necessary_workers: parseInt(document.getElementById("workers").value, 10) || 1,
@@ -195,6 +240,7 @@ async function submit(ev) {
     delay_min: delayMin,
     self_reported: selfReported,
     assignee_id: assigneeId,
+    creator_id: creatorId,
   };
 
   const label = btn ? btn.textContent : "";

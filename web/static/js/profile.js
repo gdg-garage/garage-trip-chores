@@ -2,12 +2,13 @@
 let myUid = null;
 
 async function init() {
-  const { profile, discord_id } = await API.get("/api/me");
-  if (!profile) { location.href = "/"; return; }
-  myUid = discord_id;
+  const me = await API.get("/api/me").catch(() => null);
+  if (!me || (!me.discord_id && !me.name && !me.profile)) { location.href = "/"; return; }
+  const profile = me.profile || me;
+  myUid = me.discord_id;
 
-  document.getElementById("name").textContent = profile.name;
-  document.getElementById("handle").textContent = profile.discord_handle ? "@" + profile.discord_handle : "";
+  document.getElementById("name").textContent = profile.name || me.name;
+  document.getElementById("handle").textContent = (profile.discord_handle || me.handle) ? "@" + (profile.discord_handle || me.handle) : "";
 
   document.getElementById("manual-form").addEventListener("submit", addManual);
   document.getElementById("signout").addEventListener("click", signOut);

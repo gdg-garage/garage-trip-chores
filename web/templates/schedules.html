@@ -12,6 +12,7 @@
   <form id="schedule-form">
     <input type="hidden" id="edit-id" />
     <input type="hidden" id="template_key" />
+    <input type="hidden" id="creator_id" value="{% if user %}{{ user.DiscordId }}{% endif %}" />
 
     <div style="margin-bottom:14px">
       <label for="template-select">Quick-fill from template (optional)</label>
@@ -86,6 +87,12 @@
         👤 Task creator: <strong id="creator-display">{% if user %}{{ user.Name }}{% else %}Current user{% endif %}</strong>
         <span class="muted" style="display:block;margin-top:3px;font-size:.8rem">When triggered, this schedule creates a chore credited to this creator.</span>
       </p>
+      <div id="schedule-creator-wrap" style="margin-top:8px" {% if user %}hidden{% endif %}>
+        <label for="schedule-creator-select" style="font-size:.82rem;margin-bottom:3px;display:block">Select creator for this schedule:</label>
+        <select id="schedule-creator-select" style="font-size:.85rem">
+          <option value="">-- Choose attendee --</option>
+        </select>
+      </div>
     </div>
 
     <label style="display:flex;align-items:center;gap:10px;margin:14px 0;cursor:pointer">

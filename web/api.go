@@ -30,7 +30,18 @@ func (w *Web) handleGetMe(rw http.ResponseWriter, r *http.Request) {
 		writeError(rw, http.StatusUnauthorized, "Not logged in")
 		return
 	}
-	writeJSON(rw, http.StatusOK, u)
+	writeJSON(rw, http.StatusOK, map[string]any{
+		"discord_id": u.DiscordId,
+		"name":       u.Name,
+		"handle":     u.Handle,
+		"profile": map[string]any{
+			"name":           u.Name,
+			"discord_handle": u.Handle,
+		},
+		"capabilities": u.Capabilities,
+		"is_present":   u.IsPresent,
+		"is_admin":     u.IsAdmin,
+	})
 }
 
 func (w *Web) handleGetManualWork(rw http.ResponseWriter, r *http.Request) {
@@ -274,15 +285,17 @@ func (w *Web) handlePostSchedule(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	u := w.GetCurrentUser(r)
-	creatorID := in.CreatorId
-	if creatorID == "" && u != nil {
-		creatorID = u.DiscordId
+	creatorID := strings.TrimSpace(in.CreatorId)
+	if u != nil {
+		if creatorID == "" || !u.IsAdmin {
+			creatorID = u.DiscordId
+		}
 	}
 	if creatorID == "" {
-		creatorID = "admin"
+		creatorID = "tablet"
 	}
 	creatorName := ""
-	if u != nil && (in.CreatorId == "" || in.CreatorId == u.DiscordId) {
+	if u != nil && creatorID == u.DiscordId {
 		creatorName = u.Name
 	} else {
 		creatorName = w.storage.ResolveUserName(creatorID)
@@ -611,9 +624,21 @@ func (w *Web) handlePostChore(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	u := w.GetCurrentUser(r)
-	creatorID := in.CreatorId
-	if creatorID == "" && u != nil {
-		creatorID = u.DiscordId
+	creatorID := strings.TrimSpace(in.CreatorId)
+	if u != nil {
+		// When authenticated via Discord session, use logged-in user's ID
+		// unless an admin or tablet manager explicitly specified another attendee
+		if creatorID == "" || !u.IsAdmin {
+			creatorID = u.DiscordId
+		}
+	}
+
+	if creatorID == "" {
+		if in.SelfReported {
+			writeError(rw, http.StatusBadRequest, "User ID is required to log a self-reported chore")
+			return
+		}
+		creatorID = "tablet"
 	}
 
 	workers := in.NecessaryWorkers
@@ -651,25 +676,51 @@ func (w *Web) handlePostChore(rw http.ResponseWriter, r *http.Request) {
 		chore.Completed = &now
 	}
 
-	saved, err := w.storage.SaveChore(chore)
-	if err != nil {
-		writeError(rw, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	if in.SelfReported {
-		wl := storage.WorkLog{
-			UserId:       creatorID,
-			ChoreId:      saved.ID,
-			TimeSpentMin: est,
-			SelfReported: true,
+	var saved storage.Chore
+	var err error
+	if in.DelayMin > 0 {
+		chore.Draft = false
+		saved, err = w.storage.SaveChore(chore)
+		if err != nil {
+			writeError(rw, http.StatusInternalServerError, err.Error())
+			return
 		}
-		_, _ = w.storage.SaveWorkLog(wl)
-	}
-
-	if in.DelayMin > 0 && !in.SelfReported {
 		pubAt := now.Add(time.Duration(in.DelayMin) * time.Minute)
 		_, _ = w.storage.CreateDelayedTask(saved.ID, pubAt, in.DelayMin)
+	} else if w.ui != nil {
+		saved, _, err = w.ui.PublishChore(chore)
+		if err != nil {
+			w.logger.Warn("Failed to publish chore via UI server", "error", err)
+			saved, err = w.storage.SaveChore(chore)
+			if err != nil {
+				writeError(rw, http.StatusInternalServerError, err.Error())
+				return
+			}
+			if in.SelfReported {
+				wl := storage.WorkLog{
+					UserId:       creatorID,
+					ChoreId:      saved.ID,
+					TimeSpentMin: est,
+					SelfReported: true,
+				}
+				_, _ = w.storage.SaveWorkLog(wl)
+			}
+		}
+	} else {
+		saved, err = w.storage.SaveChore(chore)
+		if err != nil {
+			writeError(rw, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if in.SelfReported {
+			wl := storage.WorkLog{
+				UserId:       creatorID,
+				ChoreId:      saved.ID,
+				TimeSpentMin: est,
+				SelfReported: true,
+			}
+			_, _ = w.storage.SaveWorkLog(wl)
+		}
 	}
 
 	dir := w.BuildPersonDirectory()
