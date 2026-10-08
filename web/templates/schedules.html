@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block title %}Scheduled Tasks — Garage Trip{% endblock %}
+{% block content %}
+<p style="margin:0 0 6px"><a href="/manage">← Back to manage</a></p>
+<div class="row" style="display:flex;justify-content:space-between;align-items:center">
+  <h1 style="margin:0">Scheduled tasks</h1>
+</div>
+<p class="muted">Automate chores on a recurring cron schedule (e.g. every morning at 09:00 to take out the garbage). When triggered, chores are posted with the creator preserved.</p>
+
+<div class="card">
+  <h2 id="form-title">Add a scheduled task</h2>
+  <form id="schedule-form">
+    <input type="hidden" id="edit-id" />
+    <input type="hidden" id="template_key" />
+
+    <div style="margin-bottom:14px">
+      <label for="template-select">Quick-fill from template (optional)</label>
+      <select id="template-select">
+        <option value="">-- Choose template to prefill --</option>
+      </select>
+    </div>
+
+    <label for="name">Chore name</label>
+    <input id="name" required placeholder="e.g. Take out the garbage" />
+
+    <label for="description">Description / Notes (optional)</label>
+    <input id="description" placeholder="e.g. Kitchen, bar and bathroom trash cans" />
+
+    <div class="grid2">
+      <div>
+        <label for="cron-preset">Frequency preset</label>
+        <select id="cron-preset">
+          <option value="0 9 * * *">Every morning at 09:00</option>
+          <option value="0 8 * * *">Every morning at 08:00</option>
+          <option value="0 13 * * *">Every afternoon at 13:00</option>
+          <option value="0 17 * * *">Every afternoon at 17:00</option>
+          <option value="0 20 * * *">Every evening at 20:00</option>
+          <option value="0 23 * * *">Every night at 23:00</option>
+          <option value="0 */2 * * *">Every 2 hours</option>
+          <option value="custom">Custom cron expression…</option>
+        </select>
+      </div>
+      <div>
+        <label for="cron_expr">Cron expression (min hour dom mon dow)</label>
+        <input id="cron_expr" required value="0 9 * * *" placeholder="e.g. 0 9 * * *" />
+      </div>
+    </div>
+
+    <div id="cron-helper" class="muted" style="font-size:.85rem;margin:4px 0 14px;padding:8px 12px;background:#151d2a;border-radius:6px;border:1px solid #29344d">
+      <span>⏰ <strong id="cron-desc-preview" style="color:var(--ink,#fff)">Every day at 09:00</strong></span>
+      <span style="color:#6272a4;margin:0 8px">•</span>
+      <span style="color:#8be9fd">Timezone: Europe/Prague</span>
+    </div>
+
+    <div class="grid2">
+      <div>
+        <label for="workers">Workers needed</label>
+        <input id="workers" type="number" min="1" max="20" value="1" />
+      </div>
+      <div>
+        <label for="time">Estimated time (min)</label>
+        <input id="time" type="number" min="1" max="1000" value="10" />
+      </div>
+    </div>
+
+    <div class="grid2">
+      <div>
+        <label for="timeout">Claim timeout (min)</label>
+        <input id="timeout" type="number" min="1" max="1000" value="15" />
+      </div>
+      <div>
+        <label for="assignee">Direct assignee (optional)</label>
+        <select id="assignee">
+          <option value="">Open (assigned to present attendees)</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="skills-wrap" style="margin-top:10px">
+      <label>Required skills</label>
+      <div class="chiprow" id="skills"></div>
+    </div>
+
+    <div style="margin:14px 0 10px;padding:10px 14px;background:#151d2a;border-radius:8px;border:1px solid #38425f">
+      <p style="margin:0;font-size:.85rem;color:#8be9fd">
+        👤 Task creator: <strong id="creator-display">{% if user %}{{ user.Name }}{% else %}Current user{% endif %}</strong>
+        <span class="muted" style="display:block;margin-top:3px;font-size:.8rem">When triggered, this schedule creates a chore credited to this creator.</span>
+      </p>
+    </div>
+
+    <label style="display:flex;align-items:center;gap:10px;margin:14px 0;cursor:pointer">
+      <input type="checkbox" id="enabled" checked style="width:auto;margin:0;accent-color:var(--accent)" />
+      <span style="font-weight:600">Active (automatically trigger chores on schedule)</span>
+    </label>
+
+    <div class="row" style="gap:8px;margin-top:16px">
+      <button type="submit" id="btn-submit">Save scheduled task</button>
+      <button type="button" id="cancel-edit" class="ghost" hidden>Cancel edit</button>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <div class="row" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <h2 style="margin:0">Configured schedules</h2>
+    <div class="chiprow" id="filter-tabs" style="gap:6px">
+      <button type="button" class="chip on" id="tab-all">All (<span id="count-all">0</span>)</button>
+      <button type="button" class="chip" id="tab-active">Active (<span id="count-active">0</span>)</button>
+      <button type="button" class="chip" id="tab-paused">Paused (<span id="count-paused">0</span>)</button>
+    </div>
+  </div>
+  <div id="schedules-list">
+    <p class="muted">Loading scheduled tasks…</p>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="/static/js/schedules.js"></script>
+{% endblock %}

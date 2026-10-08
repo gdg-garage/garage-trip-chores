@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/gdg-garage/garage-trip-chores/chores"
 	"github.com/gdg-garage/garage-trip-chores/storage"
+	"github.com/gdg-garage/garage-trip-chores/ui"
 )
 
 func setupTestWeb(t *testing.T) (*Web, chi.Router) {
@@ -32,7 +33,8 @@ func setupTestWeb(t *testing.T) (*Web, chi.Router) {
 	}
 
 	choresLogic := chores.NewChoresLogic(st, logger, chores.Config{})
-	webInstance, err := New(st, logger, &choresLogic, nil, Config{
+	uiInstance := ui.NewUi(st, logger, &choresLogic, nil, ui.Config{})
+	webInstance, err := New(st, logger, &choresLogic, uiInstance, Config{
 		AuthRequired: false,
 	})
 	if err != nil {
@@ -201,3 +203,169 @@ func TestWebPagesAndAPI(t *testing.T) {
 		t.Fatalf("expected people in pool, got 0")
 	}
 }
+
+func TestScheduledTasksWebAPI(t *testing.T) {
+	_, router := setupTestWeb(t)
+
+	// 1. Test GET /schedules (HTML template page)
+	req := httptest.NewRequest(http.MethodGet, "/schedules", nil)
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 for /schedules page, got %d", rr.Code)
+	}
+
+	// 2. Test GET /api/schedules (initially empty)
+	req = httptest.NewRequest(http.MethodGet, "/api/schedules", nil)
+	rr = httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 for /api/schedules, got %d", rr.Code)
+	}
+	var initResp struct {
+		Schedules []ScheduledTaskView `json:"schedules"`
+	}
+	if err := json.NewDecoder(rr.Body).Decode(&initResp); err != nil {
+		t.Fatalf("failed to decode schedules: %v", err)
+	}
+	if len(initResp.Schedules) != 0 {
+		t.Fatalf("expected 0 initial schedules, got %d", len(initResp.Schedules))
+	}
+
+	// 3. Test POST /api/schedules with invalid cron (should fail)
+	badBody, _ := json.Marshal(ScheduledTaskIn{
+		Name:     "Bad cron task",
+		CronExpr: "not-a-cron",
+	})
+	req = httptest.NewRequest(http.MethodPost, "/api/schedules", bytes.NewReader(badBody))
+	rr = httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid cron, got %d", rr.Code)
+	}
+
+	// 4. Test POST /api/schedules with valid task
+	createBody, _ := json.Marshal(ScheduledTaskIn{
+		Name:                  "Take out garbage every morning",
+		Description:           "Kitchen and toilet bins",
+		CronExpr:              "0 9 * * *",
+		NecessaryWorkers:      1,
+		EstimatedTimeMin:      10,
+		AssignmentTimeoutMin:  15,
+		NecessaryCapabilities: []string{"cleaning"},
+		CreatorId:             "378532044558303233", // Dongalis
+	})
+	req = httptest.NewRequest(http.MethodPost, "/api/schedules", bytes.NewReader(createBody))
+	rr = httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 for POST /api/schedules, got %d", rr.Code)
+	}
+	var created ScheduledTaskView
+	if err := json.NewDecoder(rr.Body).Decode(&created); err != nil {
+		t.Fatalf("failed to decode created task: %v", err)
+	}
+	if created.ID == 0 || created.Name != "Take out garbage every morning" {
+		t.Fatalf("unexpected created task: %+v", created)
+	}
+	if created.CreatorId != "378532044558303233" {
+		t.Fatalf("expected creator Dongalis ID, got %s", created.CreatorId)
+	}
+	if created.NextRunAt == nil {
+		t.Fatal("expected non-nil NextRunAt")
+	}
+
+	// 5. Test GET /api/schedules/{id}
+	req = httptest.NewRequest(http.MethodGet, "/api/schedules/1", nil)
+	rr = httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 for GET /api/schedules/1, got %d", rr.Code)
+	}
+
+	// 6. Test PUT /api/schedules/{id}
+	updateBody, _ := json.Marshal(ScheduledTaskIn{
+		Name:     "Take out garbage at 8am",
+		CronExpr: "0 8 * * *",
+	})
+	req = httptest.NewRequest(http.MethodPut, "/api/schedules/1", bytes.NewReader(updateBody))
+	rr = httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 for PUT /api/schedules/1, got %d", rr.Code)
+	}
+	var updated ScheduledTaskView
+	_ = json.NewDecoder(rr.Body).Decode(&updated)
+	if updated.Name != "Take out garbage at 8am" || updated.CronExpr != "0 8 * * *" {
+		t.Fatalf("expected updated name and cron, got %+v", updated)
+	}
+
+	// 7. Test POST /api/schedules/{id}/toggle
+	req = httptest.NewRequest(http.MethodPost, "/api/schedules/1/toggle", nil)
+	rr = httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 for toggle, got %d", rr.Code)
+	}
+	var toggled ScheduledTaskView
+	_ = json.NewDecoder(rr.Body).Decode(&toggled)
+	if toggled.Enabled != false {
+		t.Fatalf("expected enabled to be false, got %v", toggled.Enabled)
+	}
+
+	// Toggle back to enabled
+	req = httptest.NewRequest(http.MethodPost, "/api/schedules/1/toggle", nil)
+	rr = httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 for second toggle, got %d", rr.Code)
+	}
+
+	// 8. Test POST /api/schedules/{id}/run (manual trigger, verifies creator preservation)
+	req = httptest.NewRequest(http.MethodPost, "/api/schedules/1/run", nil)
+	rr = httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 for run schedule, got %d; body: %s", rr.Code, rr.Body.String())
+	}
+	var runResp struct {
+		Ok      bool `json:"ok"`
+		ChoreId uint `json:"chore_id"`
+	}
+	if err := json.NewDecoder(rr.Body).Decode(&runResp); err != nil {
+		t.Fatalf("failed to decode run response: %v", err)
+	}
+	if !runResp.Ok || runResp.ChoreId == 0 {
+		t.Fatalf("expected ok=true and non-zero chore_id, got %+v", runResp)
+	}
+
+	// Verify the created chore has creator set to the schedule's creator!
+	req = httptest.NewRequest(http.MethodGet, "/api/chores/1", nil)
+	rr = httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 for GET /api/chores/1, got %d", rr.Code)
+	}
+	var choreView ChoreView
+	_ = json.NewDecoder(rr.Body).Decode(&choreView)
+	if choreView.CreatorId != "378532044558303233" {
+		t.Fatalf("expected chore CreatorId to be preserved as 378532044558303233, got %s", choreView.CreatorId)
+	}
+
+	// 9. Test DELETE /api/schedules/{id}
+	req = httptest.NewRequest(http.MethodDelete, "/api/schedules/1", nil)
+	rr = httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 for delete, got %d", rr.Code)
+	}
+
+	// Verify it's gone
+	req = httptest.NewRequest(http.MethodGet, "/api/schedules/1", nil)
+	rr = httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 after deletion, got %d", rr.Code)
+	}
+}
+

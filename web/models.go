@@ -123,3 +123,39 @@ type PersonPoolEntry struct {
 	NormalizedTotal float64  `json:"normalized_total"`
 	PresentTicks    int      `json:"present_ticks"`
 }
+
+type ScheduledTaskView struct {
+	ID                    uint       `json:"id"`
+	Name                  string     `json:"name"`
+	Description           string     `json:"description,omitempty"`
+	CronExpr              string     `json:"cron_expr"`
+	CronDescription       string     `json:"cron_description"`
+	NecessaryWorkers      uint       `json:"necessary_workers"`
+	EstimatedTimeMin      uint       `json:"estimated_time_min"`
+	AssignmentTimeoutMin  uint       `json:"assignment_timeout_min"`
+	NecessaryCapabilities []string   `json:"necessary_capabilities"`
+	AssigneeId            string     `json:"assignee_id,omitempty"`
+	AssigneeName          string     `json:"assignee_name,omitempty"`
+	CreatorId             string     `json:"creator_id"`
+	CreatorName           string     `json:"creator_name"`
+	Enabled               bool       `json:"enabled"`
+	TemplateKey           string     `json:"template_key,omitempty"`
+	LastRunAt             *time.Time `json:"last_run_at,omitempty"`
+	NextRunAt             *time.Time `json:"next_run_at,omitempty"`
+	CreatedAt             time.Time  `json:"created_at"`
+}
+
+type ScheduledTaskIn struct {
+	Name                  string   `json:"name"`
+	Description           string   `json:"description,omitempty"`
+	CronExpr              string   `json:"cron_expr"`
+	NecessaryWorkers      uint     `json:"necessary_workers"`
+	EstimatedTimeMin      uint     `json:"estimated_time_min"`
+	AssignmentTimeoutMin  uint     `json:"assignment_timeout_min"`
+	NecessaryCapabilities []string `json:"necessary_capabilities"`
+	AssigneeId            string   `json:"assignee_id,omitempty"`
+	CreatorId             string   `json:"creator_id,omitempty"`
+	Enabled               *bool    `json:"enabled,omitempty"`
+	TemplateKey           string   `json:"template_key,omitempty"`
+}
+

@@ -101,3 +101,11 @@ func (w *Web) handleTemplatesPage(rw http.ResponseWriter, r *http.Request) {
 		"user":   w.GetCurrentUser(r),
 	})
 }
+
+func (w *Web) handleSchedulesPage(rw http.ResponseWriter, r *http.Request) {
+	w.renderTemplate(rw, "schedules.html", pongo2.Context{
+		"active": "schedules",
+		"user":   w.GetCurrentUser(r),
+	})
+}
+

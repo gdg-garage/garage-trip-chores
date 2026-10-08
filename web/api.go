@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/gdg-garage/garage-trip-chores/storage"
+	"github.com/gdg-garage/garage-trip-chores/ui"
 )
 
 func writeJSON(rw http.ResponseWriter, status int, data any) {
@@ -203,6 +204,296 @@ func (w *Web) handleDeleteTemplate(rw http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(rw, http.StatusOK, map[string]any{"ok": true})
 }
+
+func (w *Web) buildScheduledTaskView(t storage.ScheduledTask) ScheduledTaskView {
+	creatorName := t.CreatorName
+	if creatorName == "" {
+		creatorName = w.storage.ResolveUserName(t.CreatorId)
+	}
+	assigneeName := ""
+	if t.AssigneeId != "" {
+		assigneeName = w.storage.ResolveUserName(t.AssigneeId)
+	}
+	return ScheduledTaskView{
+		ID:                    t.ID,
+		Name:                  t.Name,
+		Description:           t.Description,
+		CronExpr:              t.CronExpr,
+		CronDescription:       ui.DescribeCron(t.CronExpr),
+		NecessaryWorkers:      t.NecessaryWorkers,
+		EstimatedTimeMin:      t.EstimatedTimeMin,
+		AssignmentTimeoutMin:  t.AssignmentTimeoutMin,
+		NecessaryCapabilities: t.GetCapabilities(),
+		AssigneeId:            t.AssigneeId,
+		AssigneeName:          assigneeName,
+		CreatorId:             t.CreatorId,
+		CreatorName:           creatorName,
+		Enabled:               t.Enabled,
+		TemplateKey:           t.TemplateKey,
+		LastRunAt:             t.LastRunAt,
+		NextRunAt:             t.NextRunAt,
+		CreatedAt:             t.CreatedAt,
+	}
+}
+
+func (w *Web) handleGetSchedules(rw http.ResponseWriter, r *http.Request) {
+	tasks, err := w.storage.GetScheduledTasks()
+	if err != nil {
+		writeError(rw, http.StatusInternalServerError, err.Error())
+		return
+	}
+	var views []ScheduledTaskView
+	for _, t := range tasks {
+		views = append(views, w.buildScheduledTaskView(t))
+	}
+	if views == nil {
+		views = []ScheduledTaskView{}
+	}
+	writeJSON(rw, http.StatusOK, map[string]any{"schedules": views})
+}
+
+func (w *Web) handlePostSchedule(rw http.ResponseWriter, r *http.Request) {
+	var in ScheduledTaskIn
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		writeError(rw, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+	if strings.TrimSpace(in.Name) == "" {
+		writeError(rw, http.StatusBadRequest, "Name required")
+		return
+	}
+	if strings.TrimSpace(in.CronExpr) == "" {
+		writeError(rw, http.StatusBadRequest, "Cron expression required")
+		return
+	}
+
+	nextRun, err := ui.ParseCronNext(in.CronExpr, time.Now(), nil)
+	if err != nil {
+		writeError(rw, http.StatusBadRequest, fmt.Sprintf("Invalid cron expression: %v", err))
+		return
+	}
+
+	u := w.GetCurrentUser(r)
+	creatorID := in.CreatorId
+	if creatorID == "" && u != nil {
+		creatorID = u.DiscordId
+	}
+	if creatorID == "" {
+		creatorID = "admin"
+	}
+	creatorName := ""
+	if u != nil && (in.CreatorId == "" || in.CreatorId == u.DiscordId) {
+		creatorName = u.Name
+	} else {
+		creatorName = w.storage.ResolveUserName(creatorID)
+	}
+
+	enabled := true
+	if in.Enabled != nil {
+		enabled = *in.Enabled
+	}
+
+	capsJSON, _ := json.Marshal(in.NecessaryCapabilities)
+	workers := in.NecessaryWorkers
+	if workers == 0 {
+		workers = 1
+	}
+	est := in.EstimatedTimeMin
+	if est == 0 {
+		est = 10
+	}
+	timeout := in.AssignmentTimeoutMin
+	if timeout == 0 {
+		timeout = 15
+	}
+
+	task := storage.ScheduledTask{
+		Name:                  in.Name,
+		Description:           in.Description,
+		CronExpr:              in.CronExpr,
+		NecessaryWorkers:      workers,
+		EstimatedTimeMin:      est,
+		AssignmentTimeoutMin:  timeout,
+		NecessaryCapabilities: string(capsJSON),
+		AssigneeId:            in.AssigneeId,
+		CreatorId:             creatorID,
+		CreatorName:           creatorName,
+		Enabled:               enabled,
+		TemplateKey:           in.TemplateKey,
+		NextRunAt:             nextRun,
+	}
+
+	created, err := w.storage.CreateScheduledTask(task)
+	if err != nil {
+		writeError(rw, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	writeJSON(rw, http.StatusOK, w.buildScheduledTaskView(created))
+}
+
+func (w *Web) handleGetSchedule(rw http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		writeError(rw, http.StatusBadRequest, "Invalid ID")
+		return
+	}
+
+	task, err := w.storage.GetScheduledTask(uint(id))
+	if err != nil {
+		writeError(rw, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if task == nil {
+		writeError(rw, http.StatusNotFound, "Schedule not found")
+		return
+	}
+	writeJSON(rw, http.StatusOK, w.buildScheduledTaskView(*task))
+}
+
+func (w *Web) handlePutSchedule(rw http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		writeError(rw, http.StatusBadRequest, "Invalid ID")
+		return
+	}
+
+	existing, err := w.storage.GetScheduledTask(uint(id))
+	if err != nil {
+		writeError(rw, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if existing == nil {
+		writeError(rw, http.StatusNotFound, "Schedule not found")
+		return
+	}
+
+	var in ScheduledTaskIn
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		writeError(rw, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+
+	if strings.TrimSpace(in.Name) != "" {
+		existing.Name = in.Name
+	}
+	existing.Description = in.Description
+	if strings.TrimSpace(in.CronExpr) != "" {
+		nextRun, err := ui.ParseCronNext(in.CronExpr, time.Now(), nil)
+		if err != nil {
+			writeError(rw, http.StatusBadRequest, fmt.Sprintf("Invalid cron expression: %v", err))
+			return
+		}
+		existing.CronExpr = in.CronExpr
+		existing.NextRunAt = nextRun
+	}
+	if in.NecessaryWorkers > 0 {
+		existing.NecessaryWorkers = in.NecessaryWorkers
+	}
+	if in.EstimatedTimeMin > 0 {
+		existing.EstimatedTimeMin = in.EstimatedTimeMin
+	}
+	if in.AssignmentTimeoutMin > 0 {
+		existing.AssignmentTimeoutMin = in.AssignmentTimeoutMin
+	}
+	if in.NecessaryCapabilities != nil {
+		capsJSON, _ := json.Marshal(in.NecessaryCapabilities)
+		existing.NecessaryCapabilities = string(capsJSON)
+	}
+	existing.AssigneeId = in.AssigneeId
+	if in.CreatorId != "" {
+		existing.CreatorId = in.CreatorId
+		existing.CreatorName = w.storage.ResolveUserName(in.CreatorId)
+	}
+	if in.Enabled != nil {
+		existing.Enabled = *in.Enabled
+		if !existing.Enabled {
+			existing.NextRunAt = nil
+		} else if existing.NextRunAt == nil {
+			nextRun, _ := ui.ParseCronNext(existing.CronExpr, time.Now(), nil)
+			existing.NextRunAt = nextRun
+		}
+	}
+	existing.TemplateKey = in.TemplateKey
+
+	if err := w.storage.UpdateScheduledTask(*existing); err != nil {
+		writeError(rw, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	writeJSON(rw, http.StatusOK, w.buildScheduledTaskView(*existing))
+}
+
+func (w *Web) handleDeleteSchedule(rw http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		writeError(rw, http.StatusBadRequest, "Invalid ID")
+		return
+	}
+
+	if err := w.storage.DeleteScheduledTask(uint(id)); err != nil {
+		writeError(rw, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(rw, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (w *Web) handleToggleSchedule(rw http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		writeError(rw, http.StatusBadRequest, "Invalid ID")
+		return
+	}
+
+	task, err := w.storage.GetScheduledTask(uint(id))
+	if err != nil {
+		writeError(rw, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if task == nil {
+		writeError(rw, http.StatusNotFound, "Schedule not found")
+		return
+	}
+
+	task.Enabled = !task.Enabled
+	if task.Enabled {
+		nextRun, _ := ui.ParseCronNext(task.CronExpr, time.Now(), nil)
+		task.NextRunAt = nextRun
+	} else {
+		task.NextRunAt = nil
+	}
+	if err := w.storage.UpdateScheduledTask(*task); err != nil {
+		writeError(rw, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(rw, http.StatusOK, w.buildScheduledTaskView(*task))
+}
+
+func (w *Web) handleRunSchedule(rw http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		writeError(rw, http.StatusBadRequest, "Invalid ID")
+		return
+	}
+
+	if w.ui == nil {
+		writeError(rw, http.StatusInternalServerError, "UI service not available")
+		return
+	}
+
+	chore, err := w.ui.ExecuteScheduledTask(uint(id))
+	if err != nil {
+		writeError(rw, http.StatusInternalServerError, fmt.Sprintf("Failed to run schedule: %v", err))
+		return
+	}
+	writeJSON(rw, http.StatusOK, map[string]any{"ok": true, "chore_id": chore.ID})
+}
+
 
 func (w *Web) handleGetSkills(rw http.ResponseWriter, r *http.Request) {
 	skills, err := w.storage.GetSkills()

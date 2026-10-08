@@ -144,6 +144,7 @@ func (w *Web) RegisterRoutes(r chi.Router) {
 	r.Get("/user/{id}", w.handleUserPage)
 	r.Get("/leaderboard", w.handleLeaderboard)
 	r.Get("/templates", w.handleTemplatesPage)
+	r.Get("/schedules", w.handleSchedulesPage)
 
 	// UI API routes
 	r.Route("/api", func(apiRouter chi.Router) {
@@ -154,6 +155,13 @@ func (w *Web) RegisterRoutes(r chi.Router) {
 		apiRouter.Post("/templates", w.handlePostTemplate)
 		apiRouter.Put("/templates/{key}", w.handlePutTemplate)
 		apiRouter.Delete("/templates/{key}", w.handleDeleteTemplate)
+		apiRouter.Get("/schedules", w.handleGetSchedules)
+		apiRouter.Post("/schedules", w.handlePostSchedule)
+		apiRouter.Get("/schedules/{id}", w.handleGetSchedule)
+		apiRouter.Put("/schedules/{id}", w.handlePutSchedule)
+		apiRouter.Delete("/schedules/{id}", w.handleDeleteSchedule)
+		apiRouter.Post("/schedules/{id}/toggle", w.handleToggleSchedule)
+		apiRouter.Post("/schedules/{id}/run", w.handleRunSchedule)
 		apiRouter.Get("/skills", w.handleGetSkills)
 		apiRouter.Get("/stats", w.handleGetStats)
 		apiRouter.Get("/users", w.handleGetUsers)

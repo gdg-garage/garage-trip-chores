@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"encoding/json"
 	"strings"
 	"time"
 )
@@ -214,4 +215,38 @@ type UserProfile struct {
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
 }
+
+type ScheduledTask struct {
+	ID                    uint       `gorm:"primaryKey" json:"id"`
+	Name                  string     `gorm:"not null" json:"name"`
+	Description           string     `json:"description,omitempty"`
+	CronExpr              string     `gorm:"not null" json:"cron_expr"`
+	NecessaryWorkers      uint       `gorm:"not null;default:1" json:"necessary_workers"`
+	EstimatedTimeMin      uint       `gorm:"not null;default:15" json:"estimated_time_min"`
+	AssignmentTimeoutMin  uint       `gorm:"not null;default:15" json:"assignment_timeout_min"`
+	NecessaryCapabilities string     `gorm:"not null;default:'[]'" json:"necessary_capabilities"`
+	AssigneeId            string     `json:"assignee_id,omitempty"`
+	CreatorId             string     `gorm:"not null" json:"creator_id"`
+	CreatorName           string     `json:"creator_name,omitempty"`
+	Enabled               bool       `gorm:"not null;default:true" json:"enabled"`
+	TemplateKey           string     `json:"template_key,omitempty"`
+	LastRunAt             *time.Time `json:"last_run_at,omitempty"`
+	NextRunAt             *time.Time `json:"next_run_at,omitempty"`
+	CreatedAt             time.Time  `json:"created_at"`
+	UpdatedAt             time.Time  `json:"updated_at"`
+}
+
+func (t *ScheduledTask) GetCapabilities() []string {
+	if t.NecessaryCapabilities == "" || t.NecessaryCapabilities == "[]" {
+		return []string{}
+	}
+	if strings.HasPrefix(t.NecessaryCapabilities, "[") {
+		var caps []string
+		if err := json.Unmarshal([]byte(t.NecessaryCapabilities), &caps); err == nil {
+			return caps
+		}
+	}
+	return strings.Split(t.NecessaryCapabilities, ",")
+}
+
 

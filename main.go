@@ -62,6 +62,7 @@ func main() {
 	uiServer.SetSummaryRunner(llmSummarizer)
 	go uiServer.Commands(ctx, &wg)
 	go uiServer.RunDelayedTaskScheduler(ctx, &wg)
+	go uiServer.RunScheduledTaskScheduler(ctx, &wg)
 
 	tracker := presencetracker.NewTracker(s, logger, conf.Tracker)
 	go tracker.RunTracker(ctx, &wg)
