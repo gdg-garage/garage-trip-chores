@@ -157,7 +157,7 @@ func (w *Web) RegisterRoutes(r chi.Router) {
 		apiRouter.Get("/skills", w.handleGetSkills)
 		apiRouter.Get("/stats", w.handleGetStats)
 		apiRouter.Get("/users", w.handleGetUsers)
-		apiRouter.Get("/people", w.handleGetUsers)
+		apiRouter.Get("/people", w.handleGetPeople)
 		apiRouter.Get("/leaderboard", w.handleGetLeaderboard)
 		apiRouter.Get("/users/{id}", w.handleGetUserDetail)
 

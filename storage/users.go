@@ -92,10 +92,19 @@ func (s *Storage) GetPresentUsers() ([]User, error) {
 		if !isPresent {
 			continue
 		}
+		name := member.User.Username
+		if member.User.GlobalName != "" {
+			name = member.User.GlobalName
+		}
+		if member.Nick != "" {
+			name = member.Nick
+		}
 		users = append(users, User{
 			Handle:       member.User.Username,
+			Name:         name,
 			DiscordId:    member.User.ID,
 			Capabilities: roles,
+			IsPresent:    true,
 		})
 	}
 

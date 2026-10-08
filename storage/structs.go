@@ -8,7 +8,10 @@ import (
 type User struct {
 	DiscordId    string
 	Handle       string
+	Name         string
 	Capabilities []string
+	IsPresent    bool
+	IsAdmin      bool
 }
 
 type Chore struct {

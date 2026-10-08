@@ -2,6 +2,7 @@ package storage
 
 import (
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -11,11 +12,13 @@ import (
 )
 
 type Storage struct {
-	db      *gorm.DB
-	logger  *slog.Logger
-	discord *discordgo.Session
-	conf    Config
-	Events  *EventBus
+	db          *gorm.DB
+	logger      *slog.Logger
+	discord     *discordgo.Session
+	conf        Config
+	Events      *EventBus
+	userCacheMu sync.RWMutex
+	userCache   map[string]User
 }
 
 func dbConnect(conf Config, logger *slog.Logger) (*gorm.DB, error) {
@@ -66,15 +69,22 @@ func New(conf Config, logger *slog.Logger) (*Storage, error) {
 	}
 
 	st := &Storage{
-		db:      db,
-		logger:  logger,
-		discord: dg,
-		conf:    conf,
-		Events:  NewEventBus(),
+		db:        db,
+		logger:    logger,
+		discord:   dg,
+		conf:      conf,
+		Events:    NewEventBus(),
+		userCache: make(map[string]User),
 	}
 	if err := st.SeedDefaultTemplates(); err != nil {
 		logger.Warn("Failed to seed default chore templates", "error", err)
 	}
+	st.SeedUserMap()
+	go func() {
+		if err := st.SyncDiscordUsers(); err != nil {
+			logger.Warn("Failed to synchronize Discord users", "error", err)
+		}
+	}()
 	return st, nil
 }
 

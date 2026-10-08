@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -135,7 +136,7 @@ func (w *Web) handleGetTemplates(rw http.ResponseWriter, r *http.Request) {
 			"sort_order":             t.SortOrder,
 		})
 	}
-	writeJSON(rw, http.StatusOK, res)
+	writeJSON(rw, http.StatusOK, map[string]any{"templates": res})
 }
 
 func (w *Web) handlePostTemplate(rw http.ResponseWriter, r *http.Request) {
@@ -209,7 +210,10 @@ func (w *Web) handleGetSkills(rw http.ResponseWriter, r *http.Request) {
 		writeError(rw, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(rw, http.StatusOK, skills)
+	if skills == nil {
+		skills = []string{}
+	}
+	writeJSON(rw, http.StatusOK, map[string]any{"skills": skills})
 }
 
 func (w *Web) handleGetStats(rw http.ResponseWriter, r *http.Request) {
@@ -218,7 +222,7 @@ func (w *Web) handleGetStats(rw http.ResponseWriter, r *http.Request) {
 		writeError(rw, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(rw, http.StatusOK, stats)
+	writeJSON(rw, http.StatusOK, map[string]any{"stats": stats})
 }
 
 func (w *Web) handleGetUsers(rw http.ResponseWriter, r *http.Request) {
@@ -227,11 +231,25 @@ func (w *Web) handleGetUsers(rw http.ResponseWriter, r *http.Request) {
 	for _, u := range dir {
 		list = append(list, u)
 	}
-	writeJSON(rw, http.StatusOK, list)
+	sort.Slice(list, func(i, j int) bool {
+		return list[i].Name < list[j].Name
+	})
+	writeJSON(rw, http.StatusOK, map[string]any{
+		"users":          list,
+		"children_count": w.conf.ChildrenCount,
+	})
+}
+
+func (w *Web) handleGetPeople(rw http.ResponseWriter, r *http.Request) {
+	pool := w.GetPeoplePool()
+	writeJSON(rw, http.StatusOK, map[string]any{
+		"people":         pool,
+		"children_count": w.conf.ChildrenCount,
+	})
 }
 
 func (w *Web) handleGetLeaderboard(rw http.ResponseWriter, r *http.Request) {
-	writeJSON(rw, http.StatusOK, w.Leaderboard())
+	writeJSON(rw, http.StatusOK, map[string]any{"rows": w.Leaderboard()})
 }
 
 func (w *Web) handleGetUserDetail(rw http.ResponseWriter, r *http.Request) {

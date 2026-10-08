@@ -1,12 +1,17 @@
 package web
 
 import (
+	"math"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/gdg-garage/garage-trip-chores/storage"
 )
+
+func round1(val float64) float64 {
+	return math.Round(val*10) / 10
+}
 
 const (
 	SpicyPepper       = "🌶️"
@@ -34,21 +39,28 @@ func SizeFor(minutes uint) string {
 func (w *Web) BuildPersonDirectory() map[string]UserInfo {
 	dir := make(map[string]UserInfo)
 
-	// Fetch users from storage/discord
-	users, err := w.storage.GetPresentUsers()
+	// 1. Fetch all known guild users from Discord cache and database
+	guildUsers, err := w.storage.GetAllGuildUsers()
 	if err == nil {
-		for _, u := range users {
+		for _, u := range guildUsers {
+			name := u.Name
+			if name == "" {
+				name = u.Handle
+			}
+			if name == "" {
+				name = u.DiscordId
+			}
 			dir[u.DiscordId] = UserInfo{
 				DiscordId:    u.DiscordId,
-				Name:         u.Handle,
+				Name:         name,
 				Handle:       u.Handle,
 				Capabilities: u.Capabilities,
-				IsPresent:    true,
+				IsPresent:    u.IsPresent,
 			}
 		}
 	}
 
-	// Augment with stored user profiles if available
+	// 2. Augment with stored user profiles if available
 	profiles, err := w.storage.GetAllProfiles()
 	if err == nil {
 		for _, p := range profiles {
@@ -64,7 +76,35 @@ func (w *Web) BuildPersonDirectory() map[string]UserInfo {
 			if p.DiscordHandle != "" {
 				entry.Handle = p.DiscordHandle
 			}
+			if entry.Name == "" {
+				entry.Name = entry.Handle
+			}
+			if entry.Name == "" {
+				entry.Name = p.DiscordId
+			}
 			dir[p.DiscordId] = entry
+		}
+	}
+
+	// 3. Mark currently present users from Discord role (chores::present)
+	users, err := w.storage.GetPresentUsers()
+	if err == nil {
+		for _, u := range users {
+			entry, ok := dir[u.DiscordId]
+			if !ok {
+				name := u.Name
+				if name == "" {
+					name = u.Handle
+				}
+				entry = UserInfo{
+					DiscordId: u.DiscordId,
+					Name:      name,
+					Handle:    u.Handle,
+				}
+			}
+			entry.Capabilities = u.Capabilities
+			entry.IsPresent = true
+			dir[u.DiscordId] = entry
 		}
 	}
 
@@ -107,6 +147,11 @@ func (w *Web) BuildChoreView(chore storage.Chore, worklogs []storage.WorkLog, as
 			name := a.UserId
 			if u, ok := dir[a.UserId]; ok && u.Name != "" {
 				name = u.Name
+			} else {
+				resolved := w.storage.ResolveUserName(a.UserId)
+				if resolved != "" {
+					name = resolved
+				}
 			}
 			claimers = append(claimers, ClaimerView{
 				DiscordId: a.UserId,
@@ -131,6 +176,11 @@ func (w *Web) BuildChoreView(chore storage.Chore, worklogs []storage.WorkLog, as
 	creatorName := chore.CreatorId
 	if u, ok := dir[chore.CreatorId]; ok && u.Name != "" {
 		creatorName = u.Name
+	} else if chore.CreatorId != "" && chore.CreatorId != "API" {
+		resolved := w.storage.ResolveUserName(chore.CreatorId)
+		if resolved != "" {
+			creatorName = resolved
+		}
 	}
 
 	workers := chore.NecessaryWorkers
@@ -335,12 +385,17 @@ func (w *Web) Leaderboard() []LeaderboardRow {
 		name := id
 		if u, ok := dir[id]; ok && u.Name != "" {
 			name = u.Name
+		} else {
+			resolved := w.storage.ResolveUserName(id)
+			if resolved != "" {
+				name = resolved
+			}
 		}
 		rows = append(rows, LeaderboardRow{
 			DiscordId:     id,
 			Name:          name,
 			WorkedCount:   int(s.Count),
-			WorkedMin:     s.TotalMin,
+			WorkedMin:     round1(s.TotalMin),
 			AssignedCount: assignedCounts[id],
 		})
 	}
@@ -366,6 +421,11 @@ func (w *Web) UserDetail(discordID string) UserDetail {
 	if u.Name != "" {
 		name = u.Name
 		handle = u.Handle
+	} else {
+		resolved := w.storage.ResolveUserName(discordID)
+		if resolved != "" {
+			name = resolved
+		}
 	}
 
 	allChores, _ := w.storage.GetChores()
@@ -434,3 +494,50 @@ func (w *Web) UserDetail(discordID string) UserDetail {
 		TimeSpentMin: totalTime,
 	}
 }
+
+func (w *Web) GetPeoplePool() []PersonPoolEntry {
+	dir := w.BuildPersonDirectory()
+	stats, _ := w.storage.GetAggregatedStats()
+
+	// Calculate committed minutes for active in-progress chores
+	committed := make(map[string]float64)
+	chores, _ := w.storage.GetChores()
+	assignments, _ := w.storage.GetChoresAssignments()
+	ackMap := make(map[uint][]string)
+	for _, a := range assignments {
+		if a.Acked != nil {
+			ackMap[a.ChoreId] = append(ackMap[a.ChoreId], a.UserId)
+		}
+	}
+	for _, c := range chores {
+		if c.Completed == nil && c.Cancelled == nil {
+			for _, uid := range ackMap[c.ID] {
+				committed[uid] += float64(c.EstimatedTimeMin)
+			}
+		}
+	}
+
+	var pool []PersonPoolEntry
+	for _, u := range dir {
+		s := stats[u.DiscordId]
+		workload := s.TotalMin + committed[u.DiscordId]
+		pool = append(pool, PersonPoolEntry{
+			DiscordId:       u.DiscordId,
+			Name:            u.Name,
+			Handle:          u.Handle,
+			Capabilities:    u.Capabilities,
+			WorkloadMin:     round1(workload),
+			NormalizedTotal: round1(s.NormalizedTotal),
+			PresentTicks:    s.PresentTicks,
+		})
+	}
+
+	sort.Slice(pool, func(i, j int) bool {
+		if pool[i].NormalizedTotal != pool[j].NormalizedTotal {
+			return pool[i].NormalizedTotal < pool[j].NormalizedTotal
+		}
+		return pool[i].WorkloadMin < pool[j].WorkloadMin
+	})
+	return pool
+}
+

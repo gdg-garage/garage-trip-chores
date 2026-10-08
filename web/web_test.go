@@ -63,11 +63,13 @@ func TestWebPagesAndAPI(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200 for /api/templates, got %d", rr.Code)
 	}
-	var tpls []map[string]any
-	if err := json.NewDecoder(rr.Body).Decode(&tpls); err != nil {
+	var tplsResp struct {
+		Templates []map[string]any `json:"templates"`
+	}
+	if err := json.NewDecoder(rr.Body).Decode(&tplsResp); err != nil {
 		t.Fatalf("failed to decode templates: %v", err)
 	}
-	if len(tpls) == 0 {
+	if len(tplsResp.Templates) == 0 {
 		t.Fatalf("expected seeded templates, got 0")
 	}
 
@@ -131,5 +133,71 @@ func TestWebPagesAndAPI(t *testing.T) {
 	}
 	if !srChore.SelfReported || srChore.Completed == nil || srChore.WorkedMinTotal != 20 {
 		t.Fatalf("unexpected self-reported chore: %+v", srChore)
+	}
+
+	// 6. Test GET /api/users (should return seeded attendees from discord user map)
+	req = httptest.NewRequest(http.MethodGet, "/api/users", nil)
+	rr = httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 for GET /api/users, got %d", rr.Code)
+	}
+	var usersResp struct {
+		Users         []UserInfo `json:"users"`
+		ChildrenCount int        `json:"children_count"`
+	}
+	if err := json.NewDecoder(rr.Body).Decode(&usersResp); err != nil {
+		t.Fatalf("failed to decode users response: %v", err)
+	}
+	if len(usersResp.Users) == 0 {
+		t.Fatalf("expected users from seeded user map, got 0")
+	}
+
+	// Verify a known user translation (e.g. 378532044558303233 -> Dongalis (Dominik N.))
+	foundDongalis := false
+	for _, u := range usersResp.Users {
+		if u.DiscordId == "378532044558303233" {
+			foundDongalis = true
+			if u.Name != "Dongalis (Dominik N.)" {
+				t.Fatalf("expected translated name 'Dongalis (Dominik N.)', got '%s'", u.Name)
+			}
+			if u.Handle != "dongalis" {
+				t.Fatalf("expected handle 'dongalis', got '%s'", u.Handle)
+			}
+		}
+	}
+	if !foundDongalis {
+		t.Fatalf("expected to find Dongalis in users list")
+	}
+
+	// 7. Test GET /api/leaderboard (wrap into rows)
+	req = httptest.NewRequest(http.MethodGet, "/api/leaderboard", nil)
+	rr = httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 for GET /api/leaderboard, got %d", rr.Code)
+	}
+	var lbResp struct {
+		Rows []LeaderboardRow `json:"rows"`
+	}
+	if err := json.NewDecoder(rr.Body).Decode(&lbResp); err != nil {
+		t.Fatalf("failed to decode leaderboard response: %v", err)
+	}
+
+	// 8. Test GET /api/people
+	req = httptest.NewRequest(http.MethodGet, "/api/people", nil)
+	rr = httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 for GET /api/people, got %d", rr.Code)
+	}
+	var peopleResp struct {
+		People []PersonPoolEntry `json:"people"`
+	}
+	if err := json.NewDecoder(rr.Body).Decode(&peopleResp); err != nil {
+		t.Fatalf("failed to decode people response: %v", err)
+	}
+	if len(peopleResp.People) == 0 {
+		t.Fatalf("expected people in pool, got 0")
 	}
 }

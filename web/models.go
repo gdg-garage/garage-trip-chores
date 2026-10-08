@@ -113,3 +113,13 @@ type SuggestionsResult struct {
 	Top    []string          `json:"top"`
 	Ranked []SuggestedPerson `json:"ranked"`
 }
+
+type PersonPoolEntry struct {
+	DiscordId       string   `json:"discord_id"`
+	Name            string   `json:"name"`
+	Handle          string   `json:"handle"`
+	Capabilities    []string `json:"capabilities"`
+	WorkloadMin     float64  `json:"workload_min"`
+	NormalizedTotal float64  `json:"normalized_total"`
+	PresentTicks    int      `json:"present_ticks"`
+}
