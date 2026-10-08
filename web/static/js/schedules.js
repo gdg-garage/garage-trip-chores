@@ -75,6 +75,13 @@ async function init() {
     }
 
     allUsers = Array.isArray(uData) ? uData : (uData.users || []);
+    const aSelect = document.getElementById("assignee");
+    if (aSelect) {
+      allUsers.forEach((u) => {
+        const opt = el("option", { value: u.discord_id }, u.name || u.handle || u.discord_id);
+        aSelect.appendChild(opt);
+      });
+    }
     const creatorSelect = document.getElementById("schedule-creator-select");
     if (creatorSelect) {
       allUsers.forEach((u) => {
@@ -342,6 +349,10 @@ function renderScheduleCard(s) {
     el("span", { class: "badge", style: "background:#212b3d;font-size:.8rem;padding:3px 8px;border-radius:4px" }, `⏳ ${s.assignment_timeout_min}m timeout`)
   );
 
+  if (s.assignee_id) {
+    specsRow.appendChild(el("span", { class: "badge", style: "background:#283a54;color:#8be9fd;font-size:.8rem;padding:3px 8px;border-radius:4px" }, `🎯 Direct: ${s.assignee_name || s.assignee_id}`));
+  }
+
   if (s.necessary_capabilities && s.necessary_capabilities.length) {
     s.necessary_capabilities.forEach((c) => {
       specsRow.appendChild(el("span", { class: "badge", style: "background:#332947;color:#bd93f9;font-size:.8rem;padding:3px 8px;border-radius:4px" }, `✨ ${c}`));
@@ -408,6 +419,10 @@ function editSchedule(s) {
   document.getElementById("timeout").value = s.assignment_timeout_min || 15;
   document.getElementById("template_key").value = s.template_key || "";
   document.getElementById("enabled").checked = s.enabled;
+  const aSelect = document.getElementById("assignee");
+  if (aSelect) {
+    aSelect.value = s.assignee_id || "";
+  }
 
   document.getElementById("cron_expr").value = s.cron_expr || "0 9 * * *";
   updateCronPreview();
@@ -442,6 +457,10 @@ function resetForm() {
   document.getElementById("btn-submit").textContent = "save::schedule ⏰";
   document.getElementById("cancel-edit").hidden = true;
   document.getElementById("cron_expr").value = "0 9 * * *";
+  const aSelect = document.getElementById("assignee");
+  if (aSelect) {
+    aSelect.value = "";
+  }
 
   selectedSkills.clear();
   document.querySelectorAll("#skills .chip").forEach((chip) => {
@@ -468,6 +487,7 @@ async function saveSchedule(ev) {
     necessary_workers: parseInt(document.getElementById("workers").value, 10) || 1,
     estimated_time_min: parseInt(document.getElementById("time").value, 10) || 10,
     assignment_timeout_min: parseInt(document.getElementById("timeout").value, 10) || 15,
+    assignee_id: document.getElementById("assignee")?.value || "",
     necessary_capabilities: [...selectedSkills],
     template_key: document.getElementById("template_key").value || "",
     enabled: document.getElementById("enabled").checked,

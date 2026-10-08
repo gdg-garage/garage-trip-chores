@@ -56,17 +56,25 @@
       </div>
     </div>
 
-    <div id="delay-wrap" style="margin-bottom:12px">
-      <label for="delay_sel">delay_publishing::</label>
-      <select id="delay_sel">
-        <option value="0">post immediately</option>
-        <option value="15">in 15 minutes</option>
-        <option value="30">in 30 minutes</option>
-        <option value="60">in 1 hour</option>
-        <option value="120">in 2 hours</option>
-        <option value="custom">custom minutes…</option>
-      </select>
-      <input id="delay_custom" type="number" min="1" max="10000" placeholder="custom minutes" style="margin-top:6px" hidden />
+    <div class="grid2" id="assignee-delay-wrap">
+      <div>
+        <label for="assignee">assign_directly::(optional)</label>
+        <select id="assignee">
+          <option value="">open (anyone can claim)</option>
+        </select>
+      </div>
+      <div id="delay-wrap">
+        <label for="delay_sel">delay_publishing::</label>
+        <select id="delay_sel">
+          <option value="0">post immediately</option>
+          <option value="15">in 15 minutes</option>
+          <option value="30">in 30 minutes</option>
+          <option value="60">in 1 hour</option>
+          <option value="120">in 2 hours</option>
+          <option value="custom">custom minutes…</option>
+        </select>
+        <input id="delay_custom" type="number" min="1" max="10000" placeholder="custom minutes" style="margin-top:6px" hidden />
+      </div>
     </div>
 
     <div class="grid2" id="timeout-headcount-wrap">

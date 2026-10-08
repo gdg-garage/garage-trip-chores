@@ -27,6 +27,14 @@ async function init() {
     sbox.appendChild(chip);
   });
 
+  // Populate direct assignee dropdown
+  const assigneeSelect = document.getElementById("assignee");
+  if (assigneeSelect) {
+    users.forEach((u) => {
+      const opt = el("option", { value: u.discord_id }, u.name || u.handle || u.discord_id);
+      assigneeSelect.appendChild(opt);
+    });
+  }
 
   let currentUser = null;
   try {
@@ -115,7 +123,7 @@ function setFilter(filter) {
 
 function toggleSelfReported(checked) {
   const workersWrap = document.getElementById("workers-wrap");
-  const delayWrap = document.getElementById("delay-wrap");
+  const assigneeDelayWrap = document.getElementById("assignee-delay-wrap");
   const timeoutHeadcountWrap = document.getElementById("timeout-headcount-wrap");
   const skillsWrap = document.getElementById("skills-wrap");
   const deadlineUrgencyWrap = document.getElementById("deadline-urgency-wrap");
@@ -123,7 +131,7 @@ function toggleSelfReported(checked) {
 
   if (checked) {
     if (workersWrap) workersWrap.hidden = true;
-    if (delayWrap) delayWrap.hidden = true;
+    if (assigneeDelayWrap) assigneeDelayWrap.hidden = true;
     if (timeoutHeadcountWrap) timeoutHeadcountWrap.hidden = true;
     if (skillsWrap) skillsWrap.hidden = true;
     if (deadlineUrgencyWrap) deadlineUrgencyWrap.hidden = true;
@@ -131,7 +139,7 @@ function toggleSelfReported(checked) {
     if (submitBtn) submitBtn.textContent = "⚡ Save completed chore";
   } else {
     if (workersWrap) workersWrap.hidden = false;
-    if (delayWrap) delayWrap.hidden = false;
+    if (assigneeDelayWrap) assigneeDelayWrap.hidden = false;
     if (timeoutHeadcountWrap) timeoutHeadcountWrap.hidden = false;
     if (skillsWrap) skillsWrap.hidden = false;
     if (deadlineUrgencyWrap) deadlineUrgencyWrap.hidden = false;
@@ -207,6 +215,7 @@ async function submit(ev) {
 
   const selfReported = document.getElementById("self_reported")?.checked || false;
   const delayMin = selfReported ? 0 : getDelayMinutes();
+  const assigneeId = selfReported ? null : (document.getElementById("assignee")?.value || null);
   const deadlineRaw = selfReported ? null : document.getElementById("deadline").value;
 
   const creatorId = document.getElementById("creator_id")?.value ||
@@ -230,6 +239,7 @@ async function submit(ev) {
     headcount: parseInt(document.getElementById("headcount").value, 10) || null,
     delay_min: delayMin,
     self_reported: selfReported,
+    assignee_id: assigneeId,
     creator_id: creatorId,
   };
 

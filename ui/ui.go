@@ -1887,6 +1887,12 @@ func (ui *Ui) Commands(ctx context.Context, wg *sync.WaitGroup) error {
 					Required:    true,
 				},
 				{
+					Type:        discordgo.ApplicationCommandOptionUser,
+					Name:        "assignee",
+					Description: "Assign this chore directly to a specific member (optional).",
+					Required:    false,
+				},
+				{
 					Type:        discordgo.ApplicationCommandOptionInteger,
 					Name:        "necessary_workers",
 					Description: "The number of workers required to complete the chore. [1]",

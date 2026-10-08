@@ -248,6 +248,10 @@ func (w *Web) buildScheduledTaskView(t storage.ScheduledTask) ScheduledTaskView 
 	if creatorName == "" {
 		creatorName = w.storage.ResolveUserName(t.CreatorId)
 	}
+	assigneeName := ""
+	if t.AssigneeId != "" {
+		assigneeName = w.storage.ResolveUserName(t.AssigneeId)
+	}
 	return ScheduledTaskView{
 		ID:                    t.ID,
 		Name:                  t.Name,
@@ -257,6 +261,8 @@ func (w *Web) buildScheduledTaskView(t storage.ScheduledTask) ScheduledTaskView 
 		EstimatedTimeMin:      t.EstimatedTimeMin,
 		AssignmentTimeoutMin:  t.AssignmentTimeoutMin,
 		NecessaryCapabilities: t.GetCapabilities(),
+		AssigneeId:            t.AssigneeId,
+		AssigneeName:          assigneeName,
 		CreatorId:             t.CreatorId,
 		CreatorName:           creatorName,
 		Enabled:               t.Enabled,
@@ -348,6 +354,7 @@ func (w *Web) handlePostSchedule(rw http.ResponseWriter, r *http.Request) {
 		EstimatedTimeMin:      est,
 		AssignmentTimeoutMin:  timeout,
 		NecessaryCapabilities: string(capsJSON),
+		AssigneeId:            in.AssigneeId,
 		CreatorId:             creatorID,
 		CreatorName:           creatorName,
 		Enabled:               enabled,
@@ -434,6 +441,7 @@ func (w *Web) handlePutSchedule(rw http.ResponseWriter, r *http.Request) {
 		capsJSON, _ := json.Marshal(in.NecessaryCapabilities)
 		existing.NecessaryCapabilities = string(capsJSON)
 	}
+	existing.AssigneeId = in.AssigneeId
 	if in.CreatorId != "" {
 		existing.CreatorId = in.CreatorId
 		existing.CreatorName = w.storage.ResolveUserName(in.CreatorId)
@@ -681,6 +689,7 @@ func (w *Web) handlePostChore(rw http.ResponseWriter, r *http.Request) {
 		NecessaryWorkers:     workers,
 		AssignmentTimeoutMin: timeout,
 		CreatorId:            creatorID,
+		AssigneeId:           in.AssigneeId,
 		DelayMin:             in.DelayMin,
 		SelfReported:         in.SelfReported,
 		TemplateKey:          in.TemplateKey,

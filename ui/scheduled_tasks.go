@@ -48,6 +48,7 @@ func (ui *Ui) ExecuteScheduledTask(taskID uint) (*storage.Chore, error) {
 		EstimatedTimeMin:      task.EstimatedTimeMin,
 		AssignmentTimeoutMin:  task.AssignmentTimeoutMin,
 		NecessaryCapabilities: task.NecessaryCapabilities,
+		AssigneeId:            task.AssigneeId,
 		CreatorId:             task.CreatorId, // CRITICAL: keeps the creator of the task!
 		TemplateKey:           task.TemplateKey,
 		Draft:                 false,

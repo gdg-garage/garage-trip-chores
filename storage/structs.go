@@ -225,6 +225,7 @@ type ScheduledTask struct {
 	EstimatedTimeMin      uint       `gorm:"not null;default:15" json:"estimated_time_min"`
 	AssignmentTimeoutMin  uint       `gorm:"not null;default:15" json:"assignment_timeout_min"`
 	NecessaryCapabilities string     `gorm:"not null;default:'[]'" json:"necessary_capabilities"`
+	AssigneeId            string     `json:"assignee_id,omitempty"`
 	CreatorId             string     `gorm:"not null" json:"creator_id"`
 	CreatorName           string     `json:"creator_name,omitempty"`
 	Enabled               bool       `gorm:"not null;default:true" json:"enabled"`
