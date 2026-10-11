@@ -5,6 +5,8 @@ type AggregatedUserStats struct {
 	WorkedMin       float64 `json:"worked_min"`
 	AssignedMin     float64 `json:"assigned_min"`
 	AssignedCount   float64 `json:"assigned_count"`
+	ShiftCount      float64 `json:"shift_count"`
+	ShiftStandbyMin float64 `json:"shift_standby_min"`
 	TotalMin        float64 `json:"total_min"`
 	TotalCount      float64 `json:"total_count"`
 	PresentTicks    int     `json:"present_ticks"`
@@ -34,6 +36,16 @@ func (s *Storage) GetAggregatedStats() (map[string]AggregatedUserStats, error) {
 		st.AssignedMin = v.TotalMin
 		st.AssignedCount = v.Count
 		usersStats[k] = st
+	}
+
+	shiftStats, err := s.GetShiftStandbyStats()
+	if err == nil {
+		for k, v := range shiftStats {
+			st := usersStats[k]
+			st.ShiftCount = v.Count
+			st.ShiftStandbyMin = v.TotalMin
+			usersStats[k] = st
+		}
 	}
 
 	totalStats, err := s.GetTotalChoreStats()

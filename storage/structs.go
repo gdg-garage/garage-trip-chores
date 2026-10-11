@@ -249,4 +249,93 @@ func (t *ScheduledTask) GetCapabilities() []string {
 	return strings.Split(t.NecessaryCapabilities, ",")
 }
 
+type ShiftDefinition struct {
+	ID                    uint      `gorm:"primaryKey" json:"id"`
+	Name                  string    `gorm:"not null" json:"name"`
+	Category              string    `gorm:"not null;default:'General'" json:"category"`
+	Description           string    `json:"description,omitempty"`
+	DocURL                string    `json:"doc_url,omitempty"`
+	WorkersCount          uint      `gorm:"not null;default:1" json:"workers_count"`
+	ShiftLengthMin        uint      `gorm:"not null;default:120" json:"shift_length_min"`
+	ActiveHoursStart      string    `gorm:"not null;default:'08:00'" json:"active_hours_start"`
+	ActiveHoursEnd        string    `gorm:"not null;default:'22:00'" json:"active_hours_end"`
+	StandbyRatio          float64   `gorm:"not null;default:0.10" json:"standby_ratio"`
+	NecessaryCapabilities string    `gorm:"not null;default:'[]'" json:"necessary_capabilities"`
+	Enabled               bool      `gorm:"not null;default:true" json:"enabled"`
+	CreatedAt             time.Time `json:"created_at"`
+	UpdatedAt             time.Time `json:"updated_at"`
+}
+
+func (d *ShiftDefinition) GetCapabilities() []string {
+	if d.NecessaryCapabilities == "" || d.NecessaryCapabilities == "[]" {
+		return []string{}
+	}
+	if strings.HasPrefix(d.NecessaryCapabilities, "[") {
+		var caps []string
+		if err := json.Unmarshal([]byte(d.NecessaryCapabilities), &caps); err == nil {
+			return caps
+		}
+	}
+	return strings.Split(d.NecessaryCapabilities, ",")
+}
+
+type Shift struct {
+	ID                    uint              `gorm:"primaryKey" json:"id"`
+	DefinitionID          uint              `gorm:"not null;index" json:"definition_id"`
+	Definition            ShiftDefinition   `gorm:"foreignKey:DefinitionID" json:"definition"`
+	Name                  string            `gorm:"not null" json:"name"`
+	Category              string            `gorm:"not null;default:'General'" json:"category"`
+	DocURL                string            `json:"doc_url,omitempty"`
+	Date                  string            `gorm:"not null;index" json:"date"` // YYYY-MM-DD
+	StartTime             time.Time         `gorm:"not null;index" json:"start_time"`
+	EndTime               time.Time         `gorm:"not null" json:"end_time"`
+	WorkersCount          uint              `gorm:"not null;default:1" json:"workers_count"`
+	StandbyRatio          float64           `gorm:"not null;default:0.10" json:"standby_ratio"`
+	Frozen                bool              `gorm:"not null;default:false" json:"frozen"`
+	Status                string            `gorm:"not null;default:'scheduled'" json:"status"` // scheduled, active, completed, cancelled
+	MessageId             string            `json:"message_id,omitempty"`
+	Assignments           []ShiftAssignment `gorm:"foreignKey:ShiftID" json:"assignments"`
+	CreatedAt             time.Time         `json:"created_at"`
+	UpdatedAt             time.Time         `json:"updated_at"`
+}
+
+func (s *Shift) DurationMin() uint {
+	if s.EndTime.After(s.StartTime) {
+		return uint(s.EndTime.Sub(s.StartTime).Minutes())
+	}
+	return 0
+}
+
+func (s *Shift) StandbyCreditedMin() float64 {
+	ratio := s.StandbyRatio
+	if ratio <= 0 {
+		ratio = 0.10
+	}
+	return float64(s.DurationMin()) * ratio
+}
+
+type ShiftAssignment struct {
+	ID                 uint      `gorm:"primaryKey" json:"id"`
+	ShiftID            uint      `gorm:"not null;index" json:"shift_id"`
+	Shift              Shift     `gorm:"foreignKey:ShiftID" json:"shift"`
+	UserId             string    `gorm:"not null;index" json:"user_id"`
+	StandbyCreditedMin float64   `gorm:"not null;default:0" json:"standby_credited_min"`
+	Status             string    `gorm:"not null;default:'assigned'" json:"status"` // assigned, completed, swapped, refused, dropped
+	Notes              string    `json:"notes,omitempty"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
+}
+
+type ShiftSwapRequest struct {
+	ID               uint       `gorm:"primaryKey" json:"id"`
+	FromAssignmentID uint       `gorm:"not null;index" json:"from_assignment_id"`
+	FromUserId       string     `gorm:"not null;index" json:"from_user_id"`
+	ToAssignmentID   *uint      `json:"to_assignment_id,omitempty"`
+	ToUserId         string     `gorm:"not null;index" json:"to_user_id"`
+	Status           string     `gorm:"not null;default:'pending'" json:"status"` // pending, accepted, rejected, cancelled
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
+	ResolvedAt       *time.Time `json:"resolved_at,omitempty"`
+}
+
 

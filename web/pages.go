@@ -109,3 +109,10 @@ func (w *Web) handleSchedulesPage(rw http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (w *Web) handleShiftsPage(rw http.ResponseWriter, r *http.Request) {
+	w.renderTemplate(rw, "shifts.html", pongo2.Context{
+		"active": "shifts",
+		"user":   w.GetCurrentUser(r),
+	})
+}
+

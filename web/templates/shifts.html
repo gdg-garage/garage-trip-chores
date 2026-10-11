@@ -1,0 +1,645 @@
+{% extends "base.html" %}
+{% block title %}duty::shifts; 🛡️ — garage::trip{% endblock %}
+{% block content %}
+<div class="row" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px">
+  <div>
+    <h1 style="margin:0">duty::shifts; 🛡️</h1>
+    <p class="muted" style="margin:4px 0 0">scheduled on-call shifts, runbooks & effort balancing across all trip chores.</p>
+  </div>
+  <div class="chiprow" id="view-tabs">
+    <button type="button" class="chip active-chip" data-tab="tab-roster">📅 roster</button>
+    <button type="button" class="chip" data-tab="tab-my-shifts">👤 my shifts</button>
+    <button type="button" class="chip" data-tab="tab-fairness">⚖️ fairness stats</button>
+    {% if user and user.IsAdmin %}
+    <button type="button" class="chip" data-tab="tab-admin" style="border-color:#ff79c6;color:#ff79c6">⚙️ g::t::orgs admin</button>
+    {% endif %}
+  </div>
+</div>
+
+<!-- SECTION 1: ROSTER -->
+<div id="tab-roster" class="tab-pane">
+  <div class="card" style="margin-bottom:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+      <div class="chiprow" id="date-filters">
+        <button type="button" class="chip active-chip" data-date-filter="today">today</button>
+        <button type="button" class="chip" data-date-filter="tomorrow">tomorrow</button>
+        <button type="button" class="chip" data-date-filter="all">all dates</button>
+      </div>
+      <div id="roster-meta" class="muted" style="font-size:0.85rem">
+        <span>⏰ freeze deadline: <strong>12:00 noon daily</strong></span>
+      </div>
+    </div>
+  </div>
+
+  <div id="shifts-list" class="grid" style="display:grid;grid-template-columns:repeat(auto-fill, minmax(320px, 1fr));gap:14px">
+    <p class="muted">loading shifts...</p>
+  </div>
+</div>
+
+<!-- SECTION 2: MY SHIFTS -->
+<div id="tab-my-shifts" class="tab-pane" hidden>
+  <div class="card">
+    <h2>my::assigned_shifts; 🛡️</h2>
+    <p class="muted">your duty assignments. click runbook to read instructions. click "can't attend" to auto-reassign if you are unavailable.</p>
+    <div id="my-shifts-list" style="margin-top:14px">
+      <p class="muted">loading your shifts...</p>
+    </div>
+  </div>
+</div>
+
+<!-- SECTION 3: FAIRNESS STATS -->
+<div id="tab-fairness" class="tab-pane" hidden>
+  <div class="card">
+    <h2>effort::balancing & fairness; ⚖️</h2>
+    <p class="muted">shared statistics combining chore minutes worked and on-call standby credits (default 10%). normalized by attendee presence.</p>
+    <div style="overflow-x:auto;margin-top:14px">
+      <table style="width:100%;border-collapse:collapse;font-size:0.9rem">
+        <thead>
+          <tr style="border-bottom:1px solid var(--panel-border);text-align:left;color:var(--c-accent)">
+            <th style="padding:8px">attendee</th>
+            <th style="padding:8px">chore time</th>
+            <th style="padding:8px">shift standby</th>
+            <th style="padding:8px">total effort</th>
+            <th style="padding:8px">presence ticks</th>
+            <th style="padding:8px">normalized workload</th>
+          </tr>
+        </thead>
+        <tbody id="fairness-tbody">
+          <tr><td colspan="6" class="muted" style="padding:12px">loading fairness stats...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- SECTION 4: G::T::ORGS ADMIN -->
+{% if user and user.IsAdmin %}
+<div id="tab-admin" class="tab-pane" hidden>
+  <div class="card" style="margin-bottom:16px;border-color:rgba(255,121,198,0.4)">
+    <h2 style="color:#ff79c6">g::t::orgs::schedule_generator; ⚡</h2>
+    <p class="muted">manually trigger the ILP optimization solver or freeze the schedule for a specific date.</p>
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:12px">
+      <div>
+        <label for="admin-gen-date" style="font-size:0.85rem">target date:</label>
+        <input type="date" id="admin-gen-date" style="padding:6px 10px;font-family:inherit" />
+      </div>
+      <div style="display:flex;gap:8px;align-self:flex-end">
+        <button type="button" id="btn-generate-schedule" class="primary">⚡ generate & balance schedule</button>
+        <button type="button" id="btn-freeze-schedule" class="secondary">🔒 freeze schedule</button>
+      </div>
+    </div>
+    <div id="admin-gen-status" style="margin-top:10px;font-size:0.85rem"></div>
+  </div>
+
+  <div class="card">
+    <h2 id="def-form-title">add::shift_definition;</h2>
+    <form id="shift-def-form">
+      <input type="hidden" id="def-id" />
+      <div class="grid2">
+        <div>
+          <label for="def-name">shift name:</label>
+          <input id="def-name" required placeholder="e.g. Kitchen Morning Steward" />
+        </div>
+        <div>
+          <label for="def-category">category / topic:</label>
+          <input id="def-category" required placeholder="e.g. Kitchen, Bar, Bathroom, Trash" value="Kitchen" />
+        </div>
+      </div>
+
+      <div style="margin-top:10px">
+        <label for="def-doc-url">google docs / runbook URL:</label>
+        <input id="def-doc-url" type="url" placeholder="https://docs.google.com/document/d/..." />
+        <span class="muted" style="font-size:0.8rem;display:block;margin-top:3px">link to documentation detailing checklist & duties for this shift</span>
+      </div>
+
+      <div class="grid2" style="margin-top:10px">
+        <div>
+          <label for="def-workers">workers needed:</label>
+          <input id="def-workers" type="number" min="1" max="10" value="1" />
+        </div>
+        <div>
+          <label for="def-duration">shift length (minutes):</label>
+          <input id="def-duration" type="number" min="15" max="720" value="120" />
+        </div>
+      </div>
+
+      <div class="grid2" style="margin-top:10px">
+        <div>
+          <label for="def-start">active hours start (HH:MM):</label>
+          <input id="def-start" value="08:00" placeholder="08:00" />
+        </div>
+        <div>
+          <label for="def-end">active hours end (HH:MM):</label>
+          <input id="def-end" value="22:00" placeholder="22:00" />
+        </div>
+      </div>
+
+      <div class="grid2" style="margin-top:10px">
+        <div>
+          <label for="def-standby">standby credit ratio (default 0.10 = 10%):</label>
+          <input id="def-standby" type="number" step="0.01" min="0" max="1" value="0.10" />
+        </div>
+        <div>
+          <label for="def-caps">required skills (comma-separated):</label>
+          <input id="def-caps" placeholder="e.g. skill::kitchen" />
+        </div>
+      </div>
+
+      <label style="display:flex;align-items:center;gap:10px;margin:14px 0;cursor:pointer">
+        <input type="checkbox" id="def-enabled" checked style="width:auto;margin:0" />
+        <span style="font-weight:600">enabled (active definition used for schedule generation)</span>
+      </label>
+
+      <div class="row" style="gap:8px;margin-top:14px">
+        <button type="submit" id="btn-save-def">save::shift_definition 💾</button>
+        <button type="button" id="btn-cancel-def" class="ghost" hidden>cancel</button>
+      </div>
+    </form>
+
+    <h3 style="margin-top:24px">configured::definitions;</h3>
+    <div id="definitions-table-wrap" style="overflow-x:auto;margin-top:10px">
+      <table style="width:100%;border-collapse:collapse;font-size:0.85rem">
+        <thead>
+          <tr style="border-bottom:1px solid var(--panel-border);text-align:left;color:var(--c-accent)">
+            <th style="padding:6px">name</th>
+            <th style="padding:6px">category</th>
+            <th style="padding:6px">window</th>
+            <th style="padding:6px">duration</th>
+            <th style="padding:6px">workers</th>
+            <th style="padding:6px">standby %</th>
+            <th style="padding:6px">runbook</th>
+            <th style="padding:6px">actions</th>
+          </tr>
+        </thead>
+        <tbody id="definitions-tbody">
+          <tr><td colspan="8" class="muted" style="padding:10px">loading definitions...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- CAN'T ATTEND MODAL -->
+<dialog id="cant-attend-dialog" style="background:#1e232d;color:var(--c-text);border:1px solid var(--panel-border);border-radius:8px;padding:20px;max-width:440px;width:90%">
+  <h3 style="margin-top:0">⚠️ cannot attend shift?</h3>
+  <p class="muted" style="font-size:0.85rem">this will drop your assignment and automatically search for the fairest replacement attendee.</p>
+  <input type="hidden" id="drop-assignment-id" />
+  <label for="drop-reason" style="font-size:0.85rem;display:block;margin-top:10px">reason (optional):</label>
+  <input id="drop-reason" placeholder="e.g. feeling unwell, went to town" style="width:100%;margin-top:4px" />
+  <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
+    <button type="button" class="ghost" onclick="document.getElementById('cant-attend-dialog').close()">cancel</button>
+    <button type="button" id="btn-confirm-drop" class="secondary" style="background:#ff5555;color:#fff">confirm & reassign</button>
+  </div>
+</dialog>
+
+<!-- SWAP SHIFT MODAL -->
+<dialog id="swap-dialog" style="background:#1e232d;color:var(--c-text);border:1px solid var(--panel-border);border-radius:8px;padding:20px;max-width:440px;width:90%">
+  <h3 style="margin-top:0">🔄 request shift swap</h3>
+  <p class="muted" style="font-size:0.85rem">select an attendee to swap shifts with.</p>
+  <input type="hidden" id="swap-assignment-id" />
+  <label for="swap-target-user" style="font-size:0.85rem;display:block;margin-top:10px">swap with:</label>
+  <select id="swap-target-user" style="width:100%;margin-top:4px">
+    <option value="">-- choose attendee --</option>
+  </select>
+  <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
+    <button type="button" class="ghost" onclick="document.getElementById('swap-dialog').close()">cancel</button>
+    <button type="button" id="btn-confirm-swap" class="primary">send swap request</button>
+  </div>
+</dialog>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  const currentUserId = "{% if user %}{{ user.DiscordId }}{% endif %}";
+  let allShifts = [];
+  let allDefinitions = [];
+  let allUsers = [];
+
+  // Tab switching
+  document.querySelectorAll('#view-tabs button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#view-tabs button').forEach(b => b.classList.remove('active-chip'));
+      btn.classList.add('active-chip');
+      document.querySelectorAll('.tab-pane').forEach(p => p.hidden = true);
+      const targetId = btn.dataset.tab;
+      const target = document.getElementById(targetId);
+      if (target) target.hidden = false;
+      if (targetId === 'tab-fairness') loadFairnessStats();
+      if (targetId === 'tab-admin') loadDefinitions();
+    });
+  });
+
+  // Date filters
+  document.querySelectorAll('#date-filters button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#date-filters button').forEach(b => b.classList.remove('active-chip'));
+      btn.classList.add('active-chip');
+      renderShifts(btn.dataset.dateFilter);
+    });
+  });
+
+  async function loadInitialData() {
+    try {
+      const [shiftsRes, usersRes] = await Promise.all([
+        fetch('/api/shifts'),
+        fetch('/api/users')
+      ]);
+      allShifts = await shiftsRes.json() || [];
+      allUsers = await usersRes.json() || [];
+
+      // Populate swap dialog select
+      const select = document.getElementById('swap-target-user');
+      if (select) {
+        select.innerHTML = '<option value="">-- choose attendee --</option>';
+        allUsers.forEach(u => {
+          if (u.DiscordId !== currentUserId) {
+            const opt = document.createElement('option');
+            opt.value = u.DiscordId;
+            opt.textContent = `${u.Name || u.Handle} (@${u.Handle})`;
+            select.appendChild(opt);
+          }
+        });
+      }
+
+      renderShifts('today');
+      renderMyShifts();
+    } catch (e) {
+      console.error("Failed to load shift data:", e);
+    }
+  }
+
+  function getTodayTomorrowDates() {
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const fmt = d => d.toISOString().split('T')[0];
+    return { today: fmt(today), tomorrow: fmt(tomorrow) };
+  }
+
+  function renderShifts(filter) {
+    const container = document.getElementById('shifts-list');
+    if (!container) return;
+
+    const { today, tomorrow } = getTodayTomorrowDates();
+    let filtered = allShifts;
+    if (filter === 'today') {
+      filtered = allShifts.filter(s => s.date === today);
+    } else if (filter === 'tomorrow') {
+      filtered = allShifts.filter(s => s.date === tomorrow);
+    }
+
+    if (filtered.length === 0) {
+      container.innerHTML = '<p class="muted">no shifts scheduled for this period.</p>';
+      return;
+    }
+
+    container.innerHTML = filtered.map(s => {
+      const startTime = new Date(s.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const endTime = new Date(s.end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const standbyMin = Math.round((s.workers_count || 1) * (new Date(s.end_time) - new Date(s.start_time)) / 60000 * (s.standby_ratio || 0.10));
+
+      const isUserAssigned = (s.assignments || []).some(a => a.user_id === currentUserId && a.status === 'assigned');
+      const userAssignment = (s.assignments || []).find(a => a.user_id === currentUserId && a.status === 'assigned');
+
+      const assigneesHtml = (s.assignments || [])
+        .filter(a => a.status !== 'dropped' && a.status !== 'refused' && a.status !== 'swapped')
+        .map(a => {
+          const userObj = allUsers.find(u => u.DiscordId === a.user_id);
+          const name = userObj ? (userObj.Name || userObj.Handle) : a.user_id;
+          const isMe = a.user_id === currentUserId;
+          return `<span class="chip" style="${isMe ? 'background:rgba(80,250,123,0.2);border-color:#50fa7b;' : ''}">👤 ${name}${isMe ? ' (you)' : ''}</span>`;
+        }).join(' ');
+
+      const statusBadge = s.frozen
+        ? '<span style="color:#8be9fd;font-size:0.8rem">🔒 frozen</span>'
+        : '<span style="color:#f1fa8c;font-size:0.8rem">⏳ draft</span>';
+
+      return `
+        <div class="card" style="display:flex;flex-direction:column;justify-content:space-between;border-top:3px solid var(--c-accent)">
+          <div>
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+              <div>
+                <span class="chip" style="font-size:0.75rem;padding:2px 8px;margin-bottom:4px">${s.category || 'Duty'}</span>
+                <h3 style="margin:4px 0">${s.name}</h3>
+              </div>
+              ${statusBadge}
+            </div>
+
+            <div style="font-size:0.85rem;color:var(--c-white);margin-bottom:8px">
+              ⏰ <strong>${startTime} – ${endTime}</strong> &bull; <span class="muted">${s.date}</span>
+            </div>
+
+            <div style="font-size:0.8rem;color:#8be9fd;margin-bottom:12px">
+              ⚡ +${standbyMin} min standby credit (${Math.round((s.standby_ratio || 0.10) * 100)}%)
+            </div>
+
+            <div style="margin-bottom:14px">
+              <span class="muted" style="font-size:0.8rem;display:block;margin-bottom:4px">on duty:</span>
+              <div class="chiprow">${assigneesHtml || '<span class="muted" style="font-size:0.85rem">unassigned</span>'}</div>
+            </div>
+          </div>
+
+          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--panel-border)">
+            ${s.doc_url ? `<a href="${s.doc_url}" target="_blank" class="chip" style="color:var(--c-accent)">📄 runbook</a>` : ''}
+            ${isUserAssigned ? `
+              <button type="button" class="chip" style="color:#f1fa8c" onclick="openSwapModal(${userAssignment.id})">🔄 swap</button>
+              <button type="button" class="chip" style="color:#ff5555" onclick="openCantAttendModal(${userAssignment.id})">⚠️ can't attend</button>
+            ` : ''}
+            ${s.status !== 'completed' ? `
+              <button type="button" class="chip ghost" style="font-size:0.75rem" onclick="completeShift(${s.id})">✅ complete</button>
+            ` : '<span style="color:#50fa7b;font-size:0.8rem">✓ completed</span>'}
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function renderMyShifts() {
+    const container = document.getElementById('my-shifts-list');
+    if (!container) return;
+
+    const myShifts = allShifts.filter(s => (s.assignments || []).some(a => a.user_id === currentUserId && a.status === 'assigned'));
+    if (myShifts.length === 0) {
+      container.innerHTML = '<p class="muted">you have no upcoming shifts assigned. enjoy your free time!</p>';
+      return;
+    }
+
+    container.innerHTML = myShifts.map(s => {
+      const a = s.assignments.find(x => x.user_id === currentUserId);
+      const startTime = new Date(s.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const endTime = new Date(s.end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      return `
+        <div class="card" style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+          <div>
+            <strong>[${s.category}] ${s.name}</strong> &bull; <span class="secondary-color">${s.date} ${startTime} – ${endTime}</span>
+            <div class="muted" style="font-size:0.82rem;margin-top:2px">+${Math.round(a.standby_credited_min)} min credited on completion</div>
+          </div>
+          <div style="display:flex;gap:8px">
+            ${s.doc_url ? `<a href="${s.doc_url}" target="_blank" class="chip" style="color:var(--c-accent)">📄 runbook</a>` : ''}
+            <button type="button" class="chip" style="color:#f1fa8c" onclick="openSwapModal(${a.id})">🔄 swap</button>
+            <button type="button" class="chip" style="color:#ff5555" onclick="openCantAttendModal(${a.id})">⚠️ can't attend</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  async function loadFairnessStats() {
+    const tbody = document.getElementById('fairness-tbody');
+    if (!tbody) return;
+    try {
+      const res = await fetch('/api/shifts/fairness');
+      const data = await res.json();
+      const rows = Object.values(data).sort((a, b) => b.total_min - a.total_min);
+
+      if (rows.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="muted" style="padding:10px">no activity recorded yet.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = rows.map(r => `
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.05)">
+          <td style="padding:8px"><strong>${r.name}</strong> <span class="muted" style="font-size:0.8rem">(@${r.handle})</span></td>
+          <td style="padding:8px">${Math.round(r.chore_min)}m <span class="muted" style="font-size:0.75rem">(${r.chore_count} chores)</span></td>
+          <td style="padding:8px">${Math.round(r.shift_standby_min)}m <span class="muted" style="font-size:0.75rem">(${r.shift_count} shifts)</span></td>
+          <td style="padding:8px"><strong class="secondary-color">${Math.round(r.total_min)}m</strong></td>
+          <td style="padding:8px">${r.present_ticks}</td>
+          <td style="padding:8px">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div style="flex:1;background:rgba(255,255,255,0.1);height:6px;border-radius:3px;overflow:hidden">
+                <div style="width:${Math.min(100, Math.round(r.normalized_total * 5))}%;background:var(--c-accent);height:100%"></div>
+              </div>
+              <span style="font-size:0.8rem">${r.normalized_total.toFixed(1)}</span>
+            </div>
+          </td>
+        </tr>
+      `).join('');
+    } catch (e) {
+      tbody.innerHTML = `<tr><td colspan="6" style="color:#ff5555;padding:10px">failed to load stats: ${e.message}</td></tr>`;
+    }
+  }
+
+  async function loadDefinitions() {
+    const tbody = document.getElementById('definitions-tbody');
+    if (!tbody) return;
+    try {
+      const res = await fetch('/api/shifts/definitions');
+      allDefinitions = await res.json() || [];
+
+      if (allDefinitions.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="muted" style="padding:10px">no shift definitions configured yet.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = allDefinitions.map(d => `
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.05)">
+          <td style="padding:6px"><strong>${d.name}</strong></td>
+          <td style="padding:6px"><span class="chip" style="font-size:0.75rem">${d.category}</span></td>
+          <td style="padding:6px">${d.active_hours_start} – ${d.active_hours_end}</td>
+          <td style="padding:6px">${d.shift_length_min}m</td>
+          <td style="padding:6px">${d.workers_count}</td>
+          <td style="padding:6px">${Math.round(d.standby_ratio * 100)}%</td>
+          <td style="padding:6px">${d.doc_url ? `<a href="${d.doc_url}" target="_blank" style="color:var(--c-accent)">doc</a>` : '<span class="muted">-</span>'}</td>
+          <td style="padding:6px">
+            <button type="button" class="chip" onclick="editDef(${d.id})">edit</button>
+            <button type="button" class="chip" style="color:#ff5555" onclick="deleteDef(${d.id})">delete</button>
+          </td>
+        </tr>
+      `).join('');
+    } catch (e) {
+      tbody.innerHTML = `<tr><td colspan="8" style="color:#ff5555;padding:10px">failed to load definitions: ${e.message}</td></tr>`;
+    }
+  }
+
+  // Modals & Action Handlers
+  window.openCantAttendModal = function(assignmentId) {
+    document.getElementById('drop-assignment-id').value = assignmentId;
+    document.getElementById('drop-reason').value = '';
+    document.getElementById('cant-attend-dialog').showModal();
+  };
+
+  window.openSwapModal = function(assignmentId) {
+    document.getElementById('swap-assignment-id').value = assignmentId;
+    document.getElementById('swap-dialog').showModal();
+  };
+
+  document.getElementById('btn-confirm-drop')?.addEventListener('click', async () => {
+    const assignmentId = parseInt(document.getElementById('drop-assignment-id').value);
+    const reason = document.getElementById('drop-reason').value;
+    try {
+      const res = await fetch('/api/shifts/cant-attend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assignment_id: assignmentId, reason })
+      });
+      const data = await res.json();
+      alert(data.message || 'Updated');
+      document.getElementById('cant-attend-dialog').close();
+      await loadInitialData();
+    } catch (e) {
+      alert("Error dropping shift: " + e.message);
+    }
+  });
+
+  document.getElementById('btn-confirm-swap')?.addEventListener('click', async () => {
+    const assignmentId = parseInt(document.getElementById('swap-assignment-id').value);
+    const targetUserId = document.getElementById('swap-target-user').value;
+    if (!targetUserId) {
+      alert("Please select an attendee");
+      return;
+    }
+    try {
+      const res = await fetch('/api/shifts/swap', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assignment_id: assignmentId, target_user_id: targetUserId })
+      });
+      const data = await res.json();
+      alert("Swap request submitted!");
+      document.getElementById('swap-dialog').close();
+    } catch (e) {
+      alert("Error requesting swap: " + e.message);
+    }
+  });
+
+  window.completeShift = async function(shiftId) {
+    if (!confirm("Mark this shift as completed and confirm standby credited minutes?")) return;
+    try {
+      await fetch(`/api/shifts/${shiftId}/complete`, { method: 'POST' });
+      await loadInitialData();
+    } catch (e) {
+      alert("Error completing shift: " + e.message);
+    }
+  };
+
+  // Admin Generator Controls
+  document.getElementById('btn-generate-schedule')?.addEventListener('click', async () => {
+    const dateInput = document.getElementById('admin-gen-date').value;
+    const statusDiv = document.getElementById('admin-gen-status');
+    statusDiv.textContent = 'Generating & balancing schedule...';
+    try {
+      const res = await fetch('/api/shifts/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: dateInput, freeze: false })
+      });
+      const data = await res.json();
+      statusDiv.innerHTML = `<span style="color:#50fa7b">✓ ${data.message} (${data.count} shifts on ${data.date})</span>`;
+      await loadInitialData();
+    } catch (e) {
+      statusDiv.innerHTML = `<span style="color:#ff5555">✗ Generation failed: ${e.message}</span>`;
+    }
+  });
+
+  document.getElementById('btn-freeze-schedule')?.addEventListener('click', async () => {
+    const dateInput = document.getElementById('admin-gen-date').value;
+    if (!dateInput) {
+      alert("Please select a date to freeze");
+      return;
+    }
+    if (!confirm(`Freeze schedule for ${dateInput}?`)) return;
+    try {
+      const res = await fetch('/api/shifts/freeze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: dateInput })
+      });
+      const data = await res.json();
+      alert(data.message || 'Schedule frozen');
+      await loadInitialData();
+    } catch (e) {
+      alert("Error freezing schedule: " + e.message);
+    }
+  });
+
+  // Admin Shift Definition Form
+  const defForm = document.getElementById('shift-def-form');
+  if (defForm) {
+    defForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const defId = document.getElementById('def-id').value;
+      const payload = {
+        name: document.getElementById('def-name').value,
+        category: document.getElementById('def-category').value,
+        doc_url: document.getElementById('def-doc-url').value,
+        workers_count: parseInt(document.getElementById('def-workers').value) || 1,
+        shift_length_min: parseInt(document.getElementById('def-duration').value) || 120,
+        active_hours_start: document.getElementById('def-start').value,
+        active_hours_end: document.getElementById('def-end').value,
+        standby_ratio: parseFloat(document.getElementById('def-standby').value) || 0.10,
+        necessary_capabilities: document.getElementById('def-caps').value,
+        enabled: document.getElementById('def-enabled').checked
+      };
+
+      const url = defId ? `/api/shifts/definitions/${defId}` : '/api/shifts/definitions';
+      const method = defId ? 'PUT' : 'POST';
+
+      try {
+        const res = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error((await res.json()).detail || 'Failed to save');
+        resetDefForm();
+        await loadDefinitions();
+      } catch (err) {
+        alert("Error saving definition: " + err.message);
+      }
+    });
+  }
+
+  window.editDef = function(id) {
+    const def = allDefinitions.find(d => d.id === id);
+    if (!def) return;
+    document.getElementById('def-id').value = def.id;
+    document.getElementById('def-name').value = def.name;
+    document.getElementById('def-category').value = def.category;
+    document.getElementById('def-doc-url').value = def.doc_url || '';
+    document.getElementById('def-workers').value = def.workers_count;
+    document.getElementById('def-duration').value = def.shift_length_min;
+    document.getElementById('def-start').value = def.active_hours_start;
+    document.getElementById('def-end').value = def.active_hours_end;
+    document.getElementById('def-standby').value = def.standby_ratio;
+    document.getElementById('def-caps').value = def.necessary_capabilities || '';
+    document.getElementById('def-enabled').checked = def.enabled;
+    document.getElementById('def-form-title').textContent = 'edit::shift_definition;';
+    document.getElementById('btn-cancel-def').hidden = false;
+  };
+
+  window.deleteDef = async function(id) {
+    if (!confirm("Are you sure you want to delete this shift definition?")) return;
+    try {
+      await fetch(`/api/shifts/definitions/${id}`, { method: 'DELETE' });
+      await loadDefinitions();
+    } catch (e) {
+      alert("Error deleting definition: " + e.message);
+    }
+  };
+
+  document.getElementById('btn-cancel-def')?.addEventListener('click', resetDefForm);
+
+  function resetDefForm() {
+    if (!defForm) return;
+    defForm.reset();
+    document.getElementById('def-id').value = '';
+    document.getElementById('def-form-title').textContent = 'add::shift_definition;';
+    document.getElementById('btn-cancel-def').hidden = true;
+  }
+
+  // Set default admin date picker to tomorrow
+  const adminDateInput = document.getElementById('admin-gen-date');
+  if (adminDateInput) {
+    const tm = new Date();
+    tm.setDate(tm.getDate() + 1);
+    adminDateInput.value = tm.toISOString().split('T')[0];
+  }
+
+  // Initial load
+  loadInitialData();
+})();
+</script>
+{% endblock %}

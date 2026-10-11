@@ -15,6 +15,7 @@ import (
 
 	"github.com/gdg-garage/garage-trip-chores/chores"
 	"github.com/gdg-garage/garage-trip-chores/llm"
+	"github.com/gdg-garage/garage-trip-chores/shifts"
 	"github.com/gdg-garage/garage-trip-chores/storage"
 	"github.com/gdg-garage/garage-trip-chores/ui"
 	"github.com/gdg-garage/garage-trip-chores/web"
@@ -33,12 +34,17 @@ type Api struct {
 	storage        *storage.Storage
 	logger         *slog.Logger
 	chores         *chores.ChoresLogic
+	shifts         *shifts.ShiftsService
 	ui             *ui.Ui
 	summarizer     *llm.Summarizer
 	conf           Config
 	hub            *WsHub
 	authorizedKeys map[string]struct{}
 	web            *web.Web
+}
+
+func (a *Api) SetShifts(s *shifts.ShiftsService) {
+	a.shifts = s
 }
 
 func (a *Api) SetSummarizer(s *llm.Summarizer) {
@@ -128,7 +134,7 @@ func (a *Api) SetupRoutes() *chi.Mux {
 	}
 
 	// Setup Huma
-	config := huma.DefaultConfig("Garage Trip Chores API", "3.0.0")
+	config := huma.DefaultConfig("Garage Trip Chores API", "4.0.0")
 	if len(a.authorizedKeys) > 0 {
 		config.Components.SecuritySchemes = map[string]*huma.SecurityScheme{
 			"bearerAuth": {
@@ -626,6 +632,8 @@ func (a *Api) SetupRoutes() *chi.Mux {
 			},
 		}, nil
 	})
+
+	a.registerShiftOperations(api, a.shifts)
 
 	if a.web != nil {
 		a.web.RegisterRoutes(router)

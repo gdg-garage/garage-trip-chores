@@ -240,8 +240,10 @@ func (w *Web) handleDiscordCallback(rw http.ResponseWriter, r *http.Request) {
 			if w.conf.DiscordPaidRole != "" {
 				hasPaid = userRoleNames[w.conf.DiscordPaidRole]
 			}
-			if w.conf.DiscordAdminRole != "" {
-				isAdmin = userRoleNames[w.conf.DiscordAdminRole]
+			if w.conf.DiscordAdminRole != "" && userRoleNames[w.conf.DiscordAdminRole] {
+				isAdmin = true
+			} else if userRoleNames["g::t::orgs"] || userRoleNames["ork"] || userRoleNames["chores::admin"] {
+				isAdmin = true
 			}
 		}
 	}

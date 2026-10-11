@@ -176,10 +176,16 @@ func (s *Storage) GetTotalChoreStats() (UserChoreStats, error) {
 	userAssignedStats, err := s.GetAssignedStats()
 	if err != nil {
 		return userStats, err
-
 	}
 
-	return userStats.Add(userAssignedStats), nil
+	total := userStats.Add(userAssignedStats)
+
+	shiftStats, err := s.GetShiftStandbyStats()
+	if err == nil {
+		total = total.Add(shiftStats)
+	}
+
+	return total, nil
 }
 
 func (s *Storage) GetTotalNormalizedChoreStats() (UserChoreStats, error) {
@@ -321,4 +327,31 @@ func (s *Storage) GetUsersPresenceCounts() (map[string]int, error) {
 		counts[res.UserId] = res.Count
 	}
 	return counts, r.Error
+}
+
+func (s *Storage) GetUsers() ([]User, error) {
+	present, err := s.GetPresentUsers()
+	if err == nil && len(present) > 0 {
+		return present, nil
+	}
+	return s.GetAllGuildUsers()
+}
+
+func (s *Storage) SaveUser(user User) error {
+	s.userCacheMu.Lock()
+	if s.userCache == nil {
+		s.userCache = make(map[string]User)
+	}
+	s.userCache[user.DiscordId] = user
+	s.userCacheMu.Unlock()
+
+	p := UserProfile{
+		DiscordId:     user.DiscordId,
+		Name:          user.Name,
+		DiscordHandle: user.Handle,
+	}
+	return s.db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "discord_id"}},
+		DoUpdates: clause.AssignmentColumns([]string{"name", "discord_handle", "updated_at"}),
+	}).Save(&p).Error
 }

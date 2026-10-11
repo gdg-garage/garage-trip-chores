@@ -10,6 +10,7 @@ import (
 	"github.com/gdg-garage/garage-trip-chores/logger"
 	presencetracker "github.com/gdg-garage/garage-trip-chores/presence_tracker"
 	"github.com/gdg-garage/garage-trip-chores/reminders"
+	"github.com/gdg-garage/garage-trip-chores/shifts"
 	"github.com/gdg-garage/garage-trip-chores/storage"
 	"github.com/gdg-garage/garage-trip-chores/ui"
 	"github.com/gdg-garage/garage-trip-chores/web"
@@ -20,6 +21,7 @@ type Config struct {
 	Logger   logger.Config
 	Db       storage.Config
 	Chores   chores.Config
+	Shifts   shifts.Config
 	Ui       ui.Config
 	Tracker  presencetracker.Config
 	Reminder reminders.Config
@@ -40,6 +42,19 @@ func New() (*Config, error) {
 
 	viper.SetDefault("chores.oversampleratio", 0.5)
 	viper.SetDefault("chores.cooldownmin", 30)
+
+	viper.SetDefault("shifts.adminrole", "g::t::orgs")
+	viper.SetDefault("shifts.freezehour", 12)
+	viper.SetDefault("shifts.defaultstandbyratio", 0.10)
+	viper.SetDefault("shifts.maxshiftsperpersonperday", 2)
+	viper.SetDefault("shifts.timezone", "Europe/Prague")
+	viper.SetDefault("shifts.reminderleadtime", "15m")
+
+	_ = viper.BindEnv("shifts.adminrole", "SHIFTS_ADMIN_ROLE")
+	_ = viper.BindEnv("shifts.freezehour", "SHIFTS_FREEZE_HOUR")
+	_ = viper.BindEnv("shifts.defaultstandbyratio", "SHIFTS_DEFAULT_STANDBY_RATIO")
+	_ = viper.BindEnv("shifts.maxshiftsperpersonperday", "SHIFTS_MAX_SHIFTS_PER_DAY")
+	_ = viper.BindEnv("shifts.timezone", "SHIFTS_TIMEZONE")
 
 	viper.SetDefault("ui.discordchannelid", "???")
 
@@ -62,7 +77,7 @@ func New() (*Config, error) {
 	viper.SetDefault("web.discordclientsecret", "")
 	viper.SetDefault("web.discordcallbackurl", "")
 	viper.SetDefault("web.discordpaidrole", "")
-	viper.SetDefault("web.discordadminrole", "")
+	viper.SetDefault("web.discordadminrole", "g::t::orgs")
 	viper.SetDefault("web.sessionsecret", "")
 	viper.SetDefault("web.tabletpassword", "garagetrip")
 	viper.SetDefault("web.authrequired", true)

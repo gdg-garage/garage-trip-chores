@@ -14,6 +14,7 @@ import (
 
 	"github.com/gdg-garage/garage-trip-chores/chores"
 	"github.com/gdg-garage/garage-trip-chores/llm"
+	"github.com/gdg-garage/garage-trip-chores/shifts"
 	"github.com/gdg-garage/garage-trip-chores/storage"
 	"github.com/gdg-garage/garage-trip-chores/ui"
 )
@@ -38,6 +39,7 @@ type Web struct {
 	storage     *storage.Storage
 	logger      *slog.Logger
 	chores      *chores.ChoresLogic
+	shifts      *shifts.ShiftsService
 	ui          *ui.Ui
 	summarizer  *llm.Summarizer
 	conf        Config
@@ -75,6 +77,10 @@ func New(s *storage.Storage, l *slog.Logger, c *chores.ChoresLogic, u *ui.Ui, co
 
 func (w *Web) SetSummarizer(s *llm.Summarizer) {
 	w.summarizer = s
+}
+
+func (w *Web) SetShifts(s *shifts.ShiftsService) {
+	w.shifts = s
 }
 
 func (w *Web) listenStorageEvents() {
@@ -145,6 +151,7 @@ func (w *Web) RegisterRoutes(r chi.Router) {
 	r.Get("/leaderboard", w.handleLeaderboard)
 	r.Get("/templates", w.handleTemplatesPage)
 	r.Get("/schedules", w.handleSchedulesPage)
+	r.Get("/shifts", w.handleShiftsPage)
 
 	// UI API routes
 	r.Route("/api", func(apiRouter chi.Router) {
@@ -168,6 +175,23 @@ func (w *Web) RegisterRoutes(r chi.Router) {
 		apiRouter.Get("/people", w.handleGetPeople)
 		apiRouter.Get("/leaderboard", w.handleGetLeaderboard)
 		apiRouter.Get("/users/{id}", w.handleGetUserDetail)
+
+		// Shifts API routes
+		apiRouter.Route("/shifts", func(sr chi.Router) {
+			sr.Get("/definitions", w.handleGetShiftDefinitions)
+			sr.Post("/definitions", w.handlePostShiftDefinition)
+			sr.Put("/definitions/{id}", w.handlePutShiftDefinition)
+			sr.Delete("/definitions/{id}", w.handleDeleteShiftDefinition)
+
+			sr.Get("/", w.handleGetShifts)
+			sr.Post("/generate", w.handlePostGenerateShifts)
+			sr.Post("/freeze", w.handlePostFreezeShifts)
+			sr.Post("/cant-attend", w.handlePostShiftCantAttend)
+			sr.Post("/swap", w.handlePostShiftSwap)
+			sr.Post("/swap/{swap_id}/accept", w.handlePostShiftAcceptSwap)
+			sr.Post("/{id}/complete", w.handlePostCompleteShift)
+			sr.Get("/fairness", w.handleGetFairnessStats)
+		})
 
 		apiRouter.Get("/chores", w.handleGetChores)
 		apiRouter.Post("/chores", w.handlePostChore)

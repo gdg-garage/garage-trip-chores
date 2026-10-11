@@ -15,6 +15,11 @@ const (
 	TaskCancelled  EventType = "task_cancelled"
 	WorklogUpdated EventType = "worklog_updated"
 	WorklogAdded   EventType = "worklog_added"
+	ShiftCreated   EventType = "shift_created"
+	ShiftUpdated   EventType = "shift_updated"
+	ShiftAssigned  EventType = "shift_assigned"
+	ShiftSwapped   EventType = "shift_swapped"
+	ShiftCompleted EventType = "shift_completed"
 )
 
 type Event struct {
@@ -23,7 +28,8 @@ type Event struct {
 	Assignment *ChoreAssignment `json:"assignment,omitempty"`
 	// WorkLog is set on worklog_added / worklog_updated events and carries the
 	// reported time entry (including "I helped" entries) that triggered the event.
-	WorkLog *WorkLog `json:"worklog,omitempty"`
+	WorkLog *WorkLog          `json:"worklog,omitempty"`
+	Shift   *Shift            `json:"shift,omitempty"`
 }
 
 type EventBus struct {

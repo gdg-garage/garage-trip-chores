@@ -15,6 +15,7 @@ import (
 	"github.com/gdg-garage/garage-trip-chores/logger"
 	presencetracker "github.com/gdg-garage/garage-trip-chores/presence_tracker"
 	"github.com/gdg-garage/garage-trip-chores/reminders"
+	"github.com/gdg-garage/garage-trip-chores/shifts"
 	"github.com/gdg-garage/garage-trip-chores/storage"
 	"github.com/gdg-garage/garage-trip-chores/ui"
 	"github.com/gdg-garage/garage-trip-chores/web"
@@ -58,8 +59,13 @@ func main() {
 		return
 	}
 
+	shiftsService := shifts.NewService(s, logger, conf.Shifts)
+	shiftsScheduler := shifts.NewScheduler(shiftsService, s, logger, conf.Shifts, s.GetDiscord(), conf.Ui.DiscordChannelId)
+	go shiftsScheduler.Run(ctx, &wg)
+
 	uiServer := ui.NewUi(s, logger, &cl, s.GetDiscord(), conf.Ui)
 	uiServer.SetSummaryRunner(llmSummarizer)
+	uiServer.SetShifts(shiftsService)
 	go uiServer.Commands(ctx, &wg)
 	go uiServer.RunDelayedTaskScheduler(ctx, &wg)
 	go uiServer.RunScheduledTaskScheduler(ctx, &wg)
@@ -82,10 +88,12 @@ func main() {
 		logger.Error("Error initializing web UI", "error", err)
 	} else {
 		webUI.SetSummarizer(llmSummarizer)
+		webUI.SetShifts(shiftsService)
 	}
 
 	apiServer := api.NewApi(s, logger, &cl, uiServer, conf.Api)
 	apiServer.SetSummarizer(llmSummarizer)
+	apiServer.SetShifts(shiftsService)
 	if webUI != nil {
 		apiServer.SetWeb(webUI)
 	}

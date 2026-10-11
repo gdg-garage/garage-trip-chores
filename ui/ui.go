@@ -14,6 +14,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/gdg-garage/garage-trip-chores/chores"
+	"github.com/gdg-garage/garage-trip-chores/shifts"
 	"github.com/gdg-garage/garage-trip-chores/storage"
 	"gorm.io/gorm"
 )
@@ -38,6 +39,7 @@ type Ui struct {
 	storage       *storage.Storage
 	logger        *slog.Logger
 	chores        *chores.ChoresLogic
+	shifts        *shifts.ShiftsService
 	discord       *discordgo.Session
 	conf          Config
 	colors        Colors
@@ -1805,6 +1807,12 @@ func (ui *Ui) Commands(ctx context.Context, wg *sync.WaitGroup) error {
 				ui.choresCompleted(i)
 			case "stats":
 				ui.stats(i)
+			case "shifts":
+				ui.shiftsCommand(i)
+			case "shift_swap":
+				ui.shiftSwapCommand(i)
+			case "shift_freeze":
+				ui.shiftFreezeCommand(i)
 			default:
 				ui.logger.Warn("Unknown application command", "command", cmdName)
 			}
@@ -1814,6 +1822,10 @@ func (ui *Ui) Commands(ctx context.Context, wg *sync.WaitGroup) error {
 			ui.logger.Info("Received message component interaction", "custom_id", data.CustomID, "component_type", data.ComponentType, "channel_id", channelId, "user_id", userId)
 
 			switch {
+			case strings.HasPrefix(data.CustomID, ShiftSwapAcceptClick):
+				ui.handleShiftSwapAccept(data.CustomID, s, i)
+			case strings.HasPrefix(data.CustomID, ShiftCantAttendClick):
+				ui.handleShiftCantAttend(data.CustomID, s, i)
 			case strings.HasPrefix(data.CustomID, DeleteButtonClick) || strings.HasPrefix(data.CustomID, CancelButtonClick):
 				ui.cancelChore(data.CustomID, s, i)
 			case strings.HasPrefix(data.CustomID, EditButtonClick):
@@ -2015,6 +2027,37 @@ func (ui *Ui) Commands(ctx context.Context, wg *sync.WaitGroup) error {
 		{
 			Name:        "chore_summary",
 			Description: "Triggers the LLM chore summary and posts it to the chore channel.",
+			Type:        discordgo.ChatApplicationCommand,
+		},
+		{
+			Name:        "shifts",
+			Description: "Display duty shifts and runbooks.",
+			Type:        discordgo.ChatApplicationCommand,
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionString,
+					Name:        "date",
+					Description: "Date to view (today, tomorrow, or YYYY-MM-DD)",
+					Required:    false,
+				},
+			},
+		},
+		{
+			Name:        "shift_swap",
+			Description: "Request to swap a duty shift with another attendee.",
+			Type:        discordgo.ChatApplicationCommand,
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionUser,
+					Name:        "user",
+					Description: "Attendee to swap shifts with",
+					Required:    true,
+				},
+			},
+		},
+		{
+			Name:        "shift_freeze",
+			Description: "Freeze duty schedule for tomorrow (ork only).",
 			Type:        discordgo.ChatApplicationCommand,
 		},
 	}
