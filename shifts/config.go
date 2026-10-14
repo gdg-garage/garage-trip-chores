@@ -9,6 +9,7 @@ type Config struct {
 	MaxShiftsPerPersonPerDay  int           `json:"max_shifts_per_person_per_day"`
 	Timezone                  string        `json:"timezone"`
 	ReminderLeadTime          time.Duration `json:"reminder_lead_time"`
+	Event                     string        `json:"event"`
 }
 
 func DefaultConfig() Config {

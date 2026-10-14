@@ -177,3 +177,133 @@ func TestSolverBuddyPairing(t *testing.T) {
 		t.Fatalf("Expected buddy pairing to include Chef (u2) as lead, got %v", assigned)
 	}
 }
+
+func TestIsUserEligibleForDate(t *testing.T) {
+	today := time.Date(2026, 10, 15, 12, 0, 0, 0, time.UTC)
+	tomorrow := time.Date(2026, 10, 16, 12, 0, 0, 0, time.UTC)
+	dayAfter := time.Date(2026, 10, 17, 12, 0, 0, 0, time.UTC)
+	nextWeek := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
+
+	uAlice := storage.User{DiscordId: "alice", IsPresent: false}
+	uBob := storage.User{DiscordId: "bob", IsPresent: true}
+	uCharlie := storage.User{DiscordId: "charlie", IsPresent: false}
+
+	regs := map[string]storage.UserRegistration{
+		// Alice arrives tomorrow (Oct 16) and stays until Oct 18
+		"alice": {
+			DiscordId:     "alice",
+			ArrivalDate:   time.Date(2026, 10, 16, 8, 0, 0, 0, time.UTC),
+			DepartureDate: time.Date(2026, 10, 18, 18, 0, 0, 0, time.UTC),
+			Cancelled:     false,
+		},
+		// Bob is currently present today (Oct 15) but departs today evening
+		"bob": {
+			DiscordId:     "bob",
+			ArrivalDate:   time.Date(2026, 10, 12, 8, 0, 0, 0, time.UTC),
+			DepartureDate: time.Date(2026, 10, 15, 18, 0, 0, 0, time.UTC),
+			Cancelled:     false,
+		},
+		// Charlie registered for tomorrow but cancelled
+		"charlie": {
+			DiscordId:     "charlie",
+			ArrivalDate:   time.Date(2026, 10, 16, 8, 0, 0, 0, time.UTC),
+			DepartureDate: time.Date(2026, 10, 18, 18, 0, 0, 0, time.UTC),
+			Cancelled:     true,
+		},
+	}
+
+	// 1. Alice is arriving tomorrow: not eligible today, eligible tomorrow and dayAfter, not eligible nextWeek
+	if IsUserEligibleForDate(uAlice, today, regs) {
+		t.Errorf("Alice should not be eligible today (before arrival)")
+	}
+	if !IsUserEligibleForDate(uAlice, tomorrow, regs) {
+		t.Errorf("Alice should be eligible tomorrow (arrival date)")
+	}
+	if !IsUserEligibleForDate(uAlice, dayAfter, regs) {
+		t.Errorf("Alice should be eligible day after tomorrow")
+	}
+	if IsUserEligibleForDate(uAlice, nextWeek, regs) {
+		t.Errorf("Alice should not be eligible next week (after departure)")
+	}
+
+	// 2. Bob departs today: eligible today, NOT eligible tomorrow
+	if !IsUserEligibleForDate(uBob, today, regs) {
+		t.Errorf("Bob should be eligible today (prior to departure)")
+	}
+	if IsUserEligibleForDate(uBob, tomorrow, regs) {
+		t.Errorf("Bob should NOT be eligible tomorrow (departs today, prevents swap disaster)")
+	}
+
+	// 3. Charlie cancelled: not eligible
+	if IsUserEligibleForDate(uCharlie, tomorrow, regs) {
+		t.Errorf("Charlie should NOT be eligible because registration is cancelled")
+	}
+
+	// 4. Dave has no registration record: fallback to IsPresent
+	uDavePresent := storage.User{DiscordId: "dave", IsPresent: true}
+	uDaveAbsent := storage.User{DiscordId: "dave", IsPresent: false}
+	if !IsUserEligibleForDate(uDavePresent, tomorrow, regs) {
+		t.Errorf("Dave should be eligible via fallback IsPresent=true")
+	}
+	if IsUserEligibleForDate(uDaveAbsent, tomorrow, regs) {
+		t.Errorf("Dave should not be eligible via fallback IsPresent=false")
+	}
+}
+
+func TestSolverPredictsArrivalAndDepartureWithRegistrations(t *testing.T) {
+	tomorrow := time.Date(2026, 10, 16, 10, 0, 0, 0, time.UTC)
+
+	// Alice is NOT currently present today, but arrives tomorrow
+	// Bob IS currently present today, but leaves today
+	users := []storage.User{
+		{DiscordId: "alice", Name: "Alice", IsPresent: false},
+		{DiscordId: "bob", Name: "Bob", IsPresent: true},
+	}
+
+	regs := map[string]storage.UserRegistration{
+		"alice": {
+			DiscordId:     "alice",
+			ArrivalDate:   time.Date(2026, 10, 16, 8, 0, 0, 0, time.UTC),
+			DepartureDate: time.Date(2026, 10, 18, 18, 0, 0, 0, time.UTC),
+			Cancelled:     false,
+		},
+		"bob": {
+			DiscordId:     "bob",
+			ArrivalDate:   time.Date(2026, 10, 12, 8, 0, 0, 0, time.UTC),
+			DepartureDate: time.Date(2026, 10, 15, 18, 0, 0, 0, time.UTC),
+			Cancelled:     false,
+		},
+	}
+
+	shifts := []storage.Shift{
+		{
+			ID:           1,
+			Name:         "Kitchen Duty Tomorrow",
+			StartTime:    tomorrow,
+			EndTime:      tomorrow.Add(2 * time.Hour),
+			WorkersCount: 1,
+		},
+	}
+
+	input := SolverInput{
+		Users:               users,
+		Shifts:              shifts,
+		NormalizedWorkloads: map[string]float64{"alice": 0, "bob": 0},
+		PresentTicks:        map[string]int{"alice": 1, "bob": 20},
+		ExistingDayCounts:   map[string]int{},
+		MaxShiftsPerDay:     1,
+		TargetDate:          tomorrow,
+		Registrations:       regs,
+	}
+
+	solution := SolveOptimizedSchedule(input)
+	if len(solution[1]) != 1 {
+		t.Fatalf("Expected 1 worker assigned to shift 1, got %v", solution[1])
+	}
+
+	assignedUser := solution[1][0]
+	if assignedUser != "alice" {
+		t.Fatalf("Expected Alice to be scheduled for tomorrow based on registration arrival, but got %s", assignedUser)
+	}
+}
+

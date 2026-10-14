@@ -216,6 +216,21 @@ type UserProfile struct {
 	UpdatedAt     time.Time `json:"updated_at"`
 }
 
+type UserRegistration struct {
+	DiscordId        string    `gorm:"primaryKey" json:"discord_id"`
+	Username         string    `json:"username"`
+	Event            string    `gorm:"index" json:"event"`
+	ArrivalDate      time.Time `json:"arrival_date"`
+	DepartureDate    time.Time `json:"departure_date"`
+	Cancelled        bool      `gorm:"default:false" json:"cancelled"`
+	Paid             bool      `gorm:"default:false" json:"paid"`
+	FoodRestrictions string    `json:"food_restrictions"`
+	ChildrenCount    int       `gorm:"default:0" json:"children_count"`
+	Note             string    `json:"note"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
+}
+
 type ScheduledTask struct {
 	ID                    uint       `gorm:"primaryKey" json:"id"`
 	Name                  string     `gorm:"not null" json:"name"`

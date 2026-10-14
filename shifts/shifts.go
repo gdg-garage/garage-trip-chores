@@ -171,6 +171,7 @@ func (s *ShiftsService) GenerateShiftsForDate(targetDate time.Time, freeze bool)
 		}
 
 		presenceCounts, _ := s.storage.GetUsersPresenceCounts()
+		regMap, _ := s.storage.GetUserRegistrationsMap(s.conf.Event)
 
 		input := SolverInput{
 			Users:               users,
@@ -179,6 +180,8 @@ func (s *ShiftsService) GenerateShiftsForDate(targetDate time.Time, freeze bool)
 			PresentTicks:        presenceCounts,
 			ExistingDayCounts:   existingDayCounts,
 			MaxShiftsPerDay:     s.conf.MaxShiftsPerPersonPerDay,
+			TargetDate:          targetDate,
+			Registrations:       regMap,
 		}
 
 		solution := SolveOptimizedSchedule(input)
@@ -281,6 +284,7 @@ func (s *ShiftsService) CanAttendShift(assignmentID uint, reason string) (*stora
 	// Construct single shift solver input
 	singleShift := shift
 	singleShift.WorkersCount = 1 // only replacing 1 dropped worker
+	regMap, _ := s.storage.GetUserRegistrationsMap(s.conf.Event)
 	input := SolverInput{
 		Users:               candidateUsers,
 		Shifts:              []storage.Shift{singleShift},
@@ -288,6 +292,8 @@ func (s *ShiftsService) CanAttendShift(assignmentID uint, reason string) (*stora
 		PresentTicks:        presenceCounts,
 		ExistingDayCounts:   existingCounts,
 		MaxShiftsPerDay:     s.conf.MaxShiftsPerPersonPerDay + 1, // allow slight relaxation for emergency fill
+		TargetDate:          shift.StartTime,
+		Registrations:       regMap,
 	}
 
 	solution := SolveOptimizedSchedule(input)

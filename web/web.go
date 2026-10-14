@@ -191,6 +191,7 @@ func (w *Web) RegisterRoutes(r chi.Router) {
 			sr.Post("/swap/{swap_id}/accept", w.handlePostShiftAcceptSwap)
 			sr.Post("/{id}/complete", w.handlePostCompleteShift)
 			sr.Get("/fairness", w.handleGetFairnessStats)
+			sr.Get("/registrations", w.handleGetRegistrations)
 		})
 
 		apiRouter.Get("/chores", w.handleGetChores)

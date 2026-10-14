@@ -87,13 +87,31 @@ func (s *Scheduler) checkDailyFreeze() {
 				s.logger.Error("Failed to auto-freeze tomorrow's schedule", "error", err)
 				return
 			}
-			s.announceFrozenSchedule(tomorrowStr, shifts)
+			if len(shifts) > 0 {
+				s.announceFrozenSchedule(tomorrowStr, shifts)
+			} else {
+				s.logger.Info("No shifts defined or scheduled for date, skipping announcement", "date", tomorrowStr)
+			}
 		}
 	}
 }
 
 func (s *Scheduler) announceFrozenSchedule(dateStr string, shifts []storage.Shift) {
-	if s.discord == nil || s.discordChannelID == "" {
+	if s.discord == nil || s.discordChannelID == "" || len(shifts) == 0 {
+		return
+	}
+
+	// Verify there is at least one active assignment before announcing
+	activeAssignments := 0
+	for _, sh := range shifts {
+		for _, a := range sh.Assignments {
+			if a.Status != "dropped" && a.Status != "refused" && a.Status != "swapped" {
+				activeAssignments++
+			}
+		}
+	}
+	if activeAssignments == 0 {
+		s.logger.Info("No assignments in frozen schedule, skipping announcement", "date", dateStr)
 		return
 	}
 

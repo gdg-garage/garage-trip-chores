@@ -346,3 +346,12 @@ func (w *Web) handleGetFairnessStats(rw http.ResponseWriter, r *http.Request) {
 
 	writeJSON(rw, http.StatusOK, overview)
 }
+
+func (w *Web) handleGetRegistrations(rw http.ResponseWriter, r *http.Request) {
+	regs, err := w.storage.GetUserRegistrations("")
+	if err != nil {
+		writeError(rw, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(rw, http.StatusOK, regs)
+}

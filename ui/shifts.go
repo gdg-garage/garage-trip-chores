@@ -246,8 +246,29 @@ func (ui *Ui) shiftFreezeCommand(i *discordgo.InteractionCreate) {
 		return
 	}
 
+	if len(shiftsList) == 0 {
+		_ = ui.discord.InteractionRespond(i.Interaction, simpleInteractionResponse(
+			fmt.Sprintf("ℹ️ No shifts are defined or scheduled for tomorrow (%s).", dateStr)))
+		return
+	}
+
+	activeCount := 0
+	for _, sh := range shiftsList {
+		for _, a := range sh.Assignments {
+			if a.Status != "dropped" && a.Status != "refused" && a.Status != "swapped" {
+				activeCount++
+			}
+		}
+	}
+
+	if activeCount == 0 {
+		_ = ui.discord.InteractionRespond(i.Interaction, simpleInteractionResponse(
+			fmt.Sprintf("ℹ️ Tomorrow (%s) has %d shift slots, but no workers were assigned (no eligible or present users).", dateStr, len(shiftsList))))
+		return
+	}
+
 	_ = ui.discord.InteractionRespond(i.Interaction, simpleInteractionResponse(
-		fmt.Sprintf("🔒 Tomorrow's duty schedule (%s) has been generated and **frozen**! (%d shifts scheduled)", dateStr, len(shiftsList))))
+		fmt.Sprintf("🔒 Tomorrow's duty schedule (%s) has been generated and **frozen**! (%d shifts, %d assignments)", dateStr, len(shiftsList), activeCount)))
 }
 
 func (ui *Ui) handleShiftSwapAccept(customID string, s *discordgo.Session, i *discordgo.InteractionCreate) {

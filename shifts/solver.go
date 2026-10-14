@@ -23,6 +23,8 @@ type SolverInput struct {
 	PresentTicks        map[string]int
 	ExistingDayCounts   map[string]int // shifts already assigned for the date
 	MaxShiftsPerDay     int
+	TargetDate          time.Time
+	Registrations       map[string]storage.UserRegistration
 }
 
 type ShiftSlotAssignment struct {
@@ -68,6 +70,33 @@ func countMatchingCapabilities(userCaps []string, needed []string) int {
 	return count
 }
 
+// IsUserEligibleForDate determines whether a user is expected to be present on targetDate.
+// If a user has a registration record, attendance dates take precedence (preventing omission
+// of arriving attendees and preventing scheduling departing attendees).
+// Otherwise, it falls back to real-time presence (u.IsPresent).
+func IsUserEligibleForDate(u storage.User, targetDate time.Time, regs map[string]storage.UserRegistration) bool {
+	if !targetDate.IsZero() && len(regs) > 0 {
+		if reg, ok := regs[u.DiscordId]; ok {
+			if reg.Cancelled {
+				return false
+			}
+			if !reg.ArrivalDate.IsZero() && !reg.DepartureDate.IsZero() {
+				targetY, targetM, targetD := targetDate.Date()
+				tDate := time.Date(targetY, targetM, targetD, 0, 0, 0, 0, time.UTC)
+
+				arrY, arrM, arrD := reg.ArrivalDate.Date()
+				arrDate := time.Date(arrY, arrM, arrD, 0, 0, 0, 0, time.UTC)
+
+				depY, depM, depD := reg.DepartureDate.Date()
+				depDate := time.Date(depY, depM, depD, 23, 59, 59, 0, time.UTC)
+
+				return !tDate.Before(arrDate) && !tDate.After(depDate)
+			}
+		}
+	}
+	return u.IsPresent
+}
+
 // SolveOptimizedSchedule computes an optimal, fair assignment matrix using
 // integer constraint optimization with branch-and-bound.
 // It guarantees:
@@ -82,16 +111,23 @@ func SolveOptimizedSchedule(input SolverInput) map[uint][]string {
 		return result
 	}
 
-	// 1. Filter present users
-	presentUsers := make([]storage.User, 0)
+	// 1. Filter eligible users based on registration predictions and real-time presence
+	eligibleUsers := make([]storage.User, 0)
 	for _, u := range input.Users {
-		if u.IsPresent {
-			presentUsers = append(presentUsers, u)
+		if IsUserEligibleForDate(u, input.TargetDate, input.Registrations) {
+			eligibleUsers = append(eligibleUsers, u)
 		}
 	}
-	if len(presentUsers) == 0 {
-		// Fallback to all users if presence data is empty
-		presentUsers = input.Users
+	if len(eligibleUsers) == 0 {
+		// Fallback to real-time present users, then all users if presence data is empty
+		for _, u := range input.Users {
+			if u.IsPresent {
+				eligibleUsers = append(eligibleUsers, u)
+			}
+		}
+		if len(eligibleUsers) == 0 {
+			eligibleUsers = input.Users
+		}
 	}
 
 	// 2. Determine effective max shifts per day
@@ -108,14 +144,14 @@ func SolveOptimizedSchedule(input SolverInput) map[uint][]string {
 	if maxPerDay <= 0 {
 		maxPerDay = 1
 	}
-	minFeasible := int(math.Ceil(float64(totalSlots) / float64(len(presentUsers))))
+	minFeasible := int(math.Ceil(float64(totalSlots) / float64(len(eligibleUsers))))
 	if minFeasible > maxPerDay {
 		maxPerDay = minFeasible
 	}
 
 	// Build user candidate states
 	candidates := make(map[string]*SolverCandidate)
-	for _, u := range presentUsers {
+	for _, u := range eligibleUsers {
 		norm := 0.0
 		if val, ok := input.NormalizedWorkloads[u.DiscordId]; ok {
 			norm = val

@@ -9,6 +9,7 @@ import (
 	"github.com/gdg-garage/garage-trip-chores/llm"
 	"github.com/gdg-garage/garage-trip-chores/logger"
 	presencetracker "github.com/gdg-garage/garage-trip-chores/presence_tracker"
+	"github.com/gdg-garage/garage-trip-chores/registration"
 	"github.com/gdg-garage/garage-trip-chores/reminders"
 	"github.com/gdg-garage/garage-trip-chores/shifts"
 	"github.com/gdg-garage/garage-trip-chores/storage"
@@ -18,16 +19,17 @@ import (
 )
 
 type Config struct {
-	Logger   logger.Config
-	Db       storage.Config
-	Chores   chores.Config
-	Shifts   shifts.Config
-	Ui       ui.Config
-	Tracker  presencetracker.Config
-	Reminder reminders.Config
-	Api      api.Config
-	LLM      llm.Config
-	Web      web.Config
+	Logger       logger.Config
+	Db           storage.Config
+	Chores       chores.Config
+	Shifts       shifts.Config
+	Registration registration.Config
+	Ui           ui.Config
+	Tracker      presencetracker.Config
+	Reminder     reminders.Config
+	Api          api.Config
+	LLM          llm.Config
+	Web          web.Config
 }
 
 func New() (*Config, error) {
@@ -49,12 +51,24 @@ func New() (*Config, error) {
 	viper.SetDefault("shifts.maxshiftsperpersonperday", 2)
 	viper.SetDefault("shifts.timezone", "Europe/Prague")
 	viper.SetDefault("shifts.reminderleadtime", "15m")
+	viper.SetDefault("shifts.event", "")
 
 	_ = viper.BindEnv("shifts.adminrole", "SHIFTS_ADMIN_ROLE")
 	_ = viper.BindEnv("shifts.freezehour", "SHIFTS_FREEZE_HOUR")
 	_ = viper.BindEnv("shifts.defaultstandbyratio", "SHIFTS_DEFAULT_STANDBY_RATIO")
 	_ = viper.BindEnv("shifts.maxshiftsperpersonperday", "SHIFTS_MAX_SHIFTS_PER_DAY")
 	_ = viper.BindEnv("shifts.timezone", "SHIFTS_TIMEZONE")
+	_ = viper.BindEnv("shifts.event", "SHIFTS_EVENT")
+
+	viper.SetDefault("registration.apiurl", "")
+	viper.SetDefault("registration.apikey", "")
+	viper.SetDefault("registration.event", "")
+	viper.SetDefault("registration.syncintervalmin", 15)
+
+	_ = viper.BindEnv("registration.apiurl", "REGISTRATION_API_URL")
+	_ = viper.BindEnv("registration.apikey", "REGISTRATION_API_KEY")
+	_ = viper.BindEnv("registration.event", "REGISTRATION_EVENT")
+	_ = viper.BindEnv("registration.syncintervalmin", "REGISTRATION_SYNC_INTERVAL_MIN")
 
 	viper.SetDefault("ui.discordchannelid", "???")
 

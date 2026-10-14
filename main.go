@@ -14,6 +14,7 @@ import (
 	"github.com/gdg-garage/garage-trip-chores/llm"
 	"github.com/gdg-garage/garage-trip-chores/logger"
 	presencetracker "github.com/gdg-garage/garage-trip-chores/presence_tracker"
+	"github.com/gdg-garage/garage-trip-chores/registration"
 	"github.com/gdg-garage/garage-trip-chores/reminders"
 	"github.com/gdg-garage/garage-trip-chores/shifts"
 	"github.com/gdg-garage/garage-trip-chores/storage"
@@ -58,6 +59,9 @@ func main() {
 		logger.Info("One-off LLM chore summary completed successfully!")
 		return
 	}
+
+	regClient := registration.NewClient(conf.Registration, s, logger)
+	go regClient.Start(ctx, &wg)
 
 	shiftsService := shifts.NewService(s, logger, conf.Shifts)
 	shiftsScheduler := shifts.NewScheduler(shiftsService, s, logger, conf.Shifts, s.GetDiscord(), conf.Ui.DiscordChannelId)
