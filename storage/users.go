@@ -438,3 +438,45 @@ func (s *Storage) SaveUser(user User) error {
 		DoUpdates: clause.AssignmentColumns([]string{"name", "discord_handle", "updated_at"}),
 	}).Save(&p).Error
 }
+
+func (s *Storage) GetUser(discordId string) (*User, error) {
+	s.userCacheMu.RLock()
+	if u, ok := s.userCache[discordId]; ok {
+		s.userCacheMu.RUnlock()
+		return &u, nil
+	}
+	s.userCacheMu.RUnlock()
+
+	var p UserProfile
+	if err := s.db.First(&p, "discord_id = ?", discordId).Error; err == nil {
+		u := User{
+			DiscordId: p.DiscordId,
+			Name:      p.Name,
+			Handle:    p.DiscordHandle,
+		}
+		return &u, nil
+	}
+
+	if s.discord != nil {
+		member, err := s.discord.GuildMember(s.conf.DiscordGuildId, discordId)
+		if err == nil && member != nil {
+			name := member.User.Username
+			if member.User.GlobalName != "" {
+				name = member.User.GlobalName
+			}
+			if member.Nick != "" {
+				name = member.Nick
+			}
+			u := User{
+				DiscordId: discordId,
+				Name:      name,
+				Handle:    member.User.Username,
+			}
+			_ = s.SaveUser(u)
+			return &u, nil
+		}
+	}
+
+	return &User{DiscordId: discordId, Name: discordId, Handle: discordId}, nil
+}
+

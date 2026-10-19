@@ -220,6 +220,15 @@ type UserProfile struct {
 	UpdatedAt     time.Time `json:"updated_at"`
 }
 
+type UserApiKey struct {
+	ID        uint       `gorm:"primaryKey" json:"id"`
+	UserId    string     `gorm:"index;not null" json:"user_id"`
+	Key       string     `gorm:"uniqueIndex;not null" json:"key"`
+	Name      string     `json:"name"`
+	Created   time.Time  `json:"created"`
+	LastUsed  *time.Time `json:"last_used"`
+}
+
 type UserRegistration struct {
 	DiscordId        string    `gorm:"primaryKey" json:"discord_id"`
 	Username         string    `json:"username"`

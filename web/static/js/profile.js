@@ -11,12 +11,92 @@ async function init() {
   document.getElementById("handle").textContent = (profile.discord_handle || me.handle) ? "@" + (profile.discord_handle || me.handle) : "";
 
   document.getElementById("manual-form").addEventListener("submit", addManual);
+  document.getElementById("api-key-form").addEventListener("submit", createApiKey);
+  document.getElementById("copy-key-btn").addEventListener("click", copyNewKey);
   document.getElementById("signout").addEventListener("click", signOut);
-  await Promise.all([loadWorkload(), loadManual()]);
+  await Promise.all([loadWorkload(), loadManual(), loadApiKeys()]);
 }
 
 function signOut() {
   location.href = "/auth/logout";
+}
+
+async function loadApiKeys() {
+  const container = document.getElementById("api-keys-list");
+  if (!container) return;
+  try {
+    const res = await API.get("/api/me/api-keys");
+    const keys = res?.api_keys || [];
+    container.innerHTML = "";
+    if (keys.length === 0) {
+      container.innerHTML = '<p class="muted" style="font-size:.85rem">no API keys created yet.</p>';
+      return;
+    }
+    const ul = el("ul", { class: "leader", style: "margin:0" });
+    keys.forEach((k) => {
+      const lastUsed = k.last_used ? `last used: ${new Date(k.last_used).toLocaleDateString()}` : "never used";
+      const li = el("li", { style: "display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--panel-border)" },
+        el("div", {},
+          el("strong", { style: "font-family:var(--main-font)" }, k.name || "API Key"),
+          el("span", { class: "badge", style: "margin-left:8px;font-family:monospace;font-size:.8rem" }, k.key),
+          el("div", { class: "muted", style: "font-size:.78rem;margin-top:2px" }, `${lastUsed} · created ${new Date(k.created).toLocaleDateString()}`)
+        ),
+        el("button", {
+          class: "ghost small",
+          style: "color:#f87171",
+          onclick: () => deleteApiKey(k.id, k.name),
+        }, "revoke")
+      );
+      ul.appendChild(li);
+    });
+    container.appendChild(ul);
+  } catch (err) {
+    console.debug("Failed to load api keys", err);
+  }
+}
+
+async function createApiKey(ev) {
+  ev.preventDefault();
+  const nameInput = document.getElementById("key-name");
+  const name = nameInput.value.trim() || "API Key";
+  try {
+    const res = await API.post("/api/me/api-keys", { name });
+    nameInput.value = "";
+    const box = document.getElementById("new-key-box");
+    const valInput = document.getElementById("new-key-value");
+    if (box && valInput && res.key) {
+      valInput.value = res.key;
+      box.style.display = "block";
+    }
+    showToast("API Key generated ✓");
+    await loadApiKeys();
+  } catch (err) {
+    showError(err);
+  }
+}
+
+async function copyNewKey() {
+  const valInput = document.getElementById("new-key-value");
+  if (!valInput || !valInput.value) return;
+  try {
+    await navigator.clipboard.writeText(valInput.value);
+    showToast("Copied to clipboard! 📋");
+  } catch (e) {
+    valInput.select();
+    document.execCommand("copy");
+    showToast("Copied! 📋");
+  }
+}
+
+async function deleteApiKey(id, name) {
+  if (!confirm(`Revoke API key "${name || id}"? Any script using it will lose access.`)) return;
+  try {
+    await API.delete(`/api/me/api-keys/${id}`);
+    showToast("Key revoked ✓");
+    await loadApiKeys();
+  } catch (err) {
+    showError(err);
+  }
 }
 
 async function loadWorkload() {

@@ -16,6 +16,30 @@ func (s *Storage) MigrateAndImportHistory(db2025Path string) error {
 	s.db.Exec("UPDATE shifts SET event = ? WHERE event = '' OR event IS NULL", gt7Code)
 	s.db.Exec("UPDATE llm_summary_logs SET event = ? WHERE event = '' OR event IS NULL", gt7Code)
 
+	// 1.5. Ensure existing GT 6.9 presence logs in DB are downsampled to unified 10-minute buckets
+	var pCount int64
+	s.db.Model(&PresenceLog{}).Where("event = ?", "g::t::6.9").Count(&pCount)
+	if pCount > 25000 {
+		s.logger.Info("Downsampling historical 2025 presence logs to 10-minute buckets", "previous_count", pCount)
+		downsampleQuery := `
+			DELETE FROM presence_logs
+			WHERE event = 'g::t::6.9'
+			  AND id NOT IN (
+			    SELECT min(id)
+			    FROM presence_logs
+			    WHERE event = 'g::t::6.9'
+			    GROUP BY user_id, (strftime('%s', timestamp) / 600)
+			  )
+		`
+		if err := s.db.Exec(downsampleQuery).Error; err != nil {
+			s.logger.Warn("Failed to downsample 2025 presence logs", "error", err)
+		} else {
+			var newPCount int64
+			s.db.Model(&PresenceLog{}).Where("event = ?", "g::t::6.9").Count(&newPCount)
+			s.logger.Info("Successfully downsampled 2025 presence logs", "new_count", newPCount)
+		}
+	}
+
 	// 2. Locate 2025 historical database
 	gt2025Path := db2025Path
 	if gt2025Path == "" {
@@ -50,7 +74,7 @@ func (s *Storage) MigrateAndImportHistory(db2025Path string) error {
 	var existingCount int64
 	s.db.Model(&Chore{}).Where("event = ?", "g::t::6.9").Count(&existingCount)
 	if existingCount > 0 {
-		s.logger.Info("Historical 2025 data already imported, skipping", "count", existingCount)
+		s.logger.Info("Historical 2025 data already imported, skipping fresh import", "chores_count", existingCount)
 		return nil
 	}
 
@@ -122,11 +146,12 @@ func (s *Storage) MigrateAndImportHistory(db2025Path string) error {
 		return fmt.Errorf("failed to import 2025 chore assignments: %w", err)
 	}
 
-	// Presence logs
+	// Presence logs downsampled to unified 10-minute intervals
 	presenceQuery := `
 		INSERT INTO presence_logs (user_id, timestamp, event)
-		SELECT user_id, timestamp, 'g::t::6.9'
+		SELECT user_id, min(timestamp), 'g::t::6.9'
 		FROM db2025.presence_logs
+		GROUP BY user_id, (strftime('%s', timestamp) / 600)
 	`
 	if err := tx.Exec(presenceQuery).Error; err != nil {
 		tx.Rollback()

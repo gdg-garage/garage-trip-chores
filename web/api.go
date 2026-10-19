@@ -1261,3 +1261,66 @@ func (w *Web) handleSummary(rw http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(rw, http.StatusOK, map[string]string{"message": "LLM summary triggered and published successfully"})
 }
+
+func (w *Web) handleGetMyApiKeys(rw http.ResponseWriter, r *http.Request) {
+	u := w.GetCurrentUser(r)
+	if u == nil {
+		writeError(rw, http.StatusUnauthorized, "Not logged in")
+		return
+	}
+	keys, err := w.storage.GetUserApiKeys(u.DiscordId)
+	if err != nil {
+		writeError(rw, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if keys == nil {
+		keys = []storage.UserApiKey{}
+	}
+	writeJSON(rw, http.StatusOK, map[string]any{"api_keys": keys})
+}
+
+type CreateApiKeyIn struct {
+	Name string `json:"name"`
+}
+
+func (w *Web) handleCreateMyApiKey(rw http.ResponseWriter, r *http.Request) {
+	u := w.GetCurrentUser(r)
+	if u == nil {
+		writeError(rw, http.StatusUnauthorized, "Not logged in")
+		return
+	}
+	var in CreateApiKeyIn
+	_ = json.NewDecoder(r.Body).Decode(&in)
+
+	keyObj, rawKey, err := w.storage.CreateUserApiKey(u.DiscordId, in.Name)
+	if err != nil {
+		writeError(rw, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(rw, http.StatusOK, map[string]any{
+		"id":      keyObj.ID,
+		"name":    keyObj.Name,
+		"key":     rawKey,
+		"created": keyObj.Created,
+	})
+}
+
+func (w *Web) handleDeleteMyApiKey(rw http.ResponseWriter, r *http.Request) {
+	u := w.GetCurrentUser(r)
+	if u == nil {
+		writeError(rw, http.StatusUnauthorized, "Not logged in")
+		return
+	}
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		writeError(rw, http.StatusBadRequest, "Invalid key ID")
+		return
+	}
+	if err := w.storage.DeleteUserApiKey(u.DiscordId, uint(id)); err != nil {
+		writeError(rw, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(rw, http.StatusOK, map[string]any{"ok": true})
+}
+

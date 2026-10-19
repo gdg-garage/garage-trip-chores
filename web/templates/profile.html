@@ -35,6 +35,23 @@
   </form>
   <ul id="manual-list" class="leader" style="margin-top:12px"></ul>
 </div>
+
+<div class="card">
+  <h2>my::api_keys; 🔑</h2>
+  <p class="muted">generate an API key to access the API as yourself (create chores, create events, read stats).</p>
+  <div id="api-keys-list" style="margin-bottom:12px"></div>
+  <form id="api-key-form" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <input id="key-name" placeholder="key label (e.g. script / laptop)" style="flex:1;min-width:200px" />
+    <button type="submit" class="secondary small">+ generate::key</button>
+  </form>
+  <div id="new-key-box" style="margin-top:12px;padding:12px;background:#15191e;border:1px solid var(--accent);border-radius:var(--radius-input);display:none">
+    <p style="margin:0 0 6px;color:#a3e635;font-weight:700">✓ key created — copy it now, it won't be displayed again:</p>
+    <div style="display:flex;gap:8px">
+      <input id="new-key-value" readonly style="font-family:monospace;background:#0d1117;flex:1" />
+      <button type="button" id="copy-key-btn" class="secondary small">📋 copy</button>
+    </div>
+  </div>
+</div>
 {% endblock %}
 {% block scripts %}
 <script src="/static/js/profile.js"></script>

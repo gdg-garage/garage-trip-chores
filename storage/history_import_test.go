@@ -147,3 +147,64 @@ func TestMigrateAndImportHistory(t *testing.T) {
 		t.Errorf("expected exactly 1 chore for g::t::6.9 after re-import, got %d", count)
 	}
 }
+
+func TestPresenceDownsamplingMigration(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "downsample-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	appDbPath := filepath.Join(tmpDir, "app.sqlite")
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	st, err := New(Config{DbPath: appDbPath}, logger)
+	if err != nil {
+		t.Fatalf("failed to init storage: %v", err)
+	}
+
+	// Insert 30,000 mock presence logs (2-min intervals over multiple buckets)
+	baseTime := time.Date(2025, 9, 20, 12, 0, 0, 0, time.UTC)
+	var logs []PresenceLog
+	for i := 0; i < 30000; i++ {
+		// 5 samples per 10-minute block (every 2 minutes)
+		logs = append(logs, PresenceLog{
+			UserId:    "dense_user",
+			Timestamp: baseTime.Add(time.Duration(i*2) * time.Minute),
+			Event:     "g::t::6.9",
+		})
+		if len(logs) == 5000 {
+			if err := st.db.Create(&logs).Error; err != nil {
+				t.Fatalf("failed to bulk insert logs: %v", err)
+			}
+			logs = nil
+		}
+	}
+	if len(logs) > 0 {
+		_ = st.db.Create(&logs)
+	}
+
+	// Insert 1 chore for g::t::6.9 so existingCount > 0 triggers the downsampling branch
+	st.db.Create(&Chore{
+		Name:  "Test 6.9 Chore",
+		Event: "g::t::6.9",
+	})
+
+	var initialCount int64
+	st.db.Model(&PresenceLog{}).Where("event = ?", "g::t::6.9").Count(&initialCount)
+	if initialCount != 30000 {
+		t.Fatalf("expected 30000 initial logs, got %d", initialCount)
+	}
+
+	// Run MigrateAndImportHistory (passes non-existent 2025 sqlite path, will execute the migration branch)
+	if err := st.MigrateAndImportHistory(""); err != nil {
+		t.Fatalf("MigrateAndImportHistory failed: %v", err)
+	}
+
+	var downsampledCount int64
+	st.db.Model(&PresenceLog{}).Where("event = ?", "g::t::6.9").Count(&downsampledCount)
+	// 30000 logs at 2 min = 60,000 minutes = 6,000 10-minute buckets
+	if downsampledCount != 6000 {
+		t.Errorf("expected 6000 downsampled logs, got %d", downsampledCount)
+	}
+}
+

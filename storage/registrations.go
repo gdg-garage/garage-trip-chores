@@ -1,7 +1,6 @@
 package storage
 
 import (
-	"strings"
 	"time"
 )
 
@@ -208,9 +207,6 @@ func (s *Storage) GetEventSamplePeriodMin(event string) int {
 			}
 		}
 	}
-	if strings.Contains(event, "6.9") {
-		return 2
-	}
-	return 10 // Default 10 min
+	return 10 // Unified standard 10 min
 }
 

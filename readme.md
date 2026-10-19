@@ -139,7 +139,7 @@ Configuration can be specified in `config.yaml` or via environment variables pre
 | `CHORES_WEB_DISCORDCLIENTSECRET` | - | Discord OAuth2 Client Secret |
 | `CHORES_WEB_TABLETPASSWORD` | `garagetrip` | Password for tablet kiosk mode |
 | `CHORES_API_PORT` | `8080` | REST/WebSocket HTTP port |
-| `CHORES_API_APIKEYS` | - | Comma-separated API keys for REST API access |
+| `CHORES_API_APIKEYS` | - | Comma-separated central API keys for REST API access (users can also generate personal API keys in `/profile`) |
 
 ---
 

@@ -118,8 +118,16 @@ func (a *Api) SetupRoutes() *chi.Mux {
 			token := ""
 			if len(authHeader) > 7 && authHeader[:7] == "Bearer " {
 				token = authHeader[7:]
+			} else if xKey := r.Header.Get("X-API-KEY"); xKey != "" {
+				token = xKey
 			}
 			if _, ok := a.authorizedKeys[token]; !ok {
+				if a.storage != nil && token != "" {
+					if u, err := a.storage.GetUserByApiKey(token); err == nil && u != nil {
+						next.ServeHTTP(w, r)
+						return
+					}
+				}
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return
 			}

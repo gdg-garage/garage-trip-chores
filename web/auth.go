@@ -102,14 +102,42 @@ func (w *Web) AuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		// API key authorization (for backend scripts or bots)
+		// API key authorization (central static keys or user-generated keys)
 		authHeader := r.Header.Get("Authorization")
+		key := ""
 		if authHeader != "" && strings.HasPrefix(authHeader, "Bearer ") {
-			key := strings.TrimPrefix(authHeader, "Bearer ")
+			key = strings.TrimPrefix(authHeader, "Bearer ")
+		} else if xKey := r.Header.Get("X-API-KEY"); xKey != "" {
+			key = xKey
+		}
+		if key != "" {
 			for _, authorizedKey := range w.conf.ApiKeys {
 				if key == authorizedKey {
-					// Authorized via API key
-					next.ServeHTTP(rw, r)
+					// Authorized via central API key
+					ctx := r.Context()
+					if ctx.Value(UserContextKey) == nil {
+						ctx = context.WithValue(ctx, UserContextKey, &UserInfo{
+							DiscordId: "api-admin",
+							Name:      "Central API Key",
+							Handle:    "api",
+							IsAdmin:   true,
+						})
+					}
+					next.ServeHTTP(rw, r.WithContext(ctx))
+					return
+				}
+			}
+
+			// Check user-generated API keys
+			if w.storage != nil {
+				if u, err := w.storage.GetUserByApiKey(key); err == nil && u != nil {
+					ctx := context.WithValue(r.Context(), UserContextKey, &UserInfo{
+						DiscordId: u.DiscordId,
+						Name:      u.Name,
+						Handle:    u.Handle,
+						IsAdmin:   u.IsAdmin,
+					})
+					next.ServeHTTP(rw, r.WithContext(ctx))
 					return
 				}
 			}
