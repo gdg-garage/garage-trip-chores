@@ -18,6 +18,7 @@ const API = {
   post(path, body) { return this.send("POST", path, body); },
   put(path, body) { return this.send("PUT", path, body); },
   del(path) { return this.send("DELETE", path); },
+  delete(path) { return this.send("DELETE", path); },
 };
 
 async function safeJson(r) { try { return await r.json(); } catch { return null; } }
