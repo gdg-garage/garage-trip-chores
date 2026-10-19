@@ -53,22 +53,22 @@ func New() (*Config, error) {
 	viper.SetDefault("shifts.reminderleadtime", "15m")
 	viper.SetDefault("shifts.event", "")
 
-	_ = viper.BindEnv("shifts.adminrole", "SHIFTS_ADMIN_ROLE")
-	_ = viper.BindEnv("shifts.freezehour", "SHIFTS_FREEZE_HOUR")
-	_ = viper.BindEnv("shifts.defaultstandbyratio", "SHIFTS_DEFAULT_STANDBY_RATIO")
-	_ = viper.BindEnv("shifts.maxshiftsperpersonperday", "SHIFTS_MAX_SHIFTS_PER_DAY")
-	_ = viper.BindEnv("shifts.timezone", "SHIFTS_TIMEZONE")
-	_ = viper.BindEnv("shifts.event", "SHIFTS_EVENT")
+	_ = viper.BindEnv("shifts.adminrole", "SHIFTS_ADMIN_ROLE", "CHORES_SHIFTS_ADMIN_ROLE", "CHORES_SHIFTS_ADMINROLE")
+	_ = viper.BindEnv("shifts.freezehour", "SHIFTS_FREEZE_HOUR", "CHORES_SHIFTS_FREEZE_HOUR", "CHORES_SHIFTS_FREEZEHOUR")
+	_ = viper.BindEnv("shifts.defaultstandbyratio", "SHIFTS_DEFAULT_STANDBY_RATIO", "CHORES_SHIFTS_DEFAULT_STANDBY_RATIO", "CHORES_SHIFTS_DEFAULTSTANDBYRATIO")
+	_ = viper.BindEnv("shifts.maxshiftsperpersonperday", "SHIFTS_MAX_SHIFTS_PER_DAY", "CHORES_SHIFTS_MAX_SHIFTS_PER_DAY", "CHORES_SHIFTS_MAXSHIFTSPERPERSONPERDAY")
+	_ = viper.BindEnv("shifts.timezone", "SHIFTS_TIMEZONE", "CHORES_SHIFTS_TIMEZONE")
+	_ = viper.BindEnv("shifts.event", "SHIFTS_EVENT", "CHORES_SHIFTS_EVENT")
 
 	viper.SetDefault("registration.apiurl", "")
 	viper.SetDefault("registration.apikey", "")
 	viper.SetDefault("registration.event", "")
 	viper.SetDefault("registration.syncintervalmin", 15)
 
-	_ = viper.BindEnv("registration.apiurl", "REGISTRATION_API_URL")
-	_ = viper.BindEnv("registration.apikey", "REGISTRATION_API_KEY")
-	_ = viper.BindEnv("registration.event", "REGISTRATION_EVENT")
-	_ = viper.BindEnv("registration.syncintervalmin", "REGISTRATION_SYNC_INTERVAL_MIN")
+	_ = viper.BindEnv("registration.apiurl", "REGISTRATION_API_URL", "CHORES_REGISTRATION_API_URL", "CHORES_REGISTRATION_APIURL")
+	_ = viper.BindEnv("registration.apikey", "REGISTRATION_API_KEY", "CHORES_REGISTRATION_API_KEY", "CHORES_REGISTRATION_APIKEY")
+	_ = viper.BindEnv("registration.event", "REGISTRATION_EVENT", "CHORES_REGISTRATION_EVENT")
+	_ = viper.BindEnv("registration.syncintervalmin", "REGISTRATION_SYNC_INTERVAL_MIN", "CHORES_REGISTRATION_SYNC_INTERVAL_MIN", "CHORES_REGISTRATION_SYNCINTERVALMIN")
 
 	viper.SetDefault("ui.discordchannelid", "???")
 
