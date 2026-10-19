@@ -63,3 +63,57 @@ func (s *Storage) GetUserRegistrationsMap(event string) (map[string]UserRegistra
 	}
 	return res, nil
 }
+
+// SaveTripEvents bulk upserts trip events into the local database
+func (s *Storage) SaveTripEvents(events []TripEvent) error {
+	if len(events) == 0 {
+		return nil
+	}
+
+	now := time.Now()
+	for i := range events {
+		events[i].UpdatedAt = now
+	}
+
+	return s.db.Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "code"}},
+		DoUpdates: clause.AssignmentColumns([]string{
+			"name", "start_date", "end_date", "location", "description",
+			"enabled", "status", "updated_at",
+		}),
+	}).Create(&events).Error
+}
+
+// GetTripEvents returns all known events
+func (s *Storage) GetTripEvents() ([]TripEvent, error) {
+	var events []TripEvent
+	err := s.db.Find(&events).Error
+	return events, err
+}
+
+// IsDateInEvent returns true if target date is within any trip event's duration (inclusive of start and end dates).
+func (s *Storage) IsDateInEvent(date time.Time) (bool, *TripEvent, error) {
+	events, err := s.GetTripEvents()
+	if err != nil {
+		return false, nil, err
+	}
+
+	y, m, d := date.Date()
+	targetDay := time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
+
+	for _, e := range events {
+		if e.StartDate != nil && e.EndDate != nil {
+			sy, sm, sd := e.StartDate.Date()
+			startDay := time.Date(sy, sm, sd, 0, 0, 0, 0, time.UTC)
+
+			ey, em, ed := e.EndDate.Date()
+			endDay := time.Date(ey, em, ed, 23, 59, 59, 0, time.UTC)
+
+			if !targetDay.Before(startDay) && !targetDay.After(endDay) {
+				return true, &e, nil
+			}
+		}
+	}
+	return false, nil, nil
+}
+

@@ -35,7 +35,8 @@ The production API and Web Dashboard is hosted at: **[chores.garage-trip.cz](htt
     *   **"Can't Attend" Auto-Replacement**: When an attendee drops a shift, the solver automatically reassigns it to the fairest available alternative candidate.
 
 ### 3. Registration System Integration & Attendance Predictions
-*   **Bidirectional Registration Sync**: Integrates directly with `garage-trip-api` using `X-API-KEY` to synchronize participant registrations (`arrival_date`, `departure_date`, and cancellation status).
+*   **Bidirectional Registration & Event Sync**: Integrates directly with `garage-trip-api` using `X-API-KEY` to synchronize trip events and participant registrations (`arrival_date`, `departure_date`, and cancellation status).
+*   **Event-Aware Scheduling**: Shift generation and daily freeze announcements only activate before and during scheduled events or when attendees are registered/present on site. When no event is happening, freeze notifications are suppressed and no shifts are assigned.
 *   **Predictive Shift Scheduling**:
     *   **Late Arrivals**: Participants arriving tomorrow are recognized by their registered arrival date and scheduled for tomorrow ahead of time, even if not yet on site.
     *   **Early Departures**: Participants departing today are excluded from tomorrow's schedule even if currently on site, preventing abandoned shifts and sudden swaps.

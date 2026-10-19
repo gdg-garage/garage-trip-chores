@@ -136,12 +136,90 @@ func (c *Client) FetchRegistrations(ctx context.Context) ([]storage.UserRegistra
 	return results, nil
 }
 
-// Sync fetches registrations from the API and saves them into the local database
+type apiEventItem struct {
+	ID          uint       `json:"id"`
+	Code        string     `json:"code"`
+	Name        string     `json:"name"`
+	StartDate   *time.Time `json:"start_date"`
+	EndDate     *time.Time `json:"end_date"`
+	Location    string     `json:"location"`
+	Description string     `json:"description"`
+	Enabled     bool       `json:"enabled"`
+	Status      string     `json:"status"`
+}
+
+type apiListEventsResponse struct {
+	Events []apiEventItem `json:"events"`
+}
+
+// FetchEvents calls the external events API
+func (c *Client) FetchEvents(ctx context.Context) ([]storage.TripEvent, error) {
+	if c.conf.ApiUrl == "" {
+		return nil, nil
+	}
+
+	apiEndpoint := strings.TrimRight(c.conf.ApiUrl, "/") + "/events?all=true"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiEndpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create events request: %w", err)
+	}
+
+	if c.conf.ApiKey != "" {
+		req.Header.Set("X-API-KEY", c.conf.ApiKey)
+	}
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("events HTTP request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("events API returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var data apiListEventsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		return nil, fmt.Errorf("failed to decode events response: %w", err)
+	}
+
+	results := make([]storage.TripEvent, 0, len(data.Events))
+	for _, item := range data.Events {
+		results = append(results, storage.TripEvent{
+			Code:        item.Code,
+			Name:        item.Name,
+			StartDate:   item.StartDate,
+			EndDate:     item.EndDate,
+			Location:    item.Location,
+			Description: item.Description,
+			Enabled:     item.Enabled,
+			Status:      item.Status,
+		})
+	}
+	return results, nil
+}
+
+// Sync fetches events and registrations from the API and saves them into the local database
 func (c *Client) Sync(ctx context.Context) error {
 	if c.conf.ApiUrl == "" {
 		return nil
 	}
 
+	// 1. Sync trip events
+	events, err := c.FetchEvents(ctx)
+	if err != nil {
+		c.logger.Warn("Failed to sync events from API", "error", err)
+	} else if len(events) > 0 {
+		if err := c.storage.SaveTripEvents(events); err != nil {
+			c.logger.Error("Failed to store events in database", "error", err)
+		} else {
+			c.logger.Info("Synchronized trip events successfully", "count", len(events))
+		}
+	}
+
+	// 2. Sync attendee registrations
 	regs, err := c.FetchRegistrations(ctx)
 	if err != nil {
 		c.logger.Warn("Failed to sync registrations from API", "error", err)

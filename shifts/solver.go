@@ -119,15 +119,17 @@ func SolveOptimizedSchedule(input SolverInput) map[uint][]string {
 		}
 	}
 	if len(eligibleUsers) == 0 {
-		// Fallback to real-time present users, then all users if presence data is empty
+		// Fallback to real-time present users only
 		for _, u := range input.Users {
 			if u.IsPresent {
 				eligibleUsers = append(eligibleUsers, u)
 			}
 		}
-		if len(eligibleUsers) == 0 {
-			eligibleUsers = input.Users
-		}
+	}
+	if len(eligibleUsers) == 0 {
+		// If nobody is eligible (nobody registered for this date and nobody present on site),
+		// do not assign random Discord members. Return empty assignment map.
+		return result
 	}
 
 	// 2. Determine effective max shifts per day

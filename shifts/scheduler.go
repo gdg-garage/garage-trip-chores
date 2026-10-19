@@ -81,7 +81,16 @@ func (s *Scheduler) checkDailyFreeze() {
 		s.mu.Unlock()
 
 		if !alreadyDone {
-			s.logger.Info("Freezing tomorrow's schedule at noon", "date", tomorrowStr)
+			active, reason, err := s.service.IsSchedulingActiveForDate(tomorrow)
+			if err != nil {
+				s.logger.Warn("Error checking if scheduling is active for tomorrow", "date", tomorrowStr, "error", err)
+			}
+			if !active {
+				s.logger.Info("No active event, registrations, or present users for tomorrow; skipping freeze", "date", tomorrowStr)
+				return
+			}
+
+			s.logger.Info("Freezing tomorrow's schedule at noon", "date", tomorrowStr, "reason", reason)
 			shifts, err := s.service.GenerateShiftsForDate(tomorrow, true)
 			if err != nil {
 				s.logger.Error("Failed to auto-freeze tomorrow's schedule", "error", err)

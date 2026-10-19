@@ -39,15 +39,32 @@ func TestFetchRegistrations(t *testing.T) {
 	departure := time.Date(2026, 10, 19, 14, 0, 0, 0, time.UTC)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/registrations" {
-			t.Errorf("unexpected path: %s", r.URL.Path)
-			http.NotFound(w, r)
-			return
-		}
-
 		if r.Header.Get("X-API-KEY") != "test-key" {
 			t.Errorf("unexpected api key: %s", r.Header.Get("X-API-KEY"))
 			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		if r.URL.Path == "/events" {
+			resp := apiListEventsResponse{
+				Events: []apiEventItem{
+					{
+						Code:      "gt-8",
+						Name:      "Garage Trip 8",
+						StartDate: &arrival,
+						EndDate:   &departure,
+						Enabled:   true,
+					},
+				},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(resp)
+			return
+		}
+
+		if r.URL.Path != "/registrations" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+			http.NotFound(w, r)
 			return
 		}
 

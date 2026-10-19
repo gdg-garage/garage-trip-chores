@@ -51,12 +51,71 @@ func parseTimeOfDay(baseDate time.Time, timeStr string, loc *time.Location) (tim
 	return time.Date(baseDate.Year(), baseDate.Month(), baseDate.Day(), hour, min, 0, 0, loc), nil
 }
 
+// IsSchedulingActiveForDate returns true if targetDate falls within an active/scheduled trip event,
+// has registered attendees arriving/departing on that date, or has participants currently marked present on site.
+// If none of these conditions are met, shift scheduling is suppressed to avoid scheduling out-of-event shifts.
+func (s *ShiftsService) IsSchedulingActiveForDate(targetDate time.Time) (bool, string, error) {
+	// 1. Check if date falls into any known trip event
+	inEvent, event, err := s.storage.IsDateInEvent(targetDate)
+	if err == nil && inEvent && event != nil {
+		return true, fmt.Sprintf("Event: %s (%s)", event.Name, event.Code), nil
+	}
+
+	// 2. Check if any attendee registration covers targetDate
+	regs, err := s.storage.GetUserRegistrationsMap(s.conf.Event)
+	if err == nil && len(regs) > 0 {
+		y, m, d := targetDate.Date()
+		tDay := time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
+		for _, r := range regs {
+			if !r.Cancelled && !r.ArrivalDate.IsZero() && !r.DepartureDate.IsZero() {
+				ay, am, ad := r.ArrivalDate.Date()
+				arrDay := time.Date(ay, am, ad, 0, 0, 0, 0, time.UTC)
+				dy, dm, dd := r.DepartureDate.Date()
+				depDay := time.Date(dy, dm, dd, 23, 59, 59, 0, time.UTC)
+				if !tDay.Before(arrDay) && !tDay.After(depDay) {
+					return true, fmt.Sprintf("Attendee registration present (%s)", r.Username), nil
+				}
+			}
+		}
+	}
+
+	// 3. Check if any participants are currently marked present on site (e.g. ad-hoc retreat or simulation/headless mode)
+	presentUsers, err := s.storage.GetPresentUsers()
+	if err == nil && len(presentUsers) > 0 {
+		return true, fmt.Sprintf("%d participants currently present on site", len(presentUsers)), nil
+	}
+	users, err := s.storage.GetUsers()
+	if err == nil {
+		presentCount := 0
+		for _, u := range users {
+			if u.IsPresent {
+				presentCount++
+			}
+		}
+		if presentCount > 0 {
+			return true, fmt.Sprintf("%d participants present", presentCount), nil
+		}
+	}
+
+	return false, "", nil
+}
+
 // GenerateShiftsForDate creates scheduled shift instances based on active shift definitions
 // and runs the ILP optimization solver to assign attendees fairly.
 func (s *ShiftsService) GenerateShiftsForDate(targetDate time.Time, freeze bool) ([]storage.Shift, error) {
 	loc := targetDate.Location()
 	dateStr := targetDate.Format("2006-01-02")
-	s.logger.Info("Generating shifts for date", "date", dateStr, "freeze", freeze)
+
+	active, reason, err := s.IsSchedulingActiveForDate(targetDate)
+	if err != nil {
+		s.logger.Warn("Error checking if scheduling is active for date", "date", dateStr, "error", err)
+	}
+	if !active {
+		s.logger.Info("No active event, registered attendees, or present users for date; skipping shift generation", "date", dateStr)
+		return nil, nil
+	}
+
+	s.logger.Info("Generating shifts for date", "date", dateStr, "freeze", freeze, "reason", reason)
 
 	defs, err := s.storage.GetActiveShiftDefinitions()
 	if err != nil {

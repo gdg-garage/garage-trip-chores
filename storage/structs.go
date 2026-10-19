@@ -231,6 +231,18 @@ type UserRegistration struct {
 	UpdatedAt        time.Time `json:"updated_at"`
 }
 
+type TripEvent struct {
+	Code        string     `gorm:"primaryKey" json:"code"`
+	Name        string     `json:"name"`
+	StartDate   *time.Time `json:"start_date,omitempty"`
+	EndDate     *time.Time `json:"end_date,omitempty"`
+	Location    string     `json:"location,omitempty"`
+	Description string     `json:"description,omitempty"`
+	Enabled     bool       `json:"enabled"`
+	Status      string     `json:"status"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+}
+
 type ScheduledTask struct {
 	ID                    uint       `gorm:"primaryKey" json:"id"`
 	Name                  string     `gorm:"not null" json:"name"`
