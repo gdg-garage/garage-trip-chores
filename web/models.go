@@ -56,6 +56,7 @@ type ChoreCreateIn struct {
 	NecessaryCapabilities []string `json:"necessary_capabilities"`
 	DelayMin              uint     `json:"delay_min"`
 	SelfReported          bool     `json:"self_reported"`
+	Assign                bool     `json:"assign"`
 	AssigneeId            string   `json:"assignee_id,omitempty"`
 	AssigneeIds           []string `json:"assignee_ids,omitempty"`
 	CreatorId             string   `json:"creator_id"`

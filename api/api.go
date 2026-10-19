@@ -341,6 +341,7 @@ func (a *Api) SetupRoutes() *chi.Mux {
 		chore := storage.Chore{
 			Name:                 name,
 			AssigneeId:           assigneeId,
+			AutoAssign:           input.Body.AutoAssign,
 			NecessaryWorkers:     workers,
 			EstimatedTimeMin:     estTime,
 			AssignmentTimeoutMin: timeoutMin,
@@ -746,6 +747,7 @@ type TasksResponse struct {
 type TaskCreateInputBody struct {
 	Name                  string     `json:"name" doc:"Name of the chore"`
 	AssigneeId            string     `json:"assignee_id,omitempty" doc:"Direct assignee ID (e.g. Discord user ID)"`
+	AutoAssign            bool       `json:"auto_assign,omitempty" doc:"When true and assignee_id is empty, auto-assigns attendees based on balancing. Default is false (open/free to take)."`
 	NecessaryWorkers      uint       `json:"necessary_workers" default:"1"`
 	EstimatedTimeMin      uint       `json:"estimated_time_min" default:"10"`
 	AssignmentTimeoutMin  uint       `json:"assignment_timeout_min" default:"15"`

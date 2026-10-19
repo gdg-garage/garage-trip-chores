@@ -56,13 +56,22 @@
       </div>
     </div>
 
-    <div class="grid2" id="assignee-delay-wrap">
-      <div>
-        <label for="assignee">assign_directly::(optional, multiple)</label>
+    <div class="panel" id="assign-toggle-wrap" style="margin-bottom:12px;padding:10px 14px;border:1px solid var(--border);border-radius:var(--radius);background:rgba(255,255,255,0.02)">
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin:0;font-weight:600">
+        <input type="checkbox" id="assign" style="width:18px;height:18px;cursor:pointer" />
+        <span>🎯 assign::attendees; (sends Discord DM)</span>
+      </label>
+      <p class="muted" style="margin:4px 0 0 28px;font-size:.82rem">default is off (chore is open and free to take). check to assign specific attendees or auto-balance among present attendees.</p>
+      
+      <div id="assign-details-wrap" style="margin-top:10px;display:none">
+        <label for="assignee">direct_assignees::(optional, auto-balances if empty)</label>
         <select id="assignee" multiple size="4" style="height:auto;min-height:95px;padding:6px;width:100%;border:1px solid var(--border);border-radius:var(--radius);background:var(--panel-bg);color:var(--c-white);">
         </select>
-        <p class="muted" style="font-size:.78rem;margin:4px 0 0">hold Ctrl/Cmd to select multiple attendees</p>
+        <p class="muted" style="font-size:.78rem;margin:4px 0 0">hold Ctrl/Cmd to select multiple attendees. if left empty, attendee is auto-selected based on workload.</p>
       </div>
+    </div>
+
+    <div class="grid2" id="delay-timeout-wrap">
       <div id="delay-wrap">
         <label for="delay_sel">delay_publishing::</label>
         <select id="delay_sel">
@@ -75,10 +84,7 @@
         </select>
         <input id="delay_custom" type="number" min="1" max="10000" placeholder="custom minutes" style="margin-top:6px" hidden />
       </div>
-    </div>
-
-    <div class="grid2" id="timeout-headcount-wrap">
-      <div>
+      <div id="timeout-wrap">
         <label for="timeout">reopen_if_unclaimed::(min)</label>
         <input id="timeout" type="number" min="1" max="1000" value="15" />
       </div>

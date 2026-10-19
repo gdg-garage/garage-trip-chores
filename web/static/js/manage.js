@@ -78,6 +78,14 @@ async function init() {
   document.getElementById("chore-form").addEventListener("submit", submit);
   document.getElementById("headcount").addEventListener("input", recalcFromTemplate);
 
+  const assignCheckbox = document.getElementById("assign");
+  if (assignCheckbox) {
+    assignCheckbox.addEventListener("change", (e) => {
+      const details = document.getElementById("assign-details-wrap");
+      if (details) details.style.display = e.target.checked ? "block" : "none";
+    });
+  }
+
   // Self-reported toggle
   const selfRep = document.getElementById("self_reported");
   if (selfRep) {
@@ -124,7 +132,8 @@ function setFilter(filter) {
 
 function toggleSelfReported(checked) {
   const workersWrap = document.getElementById("workers-wrap");
-  const assigneeDelayWrap = document.getElementById("assignee-delay-wrap");
+  const assignToggleWrap = document.getElementById("assign-toggle-wrap");
+  const delayTimeoutWrap = document.getElementById("delay-timeout-wrap");
   const timeoutHeadcountWrap = document.getElementById("timeout-headcount-wrap");
   const skillsWrap = document.getElementById("skills-wrap");
   const deadlineUrgencyWrap = document.getElementById("deadline-urgency-wrap");
@@ -132,7 +141,8 @@ function toggleSelfReported(checked) {
 
   if (checked) {
     if (workersWrap) workersWrap.hidden = true;
-    if (assigneeDelayWrap) assigneeDelayWrap.hidden = true;
+    if (assignToggleWrap) assignToggleWrap.hidden = true;
+    if (delayTimeoutWrap) delayTimeoutWrap.hidden = true;
     if (timeoutHeadcountWrap) timeoutHeadcountWrap.hidden = true;
     if (skillsWrap) skillsWrap.hidden = true;
     if (deadlineUrgencyWrap) deadlineUrgencyWrap.hidden = true;
@@ -140,7 +150,8 @@ function toggleSelfReported(checked) {
     if (submitBtn) submitBtn.textContent = "⚡ Save completed chore";
   } else {
     if (workersWrap) workersWrap.hidden = false;
-    if (assigneeDelayWrap) assigneeDelayWrap.hidden = false;
+    if (assignToggleWrap) assignToggleWrap.hidden = false;
+    if (delayTimeoutWrap) delayTimeoutWrap.hidden = false;
     if (timeoutHeadcountWrap) timeoutHeadcountWrap.hidden = false;
     if (skillsWrap) skillsWrap.hidden = false;
     if (deadlineUrgencyWrap) deadlineUrgencyWrap.hidden = false;
@@ -216,8 +227,9 @@ async function submit(ev) {
 
   const selfReported = document.getElementById("self_reported")?.checked || false;
   const delayMin = selfReported ? 0 : getDelayMinutes();
+  const assignEnabled = !selfReported && (document.getElementById("assign")?.checked || false);
   const assigneeSelect = document.getElementById("assignee");
-  const assigneeIds = selfReported ? [] : Array.from(assigneeSelect?.selectedOptions || []).map(o => o.value).filter(Boolean);
+  const assigneeIds = assignEnabled ? Array.from(assigneeSelect?.selectedOptions || []).map(o => o.value).filter(Boolean) : [];
   const assigneeId = assigneeIds[0] || null;
   const deadlineRaw = selfReported ? null : document.getElementById("deadline").value;
 
@@ -245,6 +257,7 @@ async function submit(ev) {
     headcount: parseInt(document.getElementById("headcount").value, 10) || null,
     delay_min: delayMin,
     self_reported: selfReported,
+    assign: assignEnabled,
     assignee_id: assigneeId,
     assignee_ids: assigneeIds,
     creator_id: creatorId,
@@ -280,6 +293,12 @@ function resetForm() {
   const assigneeSelect = document.getElementById("assignee");
   if (assigneeSelect) {
     Array.from(assigneeSelect.options).forEach(opt => opt.selected = false);
+  }
+  const assignCheck = document.getElementById("assign");
+  if (assignCheck) {
+    assignCheck.checked = false;
+    const details = document.getElementById("assign-details-wrap");
+    if (details) details.style.display = "none";
   }
   toggleSelfReported(false);
 }

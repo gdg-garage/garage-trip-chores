@@ -717,9 +717,13 @@ func (w *Web) handlePostChore(rw http.ResponseWriter, r *http.Request) {
 		event = w.storage.GetActiveEventCode()
 	}
 
-	assignees := in.AssigneeIds
-	if len(assignees) == 0 && in.AssigneeId != "" {
-		assignees = []string{in.AssigneeId}
+	assignEnabled := in.Assign || len(in.AssigneeIds) > 0 || in.AssigneeId != ""
+	var assignees []string
+	if assignEnabled {
+		assignees = in.AssigneeIds
+		if len(assignees) == 0 && in.AssigneeId != "" {
+			assignees = []string{in.AssigneeId}
+		}
 	}
 	primaryAssignee := ""
 	if len(assignees) > 0 {
@@ -734,6 +738,7 @@ func (w *Web) handlePostChore(rw http.ResponseWriter, r *http.Request) {
 		AssignmentTimeoutMin: timeout,
 		CreatorId:            creatorID,
 		AssigneeId:           primaryAssignee,
+		AutoAssign:           assignEnabled && len(assignees) == 0,
 		DelayMin:             in.DelayMin,
 		SelfReported:         in.SelfReported,
 		TemplateKey:          in.TemplateKey,

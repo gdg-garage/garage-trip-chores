@@ -713,3 +713,28 @@ func TestChoreDetailEnvelopeAndMultiAssign(t *testing.T) {
 
 	_ = webInstance
 }
+
+func TestChoreCreationDefaultUnassigned(t *testing.T) {
+	_, router := setupTestWeb(t)
+
+	// Create a chore without assign=true or assignees - must remain unassigned / free to take
+	createBody, _ := json.Marshal(ChoreCreateIn{
+		Name:             "Clean floor",
+		Event:            "gt6.9",
+		NecessaryWorkers: 1,
+		EstimatedTimeMin: 15,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/chores", bytes.NewReader(createBody))
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("failed to create chore: %d - %s", rr.Code, rr.Body.String())
+	}
+	var created ChoreView
+	if err := json.NewDecoder(rr.Body).Decode(&created); err != nil {
+		t.Fatalf("failed to decode created chore: %v", err)
+	}
+	if len(created.Claimers) != 0 {
+		t.Fatalf("expected 0 claimers by default (unassigned), got %d", len(created.Claimers))
+	}
+}

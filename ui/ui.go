@@ -328,15 +328,18 @@ func (ui *Ui) PublishChore(c storage.Chore) (storage.Chore, []storage.ChoreAssig
 		}
 	}
 
-	users, err := ui.storage.GetPresentUsers()
-	if err != nil {
-		ui.logger.Error("Error getting present users", "error", err)
-		return c, nil, fmt.Errorf("error getting present users: %w", err)
-	}
-	ass, err := ui.chores.AssignChoresToUsers(users, c)
-	if err != nil {
-		ui.logger.Error("Error assigning chores to users", "error", err)
-		return c, nil, fmt.Errorf("error assigning chores to users: %w", err)
+	var ass []storage.ChoreAssignment
+	if c.AutoAssign {
+		users, err := ui.storage.GetPresentUsers()
+		if err != nil {
+			ui.logger.Error("Error getting present users", "error", err)
+			return c, nil, fmt.Errorf("error getting present users: %w", err)
+		}
+		ass, err = ui.chores.AssignChoresToUsers(users, c)
+		if err != nil {
+			ui.logger.Error("Error assigning chores to users", "error", err)
+			return c, nil, fmt.Errorf("error assigning chores to users: %w", err)
+		}
 	}
 
 	allAssignments, err := ui.storage.GetChoreAssignments(c.ID)
@@ -1477,6 +1480,8 @@ func (ui *Ui) choreCreate(i *discordgo.InteractionCreate) {
 			}
 		case "self_reported":
 			chore.SelfReported = v.BoolValue()
+		case "assign":
+			chore.AutoAssign = v.BoolValue()
 		}
 	}
 
@@ -1987,6 +1992,12 @@ func (ui *Ui) Commands(ctx context.Context, wg *sync.WaitGroup) error {
 					Type:        discordgo.ApplicationCommandOptionBoolean,
 					Name:        "self_reported",
 					Description: "Self-reported chore: mark as done immediately and assign to you. [false]",
+					Required:    false,
+				},
+				{
+					Type:        discordgo.ApplicationCommandOptionBoolean,
+					Name:        "assign",
+					Description: "Auto-assign attendee based on balancing (default: false / open to claim). [false]",
 					Required:    false,
 				},
 			},

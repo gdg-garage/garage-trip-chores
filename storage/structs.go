@@ -34,6 +34,7 @@ type Chore struct {
 	AfterDeadlineReminded bool
 	SelfReported          bool
 	Draft                 bool   `gorm:"default:false"`
+	AutoAssign            bool   `gorm:"default:false" json:"auto_assign"`
 	TemplateKey           string `json:"template_key,omitempty"`
 	Event                 string `gorm:"index;default:''" json:"event"`
 }
