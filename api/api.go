@@ -134,7 +134,7 @@ func (a *Api) SetupRoutes() *chi.Mux {
 	}
 
 	// Setup Huma
-	config := huma.DefaultConfig("Garage Trip Chores API", "4.1.0")
+	config := huma.DefaultConfig("Garage Trip Chores API", "4.2.0")
 	if len(a.authorizedKeys) > 0 {
 		config.Components.SecuritySchemes = map[string]*huma.SecurityScheme{
 			"bearerAuth": {

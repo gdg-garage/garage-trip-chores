@@ -14,6 +14,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/gdg-garage/garage-trip-chores/chores"
+	"github.com/gdg-garage/garage-trip-chores/shifts"
 	"github.com/gdg-garage/garage-trip-chores/storage"
 	"github.com/gdg-garage/garage-trip-chores/ui"
 )
@@ -576,5 +577,37 @@ func TestChoreActionsWebAPI(t *testing.T) {
 		t.Fatalf("unassign failed: %d - %s", rr.Code, rr.Body.String())
 	}
 }
+
+func TestShiftsCalendarAPI(t *testing.T) {
+	webInstance, router := setupTestWeb(t)
+	shiftsService := shifts.NewService(webInstance.storage, slog.New(slog.NewTextHandler(io.Discard, nil)), shifts.DefaultConfig())
+	webInstance.SetShifts(shiftsService)
+
+	// Test GET /shifts page renders 200
+	req := httptest.NewRequest(http.MethodGet, "/shifts", nil)
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 for /shifts, got %d", rr.Code)
+	}
+
+	// Test GET /api/shifts/calendar
+	req = httptest.NewRequest(http.MethodGet, "/api/shifts/calendar", nil)
+	rr = httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 for /api/shifts/calendar, got %d - %s", rr.Code, rr.Body.String())
+	}
+
+	var pred shifts.EventSchedulePrediction
+	if err := json.NewDecoder(rr.Body).Decode(&pred); err != nil {
+		t.Fatalf("failed to decode calendar response: %v", err)
+	}
+
+	if len(pred.Days) == 0 {
+		t.Fatalf("expected at least 1 calendar day, got 0")
+	}
+}
+
 
 

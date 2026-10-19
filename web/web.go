@@ -192,6 +192,7 @@ func (w *Web) RegisterRoutes(r chi.Router) {
 			sr.Post("/{id}/complete", w.handlePostCompleteShift)
 			sr.Get("/fairness", w.handleGetFairnessStats)
 			sr.Get("/registrations", w.handleGetRegistrations)
+			sr.Get("/calendar", w.handleGetCalendarSchedule)
 		})
 
 		apiRouter.Get("/chores", w.handleGetChores)

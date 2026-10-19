@@ -8,6 +8,7 @@
   </div>
   <div class="chiprow" id="view-tabs">
     <button type="button" class="chip active-chip" data-tab="tab-roster">📅 roster</button>
+    <button type="button" class="chip" data-tab="tab-calendar">📆 event calendar & predictions</button>
     <button type="button" class="chip" data-tab="tab-my-shifts">👤 my shifts</button>
     <button type="button" class="chip" data-tab="tab-fairness">⚖️ fairness stats</button>
     {% if user and user.IsAdmin %}
@@ -25,14 +26,46 @@
         <button type="button" class="chip" data-date-filter="tomorrow">tomorrow</button>
         <button type="button" class="chip" data-date-filter="all">all dates</button>
       </div>
-      <div id="roster-meta" class="muted" style="font-size:0.85rem">
+      <div id="roster-meta" class="muted" style="font-size:0.85rem;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
         <span>⏰ freeze deadline: <strong>12:00 noon daily</strong></span>
+        <button type="button" class="chip ghost" style="font-size:0.8rem;color:#ffb86c;border-color:#ffb86c;padding:3px 8px" onclick="document.querySelector('[data-tab=\'tab-calendar\']').click()">🔮 view calendar & predictions &rarr;</button>
       </div>
     </div>
   </div>
 
   <div id="shifts-list" class="grid" style="display:grid;grid-template-columns:repeat(auto-fill, minmax(320px, 1fr));gap:14px">
     <p class="muted">loading shifts...</p>
+  </div>
+</div>
+
+<!-- SECTION: EVENT CALENDAR & PREDICTIONS -->
+<div id="tab-calendar" class="tab-pane" hidden>
+  <div class="card" style="margin-bottom:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+      <div>
+        <h2 style="margin:0">event::calendar & schedule_predictions; 📆</h2>
+        <p class="muted" style="margin:4px 0 0;font-size:0.85rem">
+          Full event timeline showing past completed shifts, frozen daily rosters, and simulated future predictions based on current workload stats, registrations, and scheduled chores.
+        </p>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <label for="calendar-event-select" class="muted" style="font-size:0.85rem">Event:</label>
+        <select id="calendar-event-select" style="padding:6px 12px;border-radius:4px;background:var(--panel-bg);color:var(--c-text);border:1px solid var(--panel-border)">
+          <option value="">loading events...</option>
+        </select>
+        <button type="button" class="chip" onclick="loadCalendar(document.getElementById('calendar-event-select').value)">🔄 refresh</button>
+      </div>
+    </div>
+    <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:14px;padding-top:10px;border-top:1px solid var(--panel-border);font-size:0.8rem">
+      <span style="display:inline-flex;align-items:center;gap:6px"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#6272a4"></span> Past / Completed</span>
+      <span style="display:inline-flex;align-items:center;gap:6px"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#50fa7b"></span> 🔒 Frozen (Locked in)</span>
+      <span style="display:inline-flex;align-items:center;gap:6px"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#ffb86c"></span> 🔮 Predicted (Projected)</span>
+      <span style="display:inline-flex;align-items:center;gap:6px"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#8be9fd"></span> 📋 Scheduled Chores</span>
+    </div>
+  </div>
+
+  <div id="calendar-content" style="display:flex;flex-direction:column;gap:16px">
+    <p class="muted">loading event calendar and predictions...</p>
   </div>
 </div>
 
@@ -227,6 +260,7 @@
       const targetId = btn.dataset.tab;
       const target = document.getElementById(targetId);
       if (target) target.hidden = false;
+      if (targetId === 'tab-calendar') loadCalendar();
       if (targetId === 'tab-fairness') loadFairnessStats();
       if (targetId === 'tab-admin') loadDefinitions();
     });
@@ -385,7 +419,166 @@
         </div>
       `;
     }).join('');
+  async function loadCalendar(eventCode) {
+    const container = document.getElementById('calendar-content');
+    const select = document.getElementById('calendar-event-select');
+    if (!container) return;
+
+    container.innerHTML = '<p class="muted">loading event calendar and schedule predictions...</p>';
+
+    try {
+      const url = '/api/shifts/calendar' + (eventCode ? '?event=' + encodeURIComponent(eventCode) : '');
+      const res = await fetch(url);
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+      const data = await res.json();
+
+      if (select && data.events && data.events.length > 0) {
+        select.innerHTML = data.events.map(ev => `
+          <option value="${ev.code}" ${ev.code === data.event_code ? 'selected' : ''}>
+            ${ev.name || ev.code} (${ev.code})
+          </option>
+        `).join('');
+        select.onchange = () => loadCalendar(select.value);
+      }
+
+      if (!data.days || data.days.length === 0) {
+        container.innerHTML = '<div class="card"><p class="muted">no dates found for this event.</p></div>';
+        return;
+      }
+
+      container.innerHTML = data.days.map(day => {
+        let statusBadge = '';
+        let borderAccent = 'var(--panel-border)';
+
+        if (day.is_today) {
+          statusBadge = '<span class="badge" style="background:#bd93f9;color:#282a36;font-weight:bold;padding:2px 8px;border-radius:4px;font-size:0.75rem">📍 TODAY</span>';
+          borderAccent = '#bd93f9';
+        } else if (day.status === 'past') {
+          statusBadge = '<span class="badge" style="background:rgba(98,114,164,0.3);color:#6272a4;padding:2px 8px;border-radius:4px;font-size:0.75rem">🟣 COMPLETED</span>';
+          borderAccent = '#6272a4';
+        } else if (day.status === 'frozen') {
+          statusBadge = '<span class="badge" style="background:rgba(80,250,123,0.2);color:#50fa7b;border:1px solid #50fa7b;padding:2px 8px;border-radius:4px;font-size:0.75rem">🔒 FROZEN</span>';
+          borderAccent = '#50fa7b';
+        } else if (day.status === 'predicted') {
+          statusBadge = '<span class="badge" style="background:rgba(255,184,108,0.2);color:#ffb86c;border:1px dashed #ffb86c;padding:2px 8px;border-radius:4px;font-size:0.75rem">🔮 PREDICTED</span>';
+          borderAccent = '#ffb86c';
+        } else {
+          statusBadge = '<span class="badge" style="background:rgba(255,255,255,0.1);color:var(--c-muted);padding:2px 8px;border-radius:4px;font-size:0.75rem">IDLE</span>';
+        }
+
+        let shiftsHtml = '';
+        if (!day.shifts || day.shifts.length === 0) {
+          shiftsHtml = '<p class="muted" style="font-size:0.85rem">no shifts scheduled for this day.</p>';
+        } else {
+          shiftsHtml = `
+            <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(280px, 1fr));gap:10px">
+              ${day.shifts.map(s => {
+                const startTime = new Date(s.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const endTime = new Date(s.end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const standbyMin = Math.round((s.workers_count || 1) * (new Date(s.end_time) - new Date(s.start_time)) / 60000 * (s.standby_ratio || 0.10));
+
+                const assignees = (s.assignments || [])
+                  .filter(a => a.status !== 'dropped' && a.status !== 'refused' && a.status !== 'swapped')
+                  .map(a => {
+                    const isMe = a.user_id === currentUserId;
+                    if (s.predicted || a.predicted) {
+                      return `<span class="chip" style="font-size:0.8rem;border:1px dashed #ffb86c;background:rgba(255,184,108,0.1);color:#ffb86c" title="Projected assignment based on current stats & registrations">🔮 ${a.name}${isMe ? ' (you)' : ''}</span>`;
+                    }
+                    return `<span class="chip" style="font-size:0.8rem;${isMe ? 'background:rgba(80,250,123,0.2);border-color:#50fa7b;' : ''}">👤 ${a.name}${isMe ? ' (you)' : ''}</span>`;
+                  }).join(' ');
+
+                const shiftBadge = s.predicted
+                  ? '<span style="color:#ffb86c;font-size:0.75rem;border:1px dashed #ffb86c;padding:1px 6px;border-radius:3px">🔮 predicted</span>'
+                  : (s.frozen ? '<span style="color:#50fa7b;font-size:0.75rem;border:1px solid #50fa7b;padding:1px 6px;border-radius:3px">🔒 frozen</span>' : '<span style="color:#8be9fd;font-size:0.75rem">scheduled</span>');
+
+                return `
+                  <div style="padding:10px;border-radius:6px;background:rgba(255,255,255,0.02);border:1px solid ${s.predicted ? 'rgba(255,184,108,0.3)' : 'var(--panel-border)'}">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+                      <div style="display:flex;align-items:center;gap:6px">
+                        <span class="chip" style="font-size:0.7rem;padding:2px 6px">${s.category || 'Duty'}</span>
+                        <strong style="font-size:0.9rem">${s.name}</strong>
+                      </div>
+                      ${shiftBadge}
+                    </div>
+                    <div style="font-size:0.8rem;color:var(--c-muted);margin-bottom:6px">
+                      ⏰ <strong>${startTime} – ${endTime}</strong> &bull; <span style="color:#8be9fd">+${standbyMin}m credit</span>
+                      ${s.doc_url ? ` &bull; <a href="${s.doc_url}" target="_blank" style="color:var(--c-accent);text-decoration:underline">runbook</a>` : ''}
+                    </div>
+                    <div>
+                      <span class="muted" style="font-size:0.75rem;display:inline-block;margin-right:6px">assigned:</span>
+                      ${assignees || '<span class="muted" style="font-size:0.8rem">unassigned</span>'}
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          `;
+        }
+
+        let choresHtml = '';
+        if (day.scheduled_chores && day.scheduled_chores.length > 0) {
+          choresHtml = `
+            <div style="margin-top:12px;padding-top:10px;border-top:1px dashed var(--panel-border)">
+              <div class="muted" style="font-size:0.8rem;text-transform:uppercase;margin-bottom:6px;color:#8be9fd">
+                📋 Scheduled Chores (${day.scheduled_chores.length})
+              </div>
+              <div style="display:flex;flex-wrap:wrap;gap:6px">
+                ${day.scheduled_chores.map(c => `
+                  <div style="font-size:0.8rem;display:inline-flex;align-items:center;gap:6px;padding:4px 8px;background:rgba(139,233,253,0.05);border-radius:4px;border:1px solid rgba(139,233,253,0.1)">
+                    <span>🧹 <strong>${c.name}</strong></span>
+                    <span class="muted" style="font-size:0.75rem">~${c.estimated_time_min}m</span>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          `;
+        }
+
+        let attendeesHtml = '';
+        if (day.attendees && day.attendees.length > 0) {
+          const names = day.attendees.map(a => a.name || a.handle).join(', ');
+          attendeesHtml = `
+            <details style="margin-top:10px;font-size:0.8rem;color:var(--c-muted)">
+              <summary style="cursor:pointer;color:var(--c-accent)">👥 registered attendees on site (${day.attendees.length})</summary>
+              <div style="padding:6px 8px;margin-top:4px;background:rgba(255,255,255,0.02);border-radius:4px;line-height:1.4">
+                ${names}
+              </div>
+            </details>
+          `;
+        }
+
+        return `
+          <div class="card" style="border-left:4px solid ${borderAccent};padding:14px">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--panel-border)">
+              <div style="display:flex;align-items:center;gap:10px">
+                <span style="font-size:1.1rem;font-weight:bold">${day.formatted_date}</span>
+                <span class="muted" style="font-size:0.85rem">(${day.day_name})</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px">
+                ${statusBadge}
+                <span class="chip" style="font-size:0.75rem;padding:2px 8px;cursor:default">👥 ${day.attendees_count} present/registered</span>
+              </div>
+            </div>
+
+            <div>
+              <div class="muted" style="font-size:0.8rem;text-transform:uppercase;margin-bottom:8px;color:var(--c-accent)">
+                🛡️ Duty Schedule (${day.shifts ? day.shifts.length : 0} shifts)
+              </div>
+              ${shiftsHtml}
+            </div>
+
+            ${choresHtml}
+            ${attendeesHtml}
+          </div>
+        `;
+      }).join('');
+    } catch (e) {
+      container.innerHTML = `<div class="card"><p style="color:#ff5555">failed to load calendar predictions: ${e.message}</p></div>`;
+    }
   }
+  window.loadCalendar = loadCalendar;
 
   async function loadFairnessStats() {
     const tbody = document.getElementById('fairness-tbody');

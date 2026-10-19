@@ -30,6 +30,10 @@ The production API and Web Dashboard is hosted at: **[chores.garage-trip.cz](htt
     *   **Chore Minute Rewards**: Balances duty shifts against ad-hoc chores—people who worked hard on physical chores are rewarded with fewer duty shifts.
 *   **Daily Noon Auto-Freeze**: Automatically generates, balances, and locks tomorrow's duty schedule every day at 12:00 noon, announcing assignments to Discord (empty schedules without shifts or assignments are quietly suppressed).
 *   **Standby Ratio**: Grants participants on-call chore credit (default: 10% of shift length, customizable per definition) for being available.
+*   **Event Calendar & Schedule Predictions**:
+    *   **Multi-Day Event Calendar**: Visual timeline across the entire trip event showing past completed shifts, frozen daily rosters, and simulated future predictions.
+    *   **Pre-Freeze Schedule Projections**: Simulates the ILP solver day-by-day for the rest of the event based on current workload stats, attendee arrival/departure registrations, and scheduled chores.
+    *   **Integrated Day Views**: Displays duty shifts, recurring scheduled chores, and registered attendees on site for each day of the event.
 *   **Swaps & Emergency Reassignment**:
     *   **1-Click Swap Proposals**: Propose and accept shift swaps via Discord interactions or the Web UI.
     *   **"Can't Attend" Auto-Replacement**: When an attendee drops a shift, the solver automatically reassigns it to the fairest available alternative candidate.

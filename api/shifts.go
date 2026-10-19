@@ -260,4 +260,26 @@ func (a *Api) registerShiftOperations(api huma.API, shiftsService *shifts.Shifts
 		}
 		return &FairnessResponse{Body: overview}, nil
 	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "get-shifts-calendar",
+		Method:      http.MethodGet,
+		Path:        "/shifts/calendar",
+		Summary:     "Get full event schedule calendar and multi-day predictions",
+		Description: "Returns daily schedules across the entire trip event, showing past/completed shifts, locked frozen schedules, and simulated predictions for the rest of the event.",
+		Tags:        []string{"Shifts"},
+	}, func(ctx context.Context, input *struct {
+		Event string `query:"event" doc:"Event code (optional)"`
+	}) (*struct {
+		Body *shifts.EventSchedulePrediction
+	}, error) {
+		pred, err := shiftsService.PredictEventSchedule(input.Event)
+		if err != nil {
+			return nil, huma.Error500InternalServerError(err.Error())
+		}
+		return &struct {
+			Body *shifts.EventSchedulePrediction
+		}{Body: pred}, nil
+	})
 }
+

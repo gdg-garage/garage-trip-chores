@@ -355,3 +355,20 @@ func (w *Web) handleGetRegistrations(rw http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(rw, http.StatusOK, regs)
 }
+
+func (w *Web) handleGetCalendarSchedule(rw http.ResponseWriter, r *http.Request) {
+	if w.shifts == nil {
+		writeError(rw, http.StatusServiceUnavailable, "Shifts service not available")
+		return
+	}
+
+	eventCode := r.URL.Query().Get("event")
+	pred, err := w.shifts.PredictEventSchedule(eventCode)
+	if err != nil {
+		writeError(rw, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	writeJSON(rw, http.StatusOK, pred)
+}
+
