@@ -14,9 +14,13 @@ type AggregatedUserStats struct {
 }
 
 func (s *Storage) GetAggregatedStats() (map[string]AggregatedUserStats, error) {
+	return s.GetAggregatedStatsForEvent(s.GetActiveEventCode())
+}
+
+func (s *Storage) GetAggregatedStatsForEvent(event string) (map[string]AggregatedUserStats, error) {
 	usersStats := map[string]AggregatedUserStats{}
 
-	userStats, err := s.GetUserStats()
+	userStats, err := s.GetUserStatsForEvent(event)
 	if err != nil {
 		return nil, err
 	}
@@ -27,7 +31,7 @@ func (s *Storage) GetAggregatedStats() (map[string]AggregatedUserStats, error) {
 		usersStats[k] = st
 	}
 
-	assignedStats, err := s.GetAssignedStats()
+	assignedStats, err := s.GetAssignedStatsForEvent(event)
 	if err != nil {
 		return nil, err
 	}
@@ -38,7 +42,7 @@ func (s *Storage) GetAggregatedStats() (map[string]AggregatedUserStats, error) {
 		usersStats[k] = st
 	}
 
-	shiftStats, err := s.GetShiftStandbyStats()
+	shiftStats, err := s.GetShiftStandbyStatsForEvent(event)
 	if err == nil {
 		for k, v := range shiftStats {
 			st := usersStats[k]
@@ -48,7 +52,7 @@ func (s *Storage) GetAggregatedStats() (map[string]AggregatedUserStats, error) {
 		}
 	}
 
-	totalStats, err := s.GetTotalChoreStats()
+	totalStats, err := s.GetTotalChoreStatsForEvent(event)
 	if err != nil {
 		return nil, err
 	}
@@ -59,7 +63,7 @@ func (s *Storage) GetAggregatedStats() (map[string]AggregatedUserStats, error) {
 		usersStats[k] = st
 	}
 
-	usersPresenceCounts, err := s.GetUsersPresenceCounts()
+	usersPresenceCounts, err := s.GetUsersPresenceCountsForEvent(event)
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +73,7 @@ func (s *Storage) GetAggregatedStats() (map[string]AggregatedUserStats, error) {
 		usersStats[k] = st
 	}
 
-	normalizedStats, err := s.GetTotalNormalizedChoreStats()
+	normalizedStats, err := s.GetTotalNormalizedChoreStatsForEvent(event)
 	if err != nil {
 		return nil, err
 	}

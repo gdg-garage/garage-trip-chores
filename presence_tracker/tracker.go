@@ -24,6 +24,15 @@ func NewTracker(storage *storage.Storage, logger *slog.Logger, conf Config) *Tra
 }
 
 func (t *Tracker) track() {
+	now := time.Now()
+	events, err := t.storage.GetTripEvents()
+	if err == nil && len(events) > 0 {
+		inEvent, _, err := t.storage.IsDateInEvent(now)
+		if err == nil && !inEvent {
+			return // Not currently in any event, skip logging presence ticks
+		}
+	}
+
 	u, err := t.storage.GetPresentUsers()
 	if err != nil {
 		t.logger.Error("Failed to get present users", "error", err)

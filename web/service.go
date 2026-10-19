@@ -224,19 +224,17 @@ func (w *Web) BuildChoreView(chore storage.Chore, worklogs []storage.WorkLog, as
 }
 
 func (w *Web) ListChoreViews(activeOnly bool) ([]ChoreView, error) {
-	var chores []storage.Chore
-	var err error
-	if activeOnly {
-		chores, err = w.storage.GetUnfinishedChores()
-	} else {
-		chores, err = w.storage.GetChores()
-	}
+	return w.ListChoreViewsForEvent(activeOnly, "")
+}
+
+func (w *Web) ListChoreViewsForEvent(activeOnly bool, event string) ([]ChoreView, error) {
+	chores, err := w.storage.GetChoresForEvent(activeOnly, event)
 	if err != nil {
 		return nil, err
 	}
 
 	dir := w.BuildPersonDirectory()
-	worklogs, _ := w.storage.GetWorkLogs()
+	worklogs, _ := w.storage.GetWorkLogsForEvent(event)
 	wlByChore := make(map[uint][]storage.WorkLog)
 	for _, wl := range worklogs {
 		wlByChore[wl.ChoreId] = append(wlByChore[wl.ChoreId], wl)
@@ -369,8 +367,12 @@ func (w *Web) SuggestionsFor(chore storage.Chore) SuggestionsResult {
 }
 
 func (w *Web) Leaderboard() []LeaderboardRow {
+	return w.LeaderboardForEvent("")
+}
+
+func (w *Web) LeaderboardForEvent(event string) []LeaderboardRow {
 	dir := w.BuildPersonDirectory()
-	stats, _ := w.storage.GetUserStats()
+	stats, _ := w.storage.GetUserStatsForEvent(event)
 	assignments, _ := w.storage.GetChoresAssignments()
 
 	assignedCounts := make(map[string]int)
@@ -414,6 +416,10 @@ func (w *Web) Leaderboard() []LeaderboardRow {
 }
 
 func (w *Web) UserDetail(discordID string) UserDetail {
+	return w.UserDetailForEvent(discordID, "")
+}
+
+func (w *Web) UserDetailForEvent(discordID string, event string) UserDetail {
 	dir := w.BuildPersonDirectory()
 	u := dir[discordID]
 	name := discordID
@@ -428,16 +434,30 @@ func (w *Web) UserDetail(discordID string) UserDetail {
 		}
 	}
 
-	allChores, _ := w.storage.GetChores()
+	allChores, _ := w.storage.GetChoresForEvent(false, "all")
 	choreMap := make(map[uint]storage.Chore)
 	for _, c := range allChores {
 		choreMap[c.ID] = c
 	}
 
-	worklogs, _ := w.storage.GetWorkLogs()
+	worklogs, _ := w.storage.GetWorkLogsForEvent("all")
 	wlByChore := make(map[uint][]storage.WorkLog)
+	userWorklogByChore := make(map[uint]storage.WorkLog)
+	userEventMinutes := make(map[string]uint)
+	userEventCounts := make(map[string]int)
+
 	for _, wl := range worklogs {
 		wlByChore[wl.ChoreId] = append(wlByChore[wl.ChoreId], wl)
+		if wl.UserId == discordID {
+			userWorklogByChore[wl.ChoreId] = wl
+			c := choreMap[wl.ChoreId]
+			ev := wl.Event
+			if ev == "" {
+				ev = c.Event
+			}
+			userEventMinutes[ev] += wl.TimeSpentMin
+			userEventCounts[ev]++
+		}
 	}
 
 	assignments, _ := w.storage.GetChoresAssignments()
@@ -458,9 +478,23 @@ func (w *Web) UserDetail(discordID string) UserDetail {
 				continue
 			}
 			seenChores[c.ID] = true
+
+			// Filter by event if requested
+			if event != "" && event != "all" && c.Event != event {
+				continue
+			}
+
 			view := w.BuildChoreView(c, wlByChore[c.ID], asByChore[c.ID], nil, dir)
 			if c.Completed != nil {
-				totalTime += view.WorkedMinTotal
+				userMin := uint(0)
+				if wl, ok := userWorklogByChore[c.ID]; ok {
+					userMin = wl.TimeSpentMin
+				} else if c.NecessaryWorkers > 0 {
+					userMin = uint(c.EstimatedTimeMin / c.NecessaryWorkers)
+				} else {
+					userMin = uint(c.EstimatedTimeMin)
+				}
+				totalTime += userMin
 				performed = append(performed, view)
 			} else {
 				performing = append(performing, view)
@@ -474,9 +508,12 @@ func (w *Web) UserDetail(discordID string) UserDetail {
 			c, ok := choreMap[wl.ChoreId]
 			if ok && !seenChores[c.ID] && c.Cancelled == nil {
 				seenChores[c.ID] = true
+				if event != "" && event != "all" && c.Event != event {
+					continue
+				}
 				view := w.BuildChoreView(c, wlByChore[c.ID], asByChore[c.ID], nil, dir)
 				if c.Completed != nil {
-					totalTime += view.WorkedMinTotal
+					totalTime += wl.TimeSpentMin
 					performed = append(performed, view)
 				} else {
 					performing = append(performing, view)
@@ -485,6 +522,36 @@ func (w *Web) UserDetail(discordID string) UserDetail {
 		}
 	}
 
+	// Build event history summaries
+	events, _ := w.storage.GetTripEvents()
+	eventNameMap := make(map[string]string)
+	for _, e := range events {
+		eventNameMap[e.Code] = e.Name
+	}
+	if eventNameMap["g::t::6.9"] == "" {
+		eventNameMap["g::t::6.9"] = "Garage Trip 6.9 (2025)"
+	}
+	if eventNameMap["g::t::7.0.0"] == "" {
+		eventNameMap["g::t::7.0.0"] = "Garage Trip 7.0 (2026)"
+	}
+
+	var eventHistory []UserEventSummary
+	for ev, mins := range userEventMinutes {
+		name := eventNameMap[ev]
+		if name == "" {
+			name = ev
+		}
+		eventHistory = append(eventHistory, UserEventSummary{
+			Event:        ev,
+			EventName:    name,
+			WorkedCount:  userEventCounts[ev],
+			TimeSpentMin: mins,
+		})
+	}
+	sort.Slice(eventHistory, func(i, j int) bool {
+		return eventHistory[i].Event > eventHistory[j].Event
+	})
+
 	return UserDetail{
 		DiscordId:    discordID,
 		Name:         name,
@@ -492,6 +559,7 @@ func (w *Web) UserDetail(discordID string) UserDetail {
 		Performing:   performing,
 		Performed:    performed,
 		TimeSpentMin: totalTime,
+		EventHistory: eventHistory,
 	}
 }
 

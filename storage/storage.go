@@ -19,6 +19,17 @@ type Storage struct {
 	Events      *EventBus
 	userCacheMu sync.RWMutex
 	userCache   map[string]User
+
+	rolesCacheMu sync.RWMutex
+	rolesCache   map[string]*discordgo.Role
+	rolesCacheAt time.Time
+	skillsCache  []string
+	skillsCacheAt time.Time
+
+	regProvider RegistrationProvider
+	regMockMu   sync.RWMutex
+	mockEvents  []TripEvent
+	mockRegs    map[string][]UserRegistration
 }
 
 func dbConnect(conf Config, logger *slog.Logger) (*gorm.DB, error) {
@@ -31,8 +42,8 @@ func dbConnect(conf Config, logger *slog.Logger) (*gorm.DB, error) {
 		return nil, err
 	}
 
-	// Migrate the schema
-	db.AutoMigrate(&Chore{}, &WorkLog{}, &ChoreAssignment{}, &PresenceLog{}, &LLMSummaryLog{}, &DelayedTask{}, &ChoreTemplate{}, &UserProfile{}, &UserRegistration{}, &TripEvent{}, &ScheduledTask{}, &ShiftDefinition{}, &Shift{}, &ShiftAssignment{}, &ShiftSwapRequest{})
+	// Migrate the schema (TripEvent and UserRegistration are purely in-memory models from garage-trip-api)
+	db.AutoMigrate(&Chore{}, &WorkLog{}, &ChoreAssignment{}, &PresenceLog{}, &LLMSummaryLog{}, &DelayedTask{}, &ChoreTemplate{}, &UserProfile{}, &ScheduledTask{}, &ShiftDefinition{}, &Shift{}, &ShiftAssignment{}, &ShiftSwapRequest{})
 
 	// Mark legacy orphaned/unscheduled preview chores as draft
 	db.Model(&Chore{}).Where("(draft = ? OR draft IS NULL) AND (message_id = '' OR message_id IS NULL) AND completed IS NULL AND (self_reported = ? OR self_reported IS NULL) AND id NOT IN (SELECT chore_id FROM delayed_tasks) AND id NOT IN (SELECT chore_id FROM chore_assignments)", false, false).Update("draft", true)
@@ -80,6 +91,9 @@ func New(conf Config, logger *slog.Logger) (*Storage, error) {
 		logger.Warn("Failed to seed default chore templates", "error", err)
 	}
 	st.SeedUserMap()
+	if err := st.MigrateAndImportHistory(""); err != nil {
+		logger.Warn("Failed to run historical data migration/import", "error", err)
+	}
 	go func() {
 		if err := st.SyncDiscordUsers(); err != nil {
 			logger.Warn("Failed to synchronize Discord users", "error", err)

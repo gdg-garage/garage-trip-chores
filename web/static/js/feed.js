@@ -31,8 +31,12 @@ async function init() {
 
 async function loadChores() {
   try {
-    const res = await API.get("/api/chores?active=true");
+    const urlParams = new URLSearchParams(window.location.search);
+    const ev = urlParams.get("event") || (typeof EventManager !== 'undefined' ? EventManager.getSelectedEvent() : "");
+    const url = ev ? `/api/chores?active=true&event=${encodeURIComponent(ev)}` : "/api/chores?active=true";
+    const res = await API.get(url);
     const list = Array.isArray(res) ? res : (res?.chores || []);
+    state.chores.clear();
     list.forEach((c) => {
       if (c && c.id != null && c.active !== false) state.chores.set(c.id, c);
     });

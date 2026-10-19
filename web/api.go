@@ -578,19 +578,35 @@ func (w *Web) handleGetPeople(rw http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (w *Web) handleGetEvents(rw http.ResponseWriter, r *http.Request) {
+	events, err := w.storage.GetTripEvents()
+	if err != nil {
+		writeError(rw, http.StatusInternalServerError, err.Error())
+		return
+	}
+	active := w.storage.GetActiveEventCode()
+	writeJSON(rw, http.StatusOK, map[string]any{
+		"events":       events,
+		"active_event": active,
+	})
+}
+
 func (w *Web) handleGetLeaderboard(rw http.ResponseWriter, r *http.Request) {
-	writeJSON(rw, http.StatusOK, map[string]any{"rows": w.Leaderboard()})
+	event := r.URL.Query().Get("event")
+	writeJSON(rw, http.StatusOK, map[string]any{"rows": w.LeaderboardForEvent(event)})
 }
 
 func (w *Web) handleGetUserDetail(rw http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "id")
 	userID = strings.TrimPrefix(userID, "/")
-	writeJSON(rw, http.StatusOK, w.UserDetail(userID))
+	event := r.URL.Query().Get("event")
+	writeJSON(rw, http.StatusOK, w.UserDetailForEvent(userID, event))
 }
 
 func (w *Web) handleGetChores(rw http.ResponseWriter, r *http.Request) {
 	activeOnly := r.URL.Query().Get("active") == "true"
-	views, err := w.ListChoreViews(activeOnly)
+	event := r.URL.Query().Get("event")
+	views, err := w.ListChoreViewsForEvent(activeOnly, event)
 	if err != nil {
 		writeError(rw, http.StatusInternalServerError, err.Error())
 		return

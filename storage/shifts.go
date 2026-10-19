@@ -92,6 +92,9 @@ func (s *Storage) CreateShift(shift Shift) (Shift, error) {
 	now := time.Now()
 	shift.CreatedAt = now
 	shift.UpdatedAt = now
+	if shift.Event == "" {
+		shift.Event = s.GetActiveEventCode()
+	}
 	if shift.Status == "" {
 		shift.Status = "scheduled"
 	}
@@ -111,14 +114,21 @@ func (s *Storage) CreateShift(shift Shift) (Shift, error) {
 	return shift, r.Error
 }
 
-func (s *Storage) GetShifts(date string) ([]Shift, error) {
+func (s *Storage) GetShiftsForEvent(date string, event string) ([]Shift, error) {
 	var list []Shift
 	query := s.db.Preload("Definition").Preload("Assignments").Order("start_time asc, id asc")
 	if date != "" {
 		query = query.Where("date = ?", date)
 	}
+	if event != "" && event != "all" {
+		query = query.Where("event = ?", event)
+	}
 	r := query.Find(&list)
 	return list, r.Error
+}
+
+func (s *Storage) GetShifts(date string) ([]Shift, error) {
+	return s.GetShiftsForEvent(date, "")
 }
 
 func (s *Storage) GetUpcomingShifts(from time.Time) ([]Shift, error) {
@@ -219,9 +229,13 @@ func (s *Storage) DeleteShiftAssignment(id uint) error {
 	return s.db.Delete(&ShiftAssignment{}, id).Error
 }
 
-// GetShiftStandbyStats aggregates standby minutes and counts by user.
-// Includes completed assignments and active assigned ones.
+// GetShiftStandbyStats aggregates standby minutes and counts by user for the active event.
 func (s *Storage) GetShiftStandbyStats() (map[string]ChoreStats, error) {
+	return s.GetShiftStandbyStatsForEvent(s.GetActiveEventCode())
+}
+
+// GetShiftStandbyStatsForEvent aggregates standby minutes and counts by user filtered by event.
+func (s *Storage) GetShiftStandbyStatsForEvent(event string) (map[string]ChoreStats, error) {
 	type Result struct {
 		UserId   string
 		Count    float64
@@ -230,12 +244,15 @@ func (s *Storage) GetShiftStandbyStats() (map[string]ChoreStats, error) {
 	var results []Result
 
 	// Sum standby_credited_min from shift_assignments where status != 'cancelled' AND status != 'refused'
-	r := s.db.Model(&ShiftAssignment{}).
-		Select("user_id, count(*) as count, coalesce(sum(standby_credited_min), 0) as total_min").
-		Where("status NOT IN ('refused', 'dropped', 'swapped')").
-		Group("user_id").
-		Scan(&results)
+	query := s.db.Model(&ShiftAssignment{}).
+		Select("shift_assignments.user_id, count(*) as count, coalesce(sum(shift_assignments.standby_credited_min), 0) as total_min").
+		Where("shift_assignments.status NOT IN ('refused', 'dropped', 'swapped')")
 
+	if event != "" && event != "all" {
+		query = query.Joins("JOIN shifts ON shift_assignments.shift_id = shifts.id").Where("shifts.event = ?", event)
+	}
+
+	r := query.Group("shift_assignments.user_id").Scan(&results)
 	if r.Error != nil {
 		return nil, r.Error
 	}

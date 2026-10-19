@@ -190,6 +190,34 @@ func (a *Api) SetupRoutes() *chi.Mux {
 		return &HealthResponse{Body: HealthData{Status: "ok"}}, nil
 	})
 
+	// Events Endpoint
+	type EventsData struct {
+		Events      []storage.TripEvent `json:"events"`
+		ActiveEvent string              `json:"active_event"`
+	}
+	type EventsResponse struct {
+		Body EventsData
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "get-events",
+		Method:      http.MethodGet,
+		Path:        "/events",
+		Summary:     "Get all trip events and active event code",
+		Security:    []map[string][]string{},
+	}, func(ctx context.Context, input *struct{}) (*EventsResponse, error) {
+		events, err := a.storage.GetTripEvents()
+		if err != nil {
+			return nil, err
+		}
+		active := a.storage.GetActiveEventCode()
+		return &EventsResponse{
+			Body: EventsData{
+				Events:      events,
+				ActiveEvent: active,
+			},
+		}, nil
+	})
+
 	// Tasks Endpoint
 	huma.Register(api, huma.Operation{
 		OperationID: "get-tasks",

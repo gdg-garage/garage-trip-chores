@@ -28,8 +28,16 @@
       <a href="/schedules" class="{% if active == 'schedules' %}on{% endif %}">/schedules</a>
       <a href="/profile" class="{% if active == 'profile' %}on{% endif %}">/profile</a>
       <a href="/dashboard" class="{% if active == 'dashboard' %}on{% endif %}">/tv</a>
+      <div class="event-selector-wrap" style="display:inline-flex;align-items:center;margin-left:auto;padding-left:12px;">
+        <select id="global-event-picker" aria-label="Select Trip Event" style="background:var(--bg-card);color:var(--fg);border:1px solid var(--border);border-radius:var(--radius);padding:4px 8px;font-size:0.85em;cursor:pointer;">
+          <option value="">loading events...</option>
+        </select>
+      </div>
     </div>
   </nav>
+  <div id="archive-banner" class="archive-banner" style="display:none;background:#ff980022;border-bottom:1px solid #ff980088;color:#ffb74d;padding:8px 16px;text-align:center;font-size:0.9em;font-weight:600;">
+    📜 <span id="archive-banner-text">Viewing Historical Archive. Live notifications and dispatching are paused for past events.</span>
+  </div>
   {% endblock %}
   <main class="{% block main_class %}wrap{% endblock %}">
     {% block content %}{% endblock %}

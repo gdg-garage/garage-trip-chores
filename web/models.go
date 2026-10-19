@@ -92,13 +92,21 @@ type LeaderboardRow struct {
 	AssignedCount int     `json:"assigned_count"`
 }
 
+type UserEventSummary struct {
+	Event        string `json:"event"`
+	EventName    string `json:"event_name"`
+	WorkedCount  int    `json:"worked_count"`
+	TimeSpentMin uint   `json:"time_spent_min"`
+}
+
 type UserDetail struct {
-	DiscordId     string      `json:"discord_id"`
-	Name          string      `json:"name"`
-	Handle        string      `json:"handle"`
-	Performing    []ChoreView `json:"performing"`
-	Performed     []ChoreView `json:"performed"`
-	TimeSpentMin  uint        `json:"time_spent_min"`
+	DiscordId    string             `json:"discord_id"`
+	Name         string             `json:"name"`
+	Handle       string             `json:"handle"`
+	Performing   []ChoreView        `json:"performing"`
+	Performed    []ChoreView        `json:"performed"`
+	TimeSpentMin uint               `json:"time_spent_min"`
+	EventHistory []UserEventSummary `json:"event_history,omitempty"`
 }
 
 type SuggestedPerson struct {

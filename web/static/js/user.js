@@ -11,7 +11,10 @@ async function init() {
 async function load() {
   let d;
   try {
-    d = await API.get(`/api/users/${encodeURIComponent(uid)}`);
+    const urlParams = new URLSearchParams(window.location.search);
+    const ev = urlParams.get("event") || (typeof EventManager !== 'undefined' ? EventManager.getSelectedEvent() : "");
+    const url = ev ? `/api/users/${encodeURIComponent(uid)}?event=${encodeURIComponent(ev)}` : `/api/users/${encodeURIComponent(uid)}`;
+    d = await API.get(url);
   } catch (e) {
     document.getElementById("sections").hidden = true;
     document.getElementById("head").innerHTML =
@@ -26,6 +29,29 @@ async function load() {
     d.handle ? el("p", { class: "muted", style: "margin:0" }, "@" + d.handle) : null,
     el("p", { class: "muted", style: "margin:.4em 0 0" },
       `${d.performed.length} done · ${fmtMin(d.time_spent_min) || "0 min"} spent · ${d.performing.length} in progress`)));
+
+  if (d.event_history && d.event_history.length > 0) {
+    const historySec = el("div", { class: "card", style: "margin-top:16px;" },
+      el("h3", { style: "margin:0 0 10px 0" }, "events::history;"),
+      el("table", { class: "lb", style: "width:100%" },
+        el("thead", {},
+          el("tr", {},
+            el("th", {}, "event"),
+            el("th", { class: "num" }, "chores::done"),
+            el("th", { class: "num" }, "time::spent")
+          )
+        ),
+        el("tbody", {},
+          ...d.event_history.map(eh => el("tr", {},
+            el("td", {}, el("strong", {}, eh.event_name || eh.event)),
+            el("td", { class: "num" }, String(eh.worked_count)),
+            el("td", { class: "num" }, fmtMin(eh.time_spent_min) || "0 min")
+          ))
+        )
+      )
+    );
+    head.appendChild(historySec);
+  }
 
   document.getElementById("sections").hidden = false;
   document.getElementById("h-performing").textContent = `in_progress::chores; (${d.performing.length})`;

@@ -181,3 +181,98 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 });
 
+// Global Event Switcher & Archive Mode
+const EventManager = {
+  selectedEvent: null,
+  activeEvent: null,
+  events: [],
+
+  async init() {
+    const picker = document.getElementById("global-event-picker");
+    if (!picker) return;
+
+    // Check URL param first, then localStorage
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlEvent = urlParams.get("event");
+    const storedEvent = localStorage.getItem("gt_selected_event");
+
+    try {
+      const res = await fetch("/api/events");
+      if (!res.ok) return;
+      const data = await res.json();
+      this.events = data.events || [];
+      this.activeEvent = data.active_event || "";
+
+      // Determine initial selection
+      this.selectedEvent = urlEvent || storedEvent || this.activeEvent;
+
+      picker.innerHTML = "";
+
+      // Add options for each event
+      this.events.forEach(ev => {
+        const opt = document.createElement("option");
+        opt.value = ev.code;
+        opt.textContent = `${ev.name || ev.code} ${ev.code === this.activeEvent ? "★ (Active)" : ""}`;
+        if (ev.code === this.selectedEvent) {
+          opt.selected = true;
+        }
+        picker.appendChild(opt);
+      });
+
+      // Add "All Events" option
+      const optAll = document.createElement("option");
+      optAll.value = "all";
+      optAll.textContent = "All Events (All-Time)";
+      if (this.selectedEvent === "all") {
+        optAll.selected = true;
+      }
+      picker.appendChild(optAll);
+
+      this.updateBanner();
+
+      picker.addEventListener("change", (e) => {
+        const val = e.target.value;
+        this.selectedEvent = val;
+        localStorage.setItem("gt_selected_event", val);
+        const newUrl = new URL(window.location.href);
+        if (val && val !== this.activeEvent) {
+          newUrl.searchParams.set("event", val);
+        } else {
+          newUrl.searchParams.delete("event");
+        }
+        window.location.href = newUrl.toString();
+      });
+
+    } catch (e) {
+      console.warn("Failed to load events", e);
+    }
+  },
+
+  updateBanner() {
+    const banner = document.getElementById("archive-banner");
+    const bannerText = document.getElementById("archive-banner-text");
+    if (!banner || !bannerText) return;
+
+    if (this.selectedEvent && this.selectedEvent !== this.activeEvent && this.selectedEvent !== "all") {
+      const ev = this.events.find(e => e.code === this.selectedEvent);
+      const name = ev ? (ev.name || ev.code) : this.selectedEvent;
+      bannerText.textContent = `Viewing Archive: ${name}. Schedulers and automated notifications are paused for historical events.`;
+      banner.style.display = "block";
+    } else if (this.selectedEvent === "all") {
+      bannerText.textContent = `Viewing All-Time Cumulative History across all events.`;
+      banner.style.display = "block";
+    } else {
+      banner.style.display = "none";
+    }
+  },
+
+  getSelectedEvent() {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get("event") || localStorage.getItem("gt_selected_event") || "";
+  }
+};
+
+document.addEventListener("DOMContentLoaded", () => {
+  EventManager.init();
+});
+

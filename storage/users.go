@@ -12,6 +12,17 @@ import (
 )
 
 func (s *Storage) getGuildRolesMap() (map[string]*discordgo.Role, error) {
+	s.rolesCacheMu.RLock()
+	if s.rolesCache != nil && time.Since(s.rolesCacheAt) < 5*time.Minute {
+		cached := make(map[string]*discordgo.Role, len(s.rolesCache))
+		for k, v := range s.rolesCache {
+			cached[k] = v
+		}
+		s.rolesCacheMu.RUnlock()
+		return cached, nil
+	}
+	s.rolesCacheMu.RUnlock()
+
 	if s.discord == nil {
 		return make(map[string]*discordgo.Role), nil
 	}
@@ -22,6 +33,10 @@ func (s *Storage) getGuildRolesMap() (map[string]*discordgo.Role, error) {
 			for _, role := range guild.Roles {
 				guildRolesMap[role.ID] = role
 			}
+			s.rolesCacheMu.Lock()
+			s.rolesCache = guildRolesMap
+			s.rolesCacheAt = time.Now()
+			s.rolesCacheMu.Unlock()
 			return guildRolesMap, nil
 		}
 	}
@@ -29,11 +44,27 @@ func (s *Storage) getGuildRolesMap() (map[string]*discordgo.Role, error) {
 	// Fallback to Discord REST API if state cache does not have the guild or roles
 	roles, err := s.discord.GuildRoles(s.conf.DiscordGuildId)
 	if err != nil {
+		s.rolesCacheMu.RLock()
+		if s.rolesCache != nil {
+			cached := make(map[string]*discordgo.Role, len(s.rolesCache))
+			for k, v := range s.rolesCache {
+				cached[k] = v
+			}
+			s.rolesCacheMu.RUnlock()
+			return cached, nil
+		}
+		s.rolesCacheMu.RUnlock()
 		return nil, err
 	}
 	for _, role := range roles {
 		guildRolesMap[role.ID] = role
 	}
+
+	s.rolesCacheMu.Lock()
+	s.rolesCache = guildRolesMap
+	s.rolesCacheAt = time.Now()
+	s.rolesCacheMu.Unlock()
+
 	return guildRolesMap, nil
 }
 
@@ -45,6 +76,15 @@ func (s *Storage) isRoleSkill(role *discordgo.Role) bool {
 }
 
 func (s *Storage) GetSkills() ([]string, error) {
+	s.rolesCacheMu.RLock()
+	if s.skillsCache != nil && time.Since(s.skillsCacheAt) < 5*time.Minute {
+		res := make([]string, len(s.skillsCache))
+		copy(res, s.skillsCache)
+		s.rolesCacheMu.RUnlock()
+		return res, nil
+	}
+	s.rolesCacheMu.RUnlock()
+
 	guildRolesMap, err := s.getGuildRolesMap()
 	if err != nil {
 		return nil, err
@@ -57,6 +97,12 @@ func (s *Storage) GetSkills() ([]string, error) {
 		}
 	}
 	sort.Strings(skills)
+
+	s.rolesCacheMu.Lock()
+	s.skillsCache = skills
+	s.skillsCacheAt = time.Now()
+	s.rolesCacheMu.Unlock()
+
 	return skills, nil
 }
 
@@ -125,7 +171,7 @@ func (s *Storage) GetUserHandleByDiscordId(discordId string) (string, error) {
 	return member.User.Username, nil
 }
 
-func (s *Storage) GetUserStats() (UserChoreStats, error) {
+func (s *Storage) GetUserStatsForEvent(event string) (UserChoreStats, error) {
 	type result struct {
 		UserId     string
 		TotalTime  int
@@ -133,7 +179,40 @@ func (s *Storage) GetUserStats() (UserChoreStats, error) {
 	}
 	var results []result
 	stats := UserChoreStats{}
-	r := s.db.Model(&WorkLog{}).Select("user_id, sum(time_spent_min) as total_time, count(*) as total_count").Group("user_id").Find(&results)
+	query := s.db.Model(&WorkLog{}).Select("user_id, sum(time_spent_min) as total_time, count(*) as total_count")
+	if event != "" && event != "all" {
+		query = query.Where("event = ?", event)
+	}
+	r := query.Group("user_id").Find(&results)
+	if r.Error != nil {
+		return stats, r.Error
+	}
+	for _, r := range results {
+		stats[r.UserId] = ChoreStats{
+			Count:    float64(r.TotalCount),
+			TotalMin: float64(r.TotalTime),
+		}
+	}
+	return stats, nil
+}
+
+func (s *Storage) GetUserStats() (UserChoreStats, error) {
+	return s.GetUserStatsForEvent(s.GetActiveEventCode())
+}
+
+func (s *Storage) GetAssignedStatsForEvent(event string) (UserChoreStats, error) {
+	type result struct {
+		UserId     string
+		TotalTime  int
+		TotalCount int
+	}
+	var results []result
+	stats := UserChoreStats{}
+	query := s.db.Model(&ChoreAssignment{}).Select("user_id, sum(chores.estimated_time_min) as total_time, count(*) as total_count").Joins("left join chores on chore_assignments.chore_id = chores.id").Where("refused IS NULL and timeouted IS NULL and chores.completed IS NULL and chores.cancelled IS NULL")
+	if event != "" && event != "all" {
+		query = query.Where("chores.event = ?", event)
+	}
+	r := query.Group("user_id").Find(&results)
 	if r.Error != nil {
 		return stats, r.Error
 	}
@@ -147,40 +226,23 @@ func (s *Storage) GetUserStats() (UserChoreStats, error) {
 }
 
 func (s *Storage) GetAssignedStats() (UserChoreStats, error) {
-	type result struct {
-		UserId     string
-		TotalTime  int
-		TotalCount int
-	}
-	var results []result
-	stats := UserChoreStats{}
-	r := s.db.Model(&ChoreAssignment{}).Select("user_id, sum(chores.estimated_time_min) as total_time, count(*) as total_count").Joins("left join chores on chore_assignments.chore_id = chores.id").Where("refused IS NULL and timeouted IS NULL and chores.completed IS NULL and chores.cancelled IS NULL").Group("user_id").Find(&results)
-	if r.Error != nil {
-		return stats, r.Error
-	}
-	for _, r := range results {
-		stats[r.UserId] = ChoreStats{
-			Count:    float64(r.TotalCount),
-			TotalMin: float64(r.TotalTime),
-		}
-	}
-	return stats, nil
+	return s.GetAssignedStatsForEvent(s.GetActiveEventCode())
 }
 
-func (s *Storage) GetTotalChoreStats() (UserChoreStats, error) {
-	userStats, err := s.GetUserStats()
+func (s *Storage) GetTotalChoreStatsForEvent(event string) (UserChoreStats, error) {
+	userStats, err := s.GetUserStatsForEvent(event)
 	if err != nil {
 		return nil, err
 	}
 
-	userAssignedStats, err := s.GetAssignedStats()
+	userAssignedStats, err := s.GetAssignedStatsForEvent(event)
 	if err != nil {
 		return userStats, err
 	}
 
 	total := userStats.Add(userAssignedStats)
 
-	shiftStats, err := s.GetShiftStandbyStats()
+	shiftStats, err := s.GetShiftStandbyStatsForEvent(event)
 	if err == nil {
 		total = total.Add(shiftStats)
 	}
@@ -188,16 +250,22 @@ func (s *Storage) GetTotalChoreStats() (UserChoreStats, error) {
 	return total, nil
 }
 
-func (s *Storage) GetTotalNormalizedChoreStats() (UserChoreStats, error) {
-	userTotalStats, err := s.GetTotalChoreStats()
+func (s *Storage) GetTotalChoreStats() (UserChoreStats, error) {
+	return s.GetTotalChoreStatsForEvent(s.GetActiveEventCode())
+}
+
+func (s *Storage) GetTotalNormalizedChoreStatsForEvent(event string) (UserChoreStats, error) {
+	userTotalStats, err := s.GetTotalChoreStatsForEvent(event)
 	if err != nil {
 		return nil, err
 	}
 
-	usersPresenceCounts, err := s.GetUsersPresenceCounts()
+	usersPresenceCounts, err := s.GetUsersPresenceCountsForEvent(event)
 	if err != nil {
 		return userTotalStats, err
 	}
+
+	sampleMin := s.GetEventSamplePeriodMin(event)
 
 	for user, stats := range userTotalStats {
 		userPresenceCount := 1
@@ -205,10 +273,12 @@ func (s *Storage) GetTotalNormalizedChoreStats() (UserChoreStats, error) {
 			userPresenceCount = c
 		}
 
-		effectivePresence := float64(userPresenceCount)
-		if effectivePresence < 6.0 {
-			effectivePresence = 6.0
+		// Calculate presence in hours: (ticks * sampleMin) / 60
+		presenceHours := float64(userPresenceCount*sampleMin) / 60.0
+		if presenceHours < 1.0 {
+			presenceHours = 1.0
 		}
+		effectivePresence := presenceHours * 6.0
 
 		stats.TotalMin /= effectivePresence
 		stats.Count /= effectivePresence
@@ -216,6 +286,10 @@ func (s *Storage) GetTotalNormalizedChoreStats() (UserChoreStats, error) {
 	}
 
 	return userTotalStats, nil
+}
+
+func (s *Storage) GetTotalNormalizedChoreStats() (UserChoreStats, error) {
+	return s.GetTotalNormalizedChoreStatsForEvent(s.GetActiveEventCode())
 }
 
 func (s *Storage) GetLastUserWorkTime(userId string) (*time.Time, error) {
@@ -307,19 +381,24 @@ func (s *Storage) LogUserPresence(userId string) (PresenceLog, error) {
 	log := PresenceLog{
 		UserId:    userId,
 		Timestamp: time.Now(),
+		Event:     s.GetActiveEventCode(),
 	}
 	r := s.db.Create(&log)
 	return log, r.Error
 }
 
-func (s *Storage) GetUsersPresenceCounts() (map[string]int, error) {
+func (s *Storage) GetUsersPresenceCountsForEvent(event string) (map[string]int, error) {
 	type result struct {
 		UserId string
 		Count  int
 	}
 	var results []result
 	counts := make(map[string]int)
-	r := s.db.Model(&PresenceLog{}).Select("user_id, count(*) as count").Group("user_id").Find(&results)
+	query := s.db.Model(&PresenceLog{}).Select("user_id, count(*) as count")
+	if event != "" && event != "all" {
+		query = query.Where("event = ?", event)
+	}
+	r := query.Group("user_id").Find(&results)
 	if r.Error != nil {
 		return counts, r.Error
 	}
@@ -327,6 +406,10 @@ func (s *Storage) GetUsersPresenceCounts() (map[string]int, error) {
 		counts[res.UserId] = res.Count
 	}
 	return counts, r.Error
+}
+
+func (s *Storage) GetUsersPresenceCounts() (map[string]int, error) {
+	return s.GetUsersPresenceCountsForEvent("")
 }
 
 func (s *Storage) GetUsers() ([]User, error) {

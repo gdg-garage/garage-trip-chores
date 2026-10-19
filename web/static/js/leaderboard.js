@@ -14,7 +14,10 @@ async function init() {
 }
 
 async function load() {
-  const data = await API.get("/api/leaderboard");
+  const urlParams = new URLSearchParams(window.location.search);
+  const ev = urlParams.get("event") || (typeof EventManager !== 'undefined' ? EventManager.getSelectedEvent() : "");
+  const url = ev ? `/api/leaderboard?event=${encodeURIComponent(ev)}` : "/api/leaderboard";
+  const data = await API.get(url);
   rows = Array.isArray(data) ? data : (data.rows || []);
   render();
 }

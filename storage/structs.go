@@ -33,8 +33,9 @@ type Chore struct {
 	necessaryCapabilities []string
 	AfterDeadlineReminded bool
 	SelfReported          bool
-	Draft                 bool `gorm:"default:false"`
+	Draft                 bool   `gorm:"default:false"`
 	TemplateKey           string `json:"template_key,omitempty"`
+	Event                 string `gorm:"index;default:''" json:"event"`
 }
 
 func (c *Chore) GetCapabilities() []string {
@@ -67,6 +68,7 @@ type WorkLog struct {
 	Chore        Chore
 	TimeSpentMin uint
 	SelfReported bool
+	Event        string `gorm:"index;default:''" json:"event"`
 }
 
 type ChoreAssignment struct {
@@ -146,6 +148,7 @@ type PresenceLog struct {
 	ID        uint
 	UserId    string
 	Timestamp time.Time
+	Event     string `gorm:"index;default:''" json:"event"`
 }
 
 type LLMSummaryLog struct {
@@ -155,6 +158,7 @@ type LLMSummaryLog struct {
 	Summary    string    `gorm:"type:text"`
 	TasksCount int
 	Status     string
+	Event      string `gorm:"index;default:''" json:"event"`
 }
 
 type TasksActivity struct {
@@ -232,15 +236,16 @@ type UserRegistration struct {
 }
 
 type TripEvent struct {
-	Code        string     `gorm:"primaryKey" json:"code"`
-	Name        string     `json:"name"`
-	StartDate   *time.Time `json:"start_date,omitempty"`
-	EndDate     *time.Time `json:"end_date,omitempty"`
-	Location    string     `json:"location,omitempty"`
-	Description string     `json:"description,omitempty"`
-	Enabled     bool       `json:"enabled"`
-	Status      string     `json:"status"`
-	UpdatedAt   time.Time  `json:"updated_at"`
+	Code              string     `json:"code"`
+	Name              string     `json:"name"`
+	StartDate         *time.Time `json:"start_date,omitempty"`
+	EndDate           *time.Time `json:"end_date,omitempty"`
+	Location          string     `json:"location,omitempty"`
+	Description       string     `json:"description,omitempty"`
+	Enabled           bool       `json:"enabled"`
+	Status            string     `json:"status"`
+	PresenceSampleMin int        `json:"presence_sample_min"`
+	UpdatedAt         time.Time  `json:"updated_at"`
 }
 
 type ScheduledTask struct {
@@ -322,6 +327,7 @@ type Shift struct {
 	Status                string            `gorm:"not null;default:'scheduled'" json:"status"` // scheduled, active, completed, cancelled
 	MessageId             string            `json:"message_id,omitempty"`
 	Assignments           []ShiftAssignment `gorm:"foreignKey:ShiftID" json:"assignments"`
+	Event                 string            `gorm:"index;default:''" json:"event"`
 	CreatedAt             time.Time         `json:"created_at"`
 	UpdatedAt             time.Time         `json:"updated_at"`
 }

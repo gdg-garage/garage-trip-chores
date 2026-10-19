@@ -20,17 +20,27 @@ type Client struct {
 	storage    *storage.Storage
 	logger     *slog.Logger
 	httpClient *http.Client
+
+	mu       sync.RWMutex
+	events   []storage.TripEvent
+	regs     map[string][]storage.UserRegistration // eventCode -> registrations
+	lastSync time.Time
 }
 
-func NewClient(conf Config, storage *storage.Storage, logger *slog.Logger) *Client {
-	return &Client{
+func NewClient(conf Config, st *storage.Storage, logger *slog.Logger) *Client {
+	c := &Client{
 		conf:    conf,
-		storage: storage,
+		storage: st,
 		logger:  logger,
 		httpClient: &http.Client{
 			Timeout: 10 * time.Second,
 		},
+		regs: make(map[string][]storage.UserRegistration),
 	}
+	if st != nil {
+		st.SetRegistrationProvider(c)
+	}
+	return c
 }
 
 type apiUser struct {
@@ -70,15 +80,20 @@ type apiListRegistrationsResponse struct {
 	Registrations []apiRegistrationItem `json:"registrations"`
 }
 
-// FetchRegistrations calls the external registrations API
+// FetchRegistrations calls the external registrations API for the configured default event
 func (c *Client) FetchRegistrations(ctx context.Context) ([]storage.UserRegistration, error) {
+	return c.FetchRegistrationsForEvent(ctx, c.conf.Event)
+}
+
+// FetchRegistrationsForEvent calls the external registrations API for a specific event
+func (c *Client) FetchRegistrationsForEvent(ctx context.Context, eventCode string) ([]storage.UserRegistration, error) {
 	if c.conf.ApiUrl == "" {
 		return nil, nil
 	}
 
 	apiEndpoint := strings.TrimRight(c.conf.ApiUrl, "/") + "/registrations"
-	if c.conf.Event != "" {
-		apiEndpoint += "?event=" + url.QueryEscape(c.conf.Event)
+	if eventCode != "" {
+		apiEndpoint += "?event=" + url.QueryEscape(eventCode)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiEndpoint, nil)
@@ -114,15 +129,15 @@ func (c *Client) FetchRegistrations(ctx context.Context) ([]storage.UserRegistra
 			continue
 		}
 
-		eventCode := item.Event
-		if eventCode == "" {
-			eventCode = c.conf.Event
+		ev := item.Event
+		if ev == "" {
+			ev = eventCode
 		}
 
 		results = append(results, storage.UserRegistration{
 			DiscordId:        discordID,
 			Username:         item.User.GetUsername(),
-			Event:            eventCode,
+			Event:            ev,
 			ArrivalDate:      item.ArrivalDate,
 			DepartureDate:    item.DepartureDate,
 			FoodRestrictions: item.FoodRestrictions,
@@ -185,54 +200,131 @@ func (c *Client) FetchEvents(ctx context.Context) ([]storage.TripEvent, error) {
 		return nil, fmt.Errorf("failed to decode events response: %w", err)
 	}
 
+	now := time.Now()
 	results := make([]storage.TripEvent, 0, len(data.Events))
 	for _, item := range data.Events {
+		sampleMin := 10
+		if strings.Contains(item.Code, "6.9") {
+			sampleMin = 2
+		}
 		results = append(results, storage.TripEvent{
-			Code:        item.Code,
-			Name:        item.Name,
-			StartDate:   item.StartDate,
-			EndDate:     item.EndDate,
-			Location:    item.Location,
-			Description: item.Description,
-			Enabled:     item.Enabled,
-			Status:      item.Status,
+			Code:              item.Code,
+			Name:              item.Name,
+			StartDate:         item.StartDate,
+			EndDate:           item.EndDate,
+			Location:          item.Location,
+			Description:       item.Description,
+			Enabled:           item.Enabled,
+			Status:            item.Status,
+			PresenceSampleMin: sampleMin,
+			UpdatedAt:         now,
 		})
 	}
 	return results, nil
 }
 
-// Sync fetches events and registrations from the API and saves them into the local database
+// Sync fetches events and registrations from the API and caches them in memory
 func (c *Client) Sync(ctx context.Context) error {
 	if c.conf.ApiUrl == "" {
 		return nil
 	}
 
-	// 1. Sync trip events
+	// 1. Fetch trip events
 	events, err := c.FetchEvents(ctx)
 	if err != nil {
 		c.logger.Warn("Failed to sync events from API", "error", err)
 	} else if len(events) > 0 {
-		if err := c.storage.SaveTripEvents(events); err != nil {
-			c.logger.Error("Failed to store events in database", "error", err)
+		c.mu.Lock()
+		c.events = events
+		c.mu.Unlock()
+		c.logger.Info("Synchronized trip events successfully", "count", len(events))
+	}
+
+	// 2. Fetch registrations for all known events
+	eventCodes := make(map[string]struct{})
+	c.mu.RLock()
+	for _, e := range c.events {
+		eventCodes[e.Code] = struct{}{}
+	}
+	c.mu.RUnlock()
+
+	if c.conf.Event != "" {
+		eventCodes[c.conf.Event] = struct{}{}
+	}
+
+	newRegs := make(map[string][]storage.UserRegistration)
+	for code := range eventCodes {
+		regs, err := c.FetchRegistrationsForEvent(ctx, code)
+		if err != nil {
+			c.logger.Warn("Failed to sync registrations for event", "event", code, "error", err)
 		} else {
-			c.logger.Info("Synchronized trip events successfully", "count", len(events))
+			newRegs[code] = regs
+			c.logger.Info("Synchronized registrations for event", "event", code, "count", len(regs))
 		}
 	}
 
-	// 2. Sync attendee registrations
-	regs, err := c.FetchRegistrations(ctx)
-	if err != nil {
-		c.logger.Warn("Failed to sync registrations from API", "error", err)
-		return err
+	c.mu.Lock()
+	for k, v := range newRegs {
+		c.regs[k] = v
 	}
+	c.lastSync = time.Now()
+	c.mu.Unlock()
 
-	if err := c.storage.SaveUserRegistrations(regs); err != nil {
-		c.logger.Error("Failed to store registrations in database", "error", err)
-		return err
-	}
-
-	c.logger.Info("Synchronized registrations successfully", "count", len(regs))
 	return nil
+}
+
+// GetTripEvents returns cached trip events
+func (c *Client) GetTripEvents() ([]storage.TripEvent, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	res := make([]storage.TripEvent, len(c.events))
+	copy(res, c.events)
+	return res, nil
+}
+
+// GetUserRegistrations returns cached registrations, optionally filtered by event
+func (c *Client) GetUserRegistrations(event string) ([]storage.UserRegistration, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	if event != "" && event != "all" {
+		list := c.regs[event]
+		res := make([]storage.UserRegistration, len(list))
+		copy(res, list)
+		return res, nil
+	}
+
+	var all []storage.UserRegistration
+	for _, list := range c.regs {
+		all = append(all, list...)
+	}
+	return all, nil
+}
+
+// GetUserRegistration returns a single registration for a user in the specified event
+func (c *Client) GetUserRegistration(discordID string, event string) (*storage.UserRegistration, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	if event != "" && event != "all" {
+		for _, r := range c.regs[event] {
+			if r.DiscordId == discordID {
+				res := r
+				return &res, nil
+			}
+		}
+		return nil, nil
+	}
+
+	for _, list := range c.regs {
+		for _, r := range list {
+			if r.DiscordId == discordID {
+				res := r
+				return &res, nil
+			}
+		}
+	}
+	return nil, nil
 }
 
 // Start launches the background periodic synchronization
@@ -271,3 +363,4 @@ func (c *Client) Start(ctx context.Context, wg *sync.WaitGroup) {
 		}
 	}
 }
+

@@ -38,7 +38,16 @@ The production API and Web Dashboard is hosted at: **[chores.garage-trip.cz](htt
     *   **1-Click Swap Proposals**: Propose and accept shift swaps via Discord interactions or the Web UI.
     *   **"Can't Attend" Auto-Replacement**: When an attendee drops a shift, the solver automatically reassigns it to the fairest available alternative candidate.
 
-### 3. Registration System Integration & Attendance Predictions
+### 3. Event Management & Historical Archive (v5.0.0)
+*   **Multi-Event Architecture**: Complete support for event scoping across chores, work logs, presence logs, and duty shifts. Allows exploring past events (`g::t::6.9` 2025, `g::t::7.0.0` 2026, `g::t::8.0.0` 2027) or aggregating cumulative all-time stats.
+*   **Pure In-Memory Provider**: Zero database duplication—trip events and attendee registrations are sourced directly from `garage-trip-api` and cached in thread-safe memory with periodic background synchronization.
+*   **Historical SQLite Import**: Automatic zero-downtime migration and import of historical database files (e.g. `data-prod/gt6.9-2025.sqlite`), with ID remapping (`+10000`) and schema backfilling.
+*   **True Presence Hour Normalization**: Adapts to varying historical sampling intervals (e.g. 2-minute ticks from 2025 vs. 10-minute ticks in modern editions) by normalizing presence directly to true elapsed hours ($\text{effective} = \max(1.0, \text{Hours})$).
+*   **Global Event Switcher & Archive Mode**: Dropdown in the top navigation bar to toggle between active, historical, and all-time views. Historical views prominently show an archive banner and disable live automation.
+*   **Multi-Select Skill Box**: Shift definitions now use an intuitive multi-select dropdown for required skills, backed by a 5-minute in-memory TTL cache from Discord API to prevent rate limits.
+*   **Attendee Multi-Event History**: Detailed profile pages (`/users/{id}`) break down contributions and minutes across each individual trip event.
+
+### 4. Registration System Integration & Attendance Predictions
 *   **Bidirectional Registration & Event Sync**: Integrates directly with `garage-trip-api` using `X-API-KEY` to synchronize trip events and participant registrations (`arrival_date`, `departure_date`, and cancellation status).
 *   **Event-Aware Scheduling**: Shift generation and daily freeze announcements only activate before and during scheduled events or when attendees are registered/present on site. When no event is happening, freeze notifications are suppressed and no shifts are assigned.
 *   **Predictive Shift Scheduling**:
@@ -46,20 +55,20 @@ The production API and Web Dashboard is hosted at: **[chores.garage-trip.cz](htt
     *   **Early Departures**: Participants departing today are excluded from tomorrow's schedule even if currently on site, preventing abandoned shifts and sudden swaps.
     *   **Presence Fallback**: Participants without registration records seamlessly fall back to real-time Discord presence (`chores::present`).
 
-### 4. Real-time Presence Tracking
+### 5. Real-time Presence Tracking
 *   Uses Discord roles (default: `chores::present`) to identify who is currently available on site.
-*   A background presence tracker periodically samples presence and logs **Presence Ticks** (10-minute intervals) for continuous workload normalization.
+*   A background presence tracker periodically samples presence and logs **Presence Ticks** (10-minute intervals) for continuous workload normalization, pausing tracking automatically outside scheduled event windows.
 
-### 5. Web Dashboard & Tablet Kiosk
+### 6. Web Dashboard & Tablet Kiosk
 *   **Interactive Web UI**: Responsive desktop and mobile interface (`/`, `/feed`, `/shifts`, `/chores`, `/schedules`, `/templates`, `/leaderboard`, `/profile`).
 *   **Tablet Kiosk Mode**: Simple PIN/password login for shared wall-mounted tablets in common areas.
 *   **Discord OAuth2 Authentication**: Role-based access control (`g::t::orgs`) for admin actions.
 
-### 6. Scheduled Tasks & Reusable Templates
+### 7. Scheduled Tasks & Reusable Templates
 *   **Cron-Based Recurring Chores**: Define recurring tasks with cron expressions, auto-generating chores at specified times.
 *   **Template Library**: Seeded and customizable templates for common recurring chores.
 
-### 7. AI-Powered Chore Summaries
+### 8. AI-Powered Chore Summaries
 *   Integration with Google Gemini (default: `gemini-3.7-flash` on the cost-efficient `flex` service tier).
 *   Scheduled summaries run twice daily (13:00 and 19:00 CET), posting entertaining progress reports and leaderboards to Discord.
 

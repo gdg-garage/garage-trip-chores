@@ -79,21 +79,24 @@ func (s *ShiftsService) IsSchedulingActiveForDate(targetDate time.Time) (bool, s
 		}
 	}
 
-	// 3. Check if any participants are currently marked present on site (e.g. ad-hoc retreat or simulation/headless mode)
-	presentUsers, err := s.storage.GetPresentUsers()
-	if err == nil && len(presentUsers) > 0 {
-		return true, fmt.Sprintf("%d participants currently present on site", len(presentUsers)), nil
-	}
-	users, err := s.storage.GetUsers()
-	if err == nil {
-		presentCount := 0
-		for _, u := range users {
-			if u.IsPresent {
-				presentCount++
-			}
+	// 3. Fallback only if no trip events are defined (e.g. headless tests/simulations)
+	events, _ := s.storage.GetTripEvents()
+	if len(events) == 0 {
+		presentUsers, err := s.storage.GetPresentUsers()
+		if err == nil && len(presentUsers) > 0 {
+			return true, fmt.Sprintf("%d participants currently present on site", len(presentUsers)), nil
 		}
-		if presentCount > 0 {
-			return true, fmt.Sprintf("%d participants present", presentCount), nil
+		users, err := s.storage.GetUsers()
+		if err == nil {
+			presentCount := 0
+			for _, u := range users {
+				if u.IsPresent {
+					presentCount++
+				}
+			}
+			if presentCount > 0 {
+				return true, fmt.Sprintf("%d participants present", presentCount), nil
+			}
 		}
 	}
 

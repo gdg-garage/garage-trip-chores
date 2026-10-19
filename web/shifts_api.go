@@ -107,6 +107,7 @@ func (w *Web) handleDeleteShiftDefinition(rw http.ResponseWriter, r *http.Reques
 func (w *Web) handleGetShifts(rw http.ResponseWriter, r *http.Request) {
 	dateStr := r.URL.Query().Get("date")
 	upcoming := r.URL.Query().Get("upcoming")
+	event := r.URL.Query().Get("event")
 
 	var shiftsList []storage.Shift
 	var err error
@@ -114,7 +115,7 @@ func (w *Web) handleGetShifts(rw http.ResponseWriter, r *http.Request) {
 	if upcoming == "true" {
 		shiftsList, err = w.storage.GetUpcomingShifts(time.Now().Add(-2 * time.Hour))
 	} else {
-		shiftsList, err = w.storage.GetShifts(dateStr)
+		shiftsList, err = w.storage.GetShiftsForEvent(dateStr, event)
 	}
 
 	if err != nil {
@@ -351,7 +352,8 @@ func (w *Web) handleGetFairnessStats(rw http.ResponseWriter, r *http.Request) {
 }
 
 func (w *Web) handleGetRegistrations(rw http.ResponseWriter, r *http.Request) {
-	regs, err := w.storage.GetUserRegistrations("")
+	event := r.URL.Query().Get("event")
+	regs, err := w.storage.GetUserRegistrations(event)
 	if err != nil {
 		writeError(rw, http.StatusInternalServerError, err.Error())
 		return
