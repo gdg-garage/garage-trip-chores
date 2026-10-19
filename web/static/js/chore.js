@@ -21,8 +21,10 @@ async function load() {
     document.getElementById("suggestions").innerHTML = "";
     return;
   }
-  renderDetail(data.chore);
-  renderSuggestions(data.suggestions, data.chore);
+  const chore = data.chore || data;
+  const suggestions = data.suggestions || {};
+  renderDetail(chore);
+  renderSuggestions(suggestions, chore);
 }
 
 function renderDetail(c) {

@@ -14,6 +14,9 @@ async function init() {
   document.getElementById("api-key-form").addEventListener("submit", createApiKey);
   document.getElementById("copy-key-btn").addEventListener("click", copyNewKey);
   document.getElementById("signout").addEventListener("click", signOut);
+  if (typeof EventManager !== 'undefined') {
+    EventManager.onEventChanged(loadWorkload);
+  }
   await Promise.all([loadWorkload(), loadManual(), loadApiKeys()]);
 }
 
@@ -100,7 +103,10 @@ async function deleteApiKey(id, name) {
 }
 
 async function loadWorkload() {
-  const { people } = await API.get("/api/people");
+  const urlParams = new URLSearchParams(window.location.search);
+  const ev = urlParams.get("event") || (typeof EventManager !== 'undefined' ? EventManager.getSelectedEvent() : "");
+  const url = ev ? `/api/people?event=${encodeURIComponent(ev)}` : "/api/people";
+  const { people } = await API.get(url);
   const me = people.find((p) => p.discord_id === myUid);
   const box = document.getElementById("workload");
   if (!me) { box.innerHTML = '<p class="muted">no workload data yet.</p>'; return; }

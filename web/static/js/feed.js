@@ -20,6 +20,12 @@ async function init() {
   // Load chores and users immediately via HTTP so the list renders even if WS is slow or disconnected
   await Promise.all([loadChores(), loadUsers()]);
 
+  if (typeof EventManager !== 'undefined') {
+    EventManager.onEventChanged(() => {
+      loadChores();
+    });
+  }
+
   connectWS(onMessage, (up) => {
     const c = document.getElementById("conn");
     if (c) {
@@ -33,7 +39,7 @@ async function loadChores() {
   try {
     const urlParams = new URLSearchParams(window.location.search);
     const ev = urlParams.get("event") || (typeof EventManager !== 'undefined' ? EventManager.getSelectedEvent() : "");
-    const url = ev ? `/api/chores?active=true&event=${encodeURIComponent(ev)}` : "/api/chores?active=true";
+    const url = (ev && ev !== "all") ? `/api/chores?active=true&event=${encodeURIComponent(ev)}` : "/api/chores?active=true";
     const res = await API.get(url);
     const list = Array.isArray(res) ? res : (res?.chores || []);
     state.chores.clear();
@@ -72,10 +78,15 @@ function _storeSuggestions(id, raw) {
 }
 
 function onMessage(msg) {
+  const currentEvent = (typeof EventManager !== 'undefined' ? EventManager.getSelectedEvent() : "") || new URLSearchParams(window.location.search).get("event") || "";
   switch (msg.type) {
     case "snapshot":
       state.chores.clear(); state.suggestions.clear();
-      msg.chores.forEach((c) => state.chores.set(c.id, c));
+      msg.chores.forEach((c) => {
+        if (!currentEvent || currentEvent === "all" || c.event === currentEvent) {
+          state.chores.set(c.id, c);
+        }
+      });
       // Snapshot ships suggestions as {id: top_array} — store as full objects
       // with empty ranked (the chip names load from top-3 cross-ref with person cache)
       Object.entries(msg.suggestions || {}).forEach(([id, val]) => _storeSuggestions(+id, val));
@@ -85,11 +96,14 @@ function onMessage(msg) {
       break;
     default:
       if (msg.chore && msg.chore.id != null) {
-        if (msg.chore.active === false) state.chores.delete(msg.chore.id);
-        else state.chores.set(msg.chore.id, msg.chore);
+        if (msg.chore.active === false || (currentEvent && currentEvent !== "all" && msg.chore.event && msg.chore.event !== currentEvent)) {
+          state.chores.delete(msg.chore.id);
+        } else {
+          state.chores.set(msg.chore.id, msg.chore);
+        }
         if (msg.suggestions != null) _storeSuggestions(msg.chore.id, msg.suggestions);
         // Announce new chores (screen readers) and ping me if one wants me.
-        if (msg.type === "task_created") {
+        if (msg.type === "task_created" && (!currentEvent || currentEvent === "all" || !msg.chore.event || msg.chore.event === currentEvent)) {
           announce(`New chore: ${msg.chore.name}`);
           const sug = state.suggestions.get(msg.chore.id);
           const top = Array.isArray(sug) ? sug : (sug?.top || []);

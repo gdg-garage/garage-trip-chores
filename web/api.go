@@ -10,9 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-chi/chi/v5"
+	"github.com/bwmarrin/discordgo"
 	"github.com/gdg-garage/garage-trip-chores/storage"
 	"github.com/gdg-garage/garage-trip-chores/ui"
+	"github.com/go-chi/chi/v5"
 )
 
 var funnyAckMessages = []string{
@@ -547,7 +548,8 @@ func (w *Web) handleGetSkills(rw http.ResponseWriter, r *http.Request) {
 }
 
 func (w *Web) handleGetStats(rw http.ResponseWriter, r *http.Request) {
-	stats, err := w.storage.GetAggregatedStats()
+	event := r.URL.Query().Get("event")
+	stats, err := w.storage.GetAggregatedStatsForEvent(event)
 	if err != nil {
 		writeError(rw, http.StatusInternalServerError, err.Error())
 		return
@@ -571,7 +573,8 @@ func (w *Web) handleGetUsers(rw http.ResponseWriter, r *http.Request) {
 }
 
 func (w *Web) handleGetPeople(rw http.ResponseWriter, r *http.Request) {
-	pool := w.GetPeoplePool()
+	event := r.URL.Query().Get("event")
+	pool := w.GetPeoplePoolForEvent(event)
 	writeJSON(rw, http.StatusOK, map[string]any{
 		"people":         pool,
 		"children_count": w.conf.ChildrenCount,
@@ -634,7 +637,17 @@ func (w *Web) handleGetChore(rw http.ResponseWriter, r *http.Request) {
 	delayed, _ := w.storage.GetDelayedTaskForChore(uint(id))
 
 	view := w.BuildChoreView(chore, worklogs, assignments, delayed, dir)
-	writeJSON(rw, http.StatusOK, view)
+	sug := w.SuggestionsFor(chore)
+	type choreDetailResponse struct {
+		ChoreView
+		Chore       ChoreView         `json:"chore"`
+		Suggestions SuggestionsResult `json:"suggestions"`
+	}
+	writeJSON(rw, http.StatusOK, choreDetailResponse{
+		ChoreView:   view,
+		Chore:       view,
+		Suggestions: sug,
+	})
 }
 
 func (w *Web) handleGetSuggestions(rw http.ResponseWriter, r *http.Request) {
@@ -699,13 +712,28 @@ func (w *Web) handlePostChore(rw http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	deadline := now.Add(24 * time.Hour)
 
+	event := strings.TrimSpace(in.Event)
+	if event == "" || event == "all" {
+		event = w.storage.GetActiveEventCode()
+	}
+
+	assignees := in.AssigneeIds
+	if len(assignees) == 0 && in.AssigneeId != "" {
+		assignees = []string{in.AssigneeId}
+	}
+	primaryAssignee := ""
+	if len(assignees) > 0 {
+		primaryAssignee = assignees[0]
+	}
+
 	chore := storage.Chore{
 		Name:                 in.Name,
+		Event:                event,
 		EstimatedTimeMin:     est,
 		NecessaryWorkers:     workers,
 		AssignmentTimeoutMin: timeout,
 		CreatorId:            creatorID,
-		AssigneeId:           in.AssigneeId,
+		AssigneeId:           primaryAssignee,
 		DelayMin:             in.DelayMin,
 		SelfReported:         in.SelfReported,
 		TemplateKey:          in.TemplateKey,
@@ -765,10 +793,49 @@ func (w *Web) handlePostChore(rw http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Create assignments for all assigned attendees if any
+	if len(assignees) > 0 && !in.SelfReported {
+		for _, uid := range assignees {
+			uid = strings.TrimSpace(uid)
+			if uid == "" {
+				continue
+			}
+			existing, _ := w.storage.GetChoreAssignment(saved.ID, uid)
+			if existing.ID == 0 {
+				newA := storage.ChoreAssignment{
+					UserId:      uid,
+					ChoreId:     saved.ID,
+					Created:     now,
+					Acked:       &now,
+					Volunteered: false,
+				}
+				_, _ = w.storage.SaveChoreAssignment(newA)
+			} else if existing.Acked == nil {
+				existing.Acked = &now
+				_, _ = w.storage.SaveChoreAssignment(existing)
+			}
+		}
+		if w.ui != nil {
+			messageUrl := w.ui.GetChoreMessageUrl(saved)
+			for _, uid := range assignees {
+				uidTrimmed := strings.TrimSpace(uid)
+				if uidTrimmed == "" {
+					continue
+				}
+				go func(aId, cName string, cId uint, mUrl string) {
+					_ = w.ui.SendDM(aId, &discordgo.MessageSend{
+						Content: fmt.Sprintf("You were assigned to chore `%s` (id: `%d`) via Web.\n%s", cName, cId, mUrl),
+					})
+				}(uidTrimmed, saved.Name, saved.ID, messageUrl)
+			}
+		}
+	}
+
 	dir := w.BuildPersonDirectory()
 	worklogs, _ := w.storage.GetWorkLogsForChore(saved.ID)
+	assignments, _ := w.storage.GetChoreAssignments(saved.ID)
 	delayed, _ := w.storage.GetDelayedTaskForChore(saved.ID)
-	view := w.BuildChoreView(saved, worklogs, nil, delayed, dir)
+	view := w.BuildChoreView(saved, worklogs, assignments, delayed, dir)
 	sug := w.SuggestionsFor(saved)
 
 	w.BroadcastWS(map[string]any{
@@ -895,7 +962,8 @@ func (w *Web) handleUnclaimChore(rw http.ResponseWriter, r *http.Request) {
 }
 
 type AssignIn struct {
-	DiscordId string `json:"discord_id"`
+	DiscordId  string   `json:"discord_id"`
+	DiscordIds []string `json:"discord_ids"`
 }
 
 func (w *Web) handleAssignChore(rw http.ResponseWriter, r *http.Request) {
@@ -915,61 +983,121 @@ func (w *Web) handleAssignChore(rw http.ResponseWriter, r *http.Request) {
 	var in AssignIn
 	_ = json.NewDecoder(r.Body).Decode(&in)
 
-	assigneeId := strings.TrimSpace(in.DiscordId)
-	if assigneeId == "" {
+	var assigneeIds []string
+	if len(in.DiscordIds) > 0 {
+		assigneeIds = in.DiscordIds
+	} else if strings.TrimSpace(in.DiscordId) != "" {
+		assigneeIds = []string{strings.TrimSpace(in.DiscordId)}
+	}
+
+	as, _ := w.storage.GetChoreAssignments(uint(id))
+	activeCount := 0
+	assignedMap := make(map[string]bool)
+	for _, a := range as {
+		if a.Refused == nil && a.Timeouted == nil {
+			activeCount++
+			assignedMap[a.UserId] = true
+		}
+	}
+
+	// If no specific assignee requested, auto-assign from suggestions
+	if len(assigneeIds) == 0 {
+		workers := chore.NecessaryWorkers
+		if workers == 0 {
+			workers = 1
+		}
+		needed := int(workers) - activeCount
+		if needed <= 0 {
+			writeError(rw, http.StatusConflict, "Chore is already fully assigned.")
+			return
+		}
+
 		sug := w.SuggestionsFor(chore)
-		if len(sug.Top) == 0 {
+		for _, topUid := range sug.Top {
+			if !assignedMap[topUid] {
+				assigneeIds = append(assigneeIds, topUid)
+				assignedMap[topUid] = true
+				if len(assigneeIds) >= needed {
+					break
+				}
+			}
+		}
+
+		if len(assigneeIds) == 0 {
 			writeError(rw, http.StatusConflict, "No eligible person available to auto-assign.")
 			return
 		}
-		assigneeId = sug.Top[0]
 	}
 
 	now := time.Now()
-	as, _ := w.storage.GetChoreAssignments(uint(id))
-	found := false
-	for _, a := range as {
-		if a.UserId == assigneeId {
-			found = true
-			a.Acked = &now
-			_, _ = w.storage.SaveChoreAssignment(a)
-			break
+	dir := w.BuildPersonDirectory()
+	var assignedNames []string
+
+	for _, uid := range assigneeIds {
+		uid = strings.TrimSpace(uid)
+		if uid == "" {
+			continue
 		}
-	}
-	if !found {
-		newA := storage.ChoreAssignment{
-			UserId:      assigneeId,
-			ChoreId:     uint(id),
-			Created:     now,
-			Acked:       &now,
-			Volunteered: false,
+
+		found := false
+		for _, a := range as {
+			if a.UserId == uid {
+				found = true
+				a.Acked = &now
+				_, _ = w.storage.SaveChoreAssignment(a)
+				break
+			}
 		}
-		_, _ = w.storage.SaveChoreAssignment(newA)
+		if !found {
+			newA := storage.ChoreAssignment{
+				UserId:      uid,
+				ChoreId:     uint(id),
+				Created:     now,
+				Acked:       &now,
+				Volunteered: false,
+			}
+			_, _ = w.storage.SaveChoreAssignment(newA)
+		}
+
+		uName := uid
+		if u, ok := dir[uid]; ok && u.Name != "" {
+			uName = u.Name
+		}
+		assignedNames = append(assignedNames, uName)
+
+		if w.ui != nil {
+			messageUrl := w.ui.GetChoreMessageUrl(chore)
+			go func(aId, cName string, cId uint, mUrl string) {
+				_ = w.ui.SendDM(aId, &discordgo.MessageSend{
+					Content: fmt.Sprintf("You were assigned to chore `%s` (id: `%d`) via Web.\n%s", cName, cId, mUrl),
+				})
+			}(uid, chore.Name, chore.ID, messageUrl)
+		}
 	}
 
 	chore, _ = w.storage.GetChore(uint(id))
-	dir := w.BuildPersonDirectory()
 	worklogs, _ := w.storage.GetWorkLogsForChore(uint(id))
 	assignments, _ := w.storage.GetChoreAssignments(uint(id))
 	view := w.BuildChoreView(chore, worklogs, assignments, nil, dir)
 
-	name := assigneeId
-	if u, ok := dir[assigneeId]; ok && u.Name != "" {
-		name = u.Name
-	}
-
 	sug := w.SuggestionsFor(chore)
+	byUid := ""
+	if len(assigneeIds) > 0 {
+		byUid = assigneeIds[0]
+	}
 	w.BroadcastWS(map[string]any{
 		"type":        "task_claimed",
 		"chore":       view,
-		"by":          assigneeId,
+		"by":          byUid,
 		"suggestions": sug.Top,
 	})
 
+	ackMsg := fmt.Sprintf("Assigned to %s ✓", strings.Join(assignedNames, ", "))
 	writeJSON(rw, http.StatusOK, map[string]any{
 		"chore":    view,
-		"assigned": map[string]string{"discord_id": assigneeId, "name": name},
-		"ack":      fmt.Sprintf("Assigned to %s ✓", name),
+		"assigned": assigneeIds,
+		"names":    assignedNames,
+		"ack":      ackMsg,
 	})
 }
 

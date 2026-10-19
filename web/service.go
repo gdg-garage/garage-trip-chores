@@ -193,6 +193,7 @@ func (w *Web) BuildChoreView(chore storage.Chore, worklogs []storage.WorkLog, as
 	return ChoreView{
 		ID:                    chore.ID,
 		Name:                  chore.Name,
+		Event:                 chore.Event,
 		NecessaryWorkers:      workers,
 		EstimatedTimeMin:      est,
 		AssignmentTimeoutMin:  chore.AssignmentTimeoutMin,
@@ -563,13 +564,13 @@ func (w *Web) UserDetailForEvent(discordID string, event string) UserDetail {
 	}
 }
 
-func (w *Web) GetPeoplePool() []PersonPoolEntry {
+func (w *Web) GetPeoplePoolForEvent(event string) []PersonPoolEntry {
 	dir := w.BuildPersonDirectory()
-	stats, _ := w.storage.GetAggregatedStats()
+	stats, _ := w.storage.GetAggregatedStatsForEvent(event)
 
 	// Calculate committed minutes for active in-progress chores
 	committed := make(map[string]float64)
-	chores, _ := w.storage.GetChores()
+	chores, _ := w.storage.GetChoresForEvent(false, event)
 	assignments, _ := w.storage.GetChoresAssignments()
 	ackMap := make(map[uint][]string)
 	for _, a := range assignments {
@@ -607,5 +608,9 @@ func (w *Web) GetPeoplePool() []PersonPoolEntry {
 		return pool[i].WorkloadMin < pool[j].WorkloadMin
 	})
 	return pool
+}
+
+func (w *Web) GetPeoplePool() []PersonPoolEntry {
+	return w.GetPeoplePoolForEvent("")
 }
 

@@ -7,7 +7,7 @@ async function init() {
   const skills = Array.isArray(sData) ? sData : (sData.skills || []);
   const sbox = document.getElementById("skills");
   skills.forEach((s) => {
-    const chip = el("button", { type: "button", class: "chip", "aria-pressed": "false", onclick: () => toggleSkill(chip, s) }, s);
+    const chip = el("button", { type: "button", class: "chip", "aria-pressed": "false", onclick: () => toggleSkill(chip, s) }, s.replace(/^skill::/, ''));
     sbox.appendChild(chip);
   });
 

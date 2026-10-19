@@ -4,6 +4,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/bwmarrin/discordgo"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -108,7 +109,13 @@ func (s *Storage) GetUserHandlesMap() (map[string]string, error) {
 	handles := make(map[string]string)
 
 	if s.discord != nil && s.conf.DiscordGuildId != "" && s.conf.DiscordGuildId != "???" {
-		members, err := s.discord.GuildMembers(s.conf.DiscordGuildId, "", 1000)
+		var members []*discordgo.Member
+		var err error
+		if s.discordCache != nil {
+			members, err = s.discordCache.GetMembers(s.discord, s.conf.DiscordGuildId)
+		} else {
+			members, err = s.discord.GuildMembers(s.conf.DiscordGuildId, "", 1000)
+		}
 		if err == nil {
 			for _, m := range members {
 				if m.User != nil {

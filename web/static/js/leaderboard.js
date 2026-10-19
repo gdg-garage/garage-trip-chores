@@ -8,6 +8,9 @@ async function init() {
   document.querySelectorAll("th.sortable").forEach((th) =>
     th.addEventListener("click", () => setSort(th.dataset.sort)));
   await load();
+  if (typeof EventManager !== 'undefined') {
+    EventManager.onEventChanged(load);
+  }
   connectWS((msg) => {
     if (["snapshot", "task_done", "task_claimed", "task_created", "workload_updated", "profile_updated"].includes(msg.type)) load();
   });
@@ -93,7 +96,8 @@ function render() {
       bar);
 
     const cls = "clickable" + (hasEffort && rank === 1 ? " podium-1" : "");
-    const tr = el("tr", { class: cls, onclick: () => (location.href = `/users/${encodeURIComponent(r.discord_id)}`) },
+    const userUrl = `/user/${encodeURIComponent(r.discord_id)}` + (ev ? `?event=${encodeURIComponent(ev)}` : "");
+    const tr = el("tr", { class: cls, onclick: () => (location.href = userUrl) },
       rankCell, nameCell,
       el("td", { class: "num" }, String(r.worked_count)),
       el("td", { class: "num" }, fmtMin(r.worked_min) || "0 min"));

@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"encoding/json"
 
+	"github.com/bwmarrin/discordgo"
 	"gorm.io/gorm/clause"
 )
 
@@ -96,7 +97,12 @@ func (s *Storage) SyncDiscordUsers() error {
 		s.logger.Warn("Failed to fetch guild roles for user sync", "error", err)
 	}
 
-	members, err := s.discord.GuildMembers(s.conf.DiscordGuildId, "", 1000)
+	var members []*discordgo.Member
+	if s.discordCache != nil {
+		members, err = s.discordCache.GetMembers(s.discord, s.conf.DiscordGuildId)
+	} else {
+		members, err = s.discord.GuildMembers(s.conf.DiscordGuildId, "", 1000)
+	}
 	if err != nil {
 		s.logger.Warn("Failed to fetch guild members from Discord", "guild_id", s.conf.DiscordGuildId, "error", err)
 		return err

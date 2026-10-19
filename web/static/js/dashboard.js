@@ -3,16 +3,51 @@ const state = { chores: new Map(), suggestions: new Map() };
 let muted = false;
 let audioCtx = null;
 
+function getEvent() {
+  const urlParams = new URLSearchParams(window.location.search);
+  return urlParams.get("event") || (typeof EventManager !== 'undefined' ? EventManager.getSelectedEvent() : "");
+}
+
 async function init() {
   document.getElementById("mute").addEventListener("click", toggleMute);
   tickClock(); setInterval(tickClock, 1000);
   setInterval(loadLeader, 15000);
+  const ev = getEvent();
+  if (ev) {
+    const badge = document.getElementById("tv-event");
+    if (badge) {
+      badge.textContent = `event::${ev};`;
+      badge.style.display = "inline-block";
+    }
+  }
+  await Promise.all([loadChores(), loadLeader()]);
+  if (typeof EventManager !== 'undefined') {
+    EventManager.onEventChanged(() => {
+      loadChores();
+      loadLeader();
+    });
+  }
   connectWS(onMessage, (up) => {
     const c = document.getElementById("conn");
     c.className = "conn " + (up ? "up" : "down");
     c.textContent = up ? "● live" : "● offline";
   });
-  loadLeader();
+}
+
+async function loadChores() {
+  try {
+    const ev = getEvent();
+    const url = (ev && ev !== "all") ? `/api/chores?active=true&event=${encodeURIComponent(ev)}` : "/api/chores?active=true";
+    const res = await API.get(url);
+    const list = Array.isArray(res) ? res : (res?.chores || []);
+    state.chores.clear();
+    list.forEach((c) => {
+      if (c && c.id != null && c.active !== false) state.chores.set(c.id, c);
+    });
+    render();
+  } catch (err) {
+    console.debug("Failed to load chores for dashboard", err);
+  }
 }
 
 function tickClock() {
@@ -48,24 +83,37 @@ function chime(urgent) {
 }
 
 function onMessage(msg) {
+  const currentEv = getEvent();
   switch (msg.type) {
     case "snapshot":
       state.chores.clear();
-      msg.chores.forEach((c) => state.chores.set(c.id, c));
+      msg.chores.forEach((c) => {
+        if (!currentEv || currentEv === "all" || c.event === currentEv) {
+          state.chores.set(c.id, c);
+        }
+      });
       Object.entries(msg.suggestions || {}).forEach(([id, t]) => state.suggestions.set(+id, t));
       break;
     case "task_done":
       state.chores.delete(msg.chore?.id);
       break;
     case "task_created":
-      if (msg.chore) { state.chores.set(msg.chore.id, msg.chore); chime(msg.chore.urgent); }
+      if (msg.chore) {
+        if (!currentEv || currentEv === "all" || msg.chore.event === currentEv) {
+          state.chores.set(msg.chore.id, msg.chore);
+          chime(msg.chore.urgent);
+        }
+      }
       if (msg.suggestions) state.suggestions.set(msg.chore.id, msg.suggestions);
       loadLeader();
       break;
     default:
       if (msg.chore && msg.chore.id != null) {
-        if (msg.chore.active === false) state.chores.delete(msg.chore.id);
-        else state.chores.set(msg.chore.id, msg.chore);
+        if (msg.chore.active === false || (currentEv && currentEv !== "all" && msg.chore.event && msg.chore.event !== currentEv)) {
+          state.chores.delete(msg.chore.id);
+        } else {
+          state.chores.set(msg.chore.id, msg.chore);
+        }
         if (msg.suggestions) state.suggestions.set(msg.chore.id, msg.suggestions);
       }
       if (msg.type === "workload_updated" || msg.type === "task_claimed") loadLeader();
@@ -101,8 +149,10 @@ function card(c) {
 async function loadLeader() {
   // Workload comes from /stats, names from /users — each from its own upstream
   // source, joined here by discord_id.
+  const ev = getEvent();
+  const statsUrl = (ev && ev !== "all") ? `/api/stats?event=${encodeURIComponent(ev)}` : "/api/stats";
   const [statsData, usersData] = await Promise.all([
-    API.get("/api/stats"),
+    API.get(statsUrl),
     API.get("/api/users"),
   ]);
   const stats = (statsData && statsData.stats) ? statsData.stats : (statsData || {});

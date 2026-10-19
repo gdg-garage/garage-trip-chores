@@ -58,10 +58,10 @@
 
     <div class="grid2" id="assignee-delay-wrap">
       <div>
-        <label for="assignee">assign_directly::(optional)</label>
-        <select id="assignee">
-          <option value="">open (anyone can claim)</option>
+        <label for="assignee">assign_directly::(optional, multiple)</label>
+        <select id="assignee" multiple size="4" style="height:auto;min-height:95px;padding:6px;width:100%;border:1px solid var(--border);border-radius:var(--radius);background:var(--panel-bg);color:var(--c-white);">
         </select>
+        <p class="muted" style="font-size:.78rem;margin:4px 0 0">hold Ctrl/Cmd to select multiple attendees</p>
       </div>
       <div id="delay-wrap">
         <label for="delay_sel">delay_publishing::</label>

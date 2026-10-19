@@ -26,10 +26,11 @@ type Storage struct {
 	skillsCache  []string
 	skillsCacheAt time.Time
 
-	regProvider RegistrationProvider
-	regMockMu   sync.RWMutex
-	mockEvents  []TripEvent
-	mockRegs    map[string][]UserRegistration
+	regProvider  RegistrationProvider
+	regMockMu    sync.RWMutex
+	mockEvents   []TripEvent
+	mockRegs     map[string][]UserRegistration
+	discordCache *DiscordCache
 }
 
 func dbConnect(conf Config, logger *slog.Logger) (*gorm.DB, error) {
@@ -83,9 +84,10 @@ func New(conf Config, logger *slog.Logger) (*Storage, error) {
 		db:        db,
 		logger:    logger,
 		discord:   dg,
-		conf:      conf,
-		Events:    NewEventBus(),
-		userCache: make(map[string]User),
+		conf:         conf,
+		Events:       NewEventBus(),
+		userCache:    make(map[string]User),
+		discordCache: NewDiscordCache(),
 	}
 	if err := st.SeedDefaultTemplates(); err != nil {
 		logger.Warn("Failed to seed default chore templates", "error", err)

@@ -2,7 +2,6 @@ package storage
 
 import (
 	"errors"
-	"sort"
 	"strings"
 	"time"
 
@@ -23,49 +22,10 @@ func (s *Storage) getGuildRolesMap() (map[string]*discordgo.Role, error) {
 	}
 	s.rolesCacheMu.RUnlock()
 
-	if s.discord == nil {
-		return make(map[string]*discordgo.Role), nil
+	if s.discordCache != nil {
+		return s.discordCache.GetRoles(s.discord, s.conf.DiscordGuildId)
 	}
-
-	guildRolesMap := make(map[string]*discordgo.Role)
-	if s.discord.State != nil {
-		if guild, err := s.discord.State.Guild(s.conf.DiscordGuildId); err == nil && guild != nil && len(guild.Roles) > 0 {
-			for _, role := range guild.Roles {
-				guildRolesMap[role.ID] = role
-			}
-			s.rolesCacheMu.Lock()
-			s.rolesCache = guildRolesMap
-			s.rolesCacheAt = time.Now()
-			s.rolesCacheMu.Unlock()
-			return guildRolesMap, nil
-		}
-	}
-
-	// Fallback to Discord REST API if state cache does not have the guild or roles
-	roles, err := s.discord.GuildRoles(s.conf.DiscordGuildId)
-	if err != nil {
-		s.rolesCacheMu.RLock()
-		if s.rolesCache != nil {
-			cached := make(map[string]*discordgo.Role, len(s.rolesCache))
-			for k, v := range s.rolesCache {
-				cached[k] = v
-			}
-			s.rolesCacheMu.RUnlock()
-			return cached, nil
-		}
-		s.rolesCacheMu.RUnlock()
-		return nil, err
-	}
-	for _, role := range roles {
-		guildRolesMap[role.ID] = role
-	}
-
-	s.rolesCacheMu.Lock()
-	s.rolesCache = guildRolesMap
-	s.rolesCacheAt = time.Now()
-	s.rolesCacheMu.Unlock()
-
-	return guildRolesMap, nil
+	return make(map[string]*discordgo.Role), nil
 }
 
 func (s *Storage) isRoleSkill(role *discordgo.Role) bool {
@@ -76,34 +36,10 @@ func (s *Storage) isRoleSkill(role *discordgo.Role) bool {
 }
 
 func (s *Storage) GetSkills() ([]string, error) {
-	s.rolesCacheMu.RLock()
-	if s.skillsCache != nil && time.Since(s.skillsCacheAt) < 5*time.Minute {
-		res := make([]string, len(s.skillsCache))
-		copy(res, s.skillsCache)
-		s.rolesCacheMu.RUnlock()
-		return res, nil
+	if s.discordCache != nil {
+		return s.discordCache.GetSkills(s.discord, s.conf.DiscordGuildId, s.conf.SkillPrefix)
 	}
-	s.rolesCacheMu.RUnlock()
-
-	guildRolesMap, err := s.getGuildRolesMap()
-	if err != nil {
-		return nil, err
-	}
-
-	skills := []string{}
-	for _, role := range guildRolesMap {
-		if s.isRoleSkill(role) {
-			skills = append(skills, role.Name[len(s.conf.SkillPrefix):])
-		}
-	}
-	sort.Strings(skills)
-
-	s.rolesCacheMu.Lock()
-	s.skillsCache = skills
-	s.skillsCacheAt = time.Now()
-	s.rolesCacheMu.Unlock()
-
-	return skills, nil
+	return []string{}, nil
 }
 
 func (s *Storage) GetPresentUsers() ([]User, error) {
@@ -116,11 +52,17 @@ func (s *Storage) GetPresentUsers() ([]User, error) {
 		return nil, err
 	}
 
-	users := []User{}
-	members, err := s.discord.GuildMembers(s.conf.DiscordGuildId, "", 1000)
+	var members []*discordgo.Member
+	if s.discordCache != nil {
+		members, err = s.discordCache.GetMembers(s.discord, s.conf.DiscordGuildId)
+	} else {
+		members, err = s.discord.GuildMembers(s.conf.DiscordGuildId, "", 1000)
+	}
 	if err != nil {
 		return nil, err
 	}
+
+	users := []User{}
 	for _, member := range members {
 		roles := []string{}
 		isPresent := false
@@ -161,7 +103,13 @@ func (s *Storage) GetUserHandleByDiscordId(discordId string) (string, error) {
 	if s.discord == nil {
 		return "", nil
 	}
-	member, err := s.discord.GuildMember(s.conf.DiscordGuildId, discordId)
+	var member *discordgo.Member
+	var err error
+	if s.discordCache != nil {
+		member, err = s.discordCache.GetMember(s.discord, s.conf.DiscordGuildId, discordId)
+	} else {
+		member, err = s.discord.GuildMember(s.conf.DiscordGuildId, discordId)
+	}
 	if err != nil {
 		return "", err
 	}
@@ -458,7 +406,13 @@ func (s *Storage) GetUser(discordId string) (*User, error) {
 	}
 
 	if s.discord != nil {
-		member, err := s.discord.GuildMember(s.conf.DiscordGuildId, discordId)
+		var member *discordgo.Member
+		var err error
+		if s.discordCache != nil {
+			member, err = s.discordCache.GetMember(s.discord, s.conf.DiscordGuildId, discordId)
+		} else {
+			member, err = s.discord.GuildMember(s.conf.DiscordGuildId, discordId)
+		}
 		if err == nil && member != nil {
 			name := member.User.Username
 			if member.User.GlobalName != "" {

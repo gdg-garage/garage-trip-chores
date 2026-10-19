@@ -23,13 +23,14 @@ async function init() {
 
   const sbox = document.getElementById("skills");
   skills.forEach((s) => {
-    const chip = el("button", { type: "button", class: "chip", "aria-pressed": "false", onclick: () => toggleSkill(chip, s) }, s);
+    const chip = el("button", { type: "button", class: "chip", "aria-pressed": "false", onclick: () => toggleSkill(chip, s) }, s.replace(/^skill::/, ''));
     sbox.appendChild(chip);
   });
 
   // Populate direct assignee dropdown
   const assigneeSelect = document.getElementById("assignee");
   if (assigneeSelect) {
+    assigneeSelect.innerHTML = "";
     users.forEach((u) => {
       const opt = el("option", { value: u.discord_id }, u.name || u.handle || u.discord_id);
       assigneeSelect.appendChild(opt);
@@ -215,7 +216,9 @@ async function submit(ev) {
 
   const selfReported = document.getElementById("self_reported")?.checked || false;
   const delayMin = selfReported ? 0 : getDelayMinutes();
-  const assigneeId = selfReported ? null : (document.getElementById("assignee")?.value || null);
+  const assigneeSelect = document.getElementById("assignee");
+  const assigneeIds = selfReported ? [] : Array.from(assigneeSelect?.selectedOptions || []).map(o => o.value).filter(Boolean);
+  const assigneeId = assigneeIds[0] || null;
   const deadlineRaw = selfReported ? null : document.getElementById("deadline").value;
 
   const creatorId = document.getElementById("creator_id")?.value ||
@@ -227,8 +230,11 @@ async function submit(ev) {
     return;
   }
 
+  const ev = (typeof EventManager !== 'undefined' ? EventManager.getSelectedEvent() : "") || new URLSearchParams(window.location.search).get("event") || null;
+
   const body = {
     name: document.getElementById("name").value.trim(),
+    event: ev,
     necessary_workers: parseInt(document.getElementById("workers").value, 10) || 1,
     estimated_time_min: parseInt(document.getElementById("time").value, 10) || 10,
     assignment_timeout_min: parseInt(document.getElementById("timeout").value, 10) || 15,
@@ -240,6 +246,7 @@ async function submit(ev) {
     delay_min: delayMin,
     self_reported: selfReported,
     assignee_id: assigneeId,
+    assignee_ids: assigneeIds,
     creator_id: creatorId,
   };
 
@@ -270,6 +277,10 @@ function resetForm() {
     c.classList.remove("on");
     c.setAttribute("aria-pressed", "false");
   });
+  const assigneeSelect = document.getElementById("assignee");
+  if (assigneeSelect) {
+    Array.from(assigneeSelect.options).forEach(opt => opt.selected = false);
+  }
   toggleSelfReported(false);
 }
 
@@ -278,7 +289,9 @@ function onMessage(msg) {
 }
 
 async function loadCurrent() {
-  const { chores } = await API.get("/api/chores");
+  const ev = (typeof EventManager !== 'undefined' ? EventManager.getSelectedEvent() : "") || new URLSearchParams(window.location.search).get("event") || "";
+  const url = (ev && ev !== "all") ? `/api/chores?event=${encodeURIComponent(ev)}` : "/api/chores";
+  const { chores } = await API.get(url);
   const box = document.getElementById("current");
   if (!box) return;
 

@@ -3,6 +3,9 @@ const uid = window.USER_ID;
 
 async function init() {
   await load();
+  if (typeof EventManager !== 'undefined') {
+    EventManager.onEventChanged(load);
+  }
   connectWS((msg) => {
     if (["snapshot", "task_done", "task_claimed", "task_created", "profile_updated", "workload_updated"].includes(msg.type)) load();
   });

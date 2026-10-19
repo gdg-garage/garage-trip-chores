@@ -10,6 +10,7 @@ type ClaimerView struct {
 type ChoreView struct {
 	ID                    uint          `json:"id"`
 	Name                  string        `json:"name"`
+	Event                 string        `json:"event,omitempty"`
 	NecessaryWorkers      uint          `json:"necessary_workers"`
 	EstimatedTimeMin      uint          `json:"estimated_time_min"`
 	AssignmentTimeoutMin  uint          `json:"assignment_timeout_min"`
@@ -48,6 +49,7 @@ type WorkLogView struct {
 
 type ChoreCreateIn struct {
 	Name                  string   `json:"name"`
+	Event                 string   `json:"event,omitempty"`
 	EstimatedTimeMin      uint     `json:"estimated_time_min"`
 	NecessaryWorkers      uint     `json:"necessary_workers"`
 	AssignmentTimeoutMin  uint     `json:"assignment_timeout_min"`
@@ -55,6 +57,7 @@ type ChoreCreateIn struct {
 	DelayMin              uint     `json:"delay_min"`
 	SelfReported          bool     `json:"self_reported"`
 	AssigneeId            string   `json:"assignee_id,omitempty"`
+	AssigneeIds           []string `json:"assignee_ids,omitempty"`
 	CreatorId             string   `json:"creator_id"`
 	TemplateKey           string   `json:"template_key"`
 }

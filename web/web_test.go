@@ -609,5 +609,107 @@ func TestShiftsCalendarAPI(t *testing.T) {
 	}
 }
 
+func TestTVAndUserRoutes(t *testing.T) {
+	_, router := setupTestWeb(t)
 
+	// Test GET /tv
+	req := httptest.NewRequest(http.MethodGet, "/tv", nil)
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 for /tv, got %d", rr.Code)
+	}
 
+	// Test GET /users/{id} renders HTML page like /user/{id}
+	req = httptest.NewRequest(http.MethodGet, "/users/123456", nil)
+	rr = httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 for /users/123456, got %d", rr.Code)
+	}
+}
+
+func TestChoreDetailEnvelopeAndMultiAssign(t *testing.T) {
+	webInstance, router := setupTestWeb(t)
+
+	// Create a chore needing 2 workers with 2 direct assignees for event 'gt6.9'
+	createBody, _ := json.Marshal(ChoreCreateIn{
+		Name:             "Wash pots",
+		Event:            "gt6.9",
+		NecessaryWorkers: 2,
+		EstimatedTimeMin: 20,
+		AssigneeIds:      []string{"111111", "222222"},
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/chores", bytes.NewReader(createBody))
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("failed to create chore: %d - %s", rr.Code, rr.Body.String())
+	}
+	var created ChoreView
+	if err := json.NewDecoder(rr.Body).Decode(&created); err != nil {
+		t.Fatalf("failed to decode created chore: %v", err)
+	}
+	if created.Event != "gt6.9" {
+		t.Fatalf("expected event 'gt6.9', got %s", created.Event)
+	}
+	if len(created.Claimers) != 2 {
+		t.Fatalf("expected 2 claimers, got %d", len(created.Claimers))
+	}
+
+	// Verify GET /api/chores/{id} returns both envelope and suggestions
+	req = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/chores/%d", created.ID), nil)
+	rr = httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("failed to get chore: %d", rr.Code)
+	}
+
+	var envelope struct {
+		Chore       ChoreView         `json:"chore"`
+		Suggestions SuggestionsResult `json:"suggestions"`
+		ID          uint              `json:"id"`
+	}
+	if err := json.NewDecoder(rr.Body).Decode(&envelope); err != nil {
+		t.Fatalf("failed to decode chore envelope: %v", err)
+	}
+	if envelope.Chore.ID != created.ID || envelope.ID != created.ID {
+		t.Fatalf("expected matching chore ID %d, got %d and %d", created.ID, envelope.Chore.ID, envelope.ID)
+	}
+
+	// Test multi-assign endpoint
+	assignBody, _ := json.Marshal(AssignIn{
+		DiscordIds: []string{"333333", "444444"},
+	})
+	req = httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/chores/%d/assign", created.ID), bytes.NewReader(assignBody))
+	rr = httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("failed to multi-assign: %d - %s", rr.Code, rr.Body.String())
+	}
+
+	// Test event filtering in GET /api/chores
+	req = httptest.NewRequest(http.MethodGet, "/api/chores?event=gt6.9", nil)
+	rr = httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	var listResp struct {
+		Chores []ChoreView `json:"chores"`
+	}
+	_ = json.NewDecoder(rr.Body).Decode(&listResp)
+	if len(listResp.Chores) == 0 {
+		t.Fatalf("expected at least 1 chore for event gt6.9, got 0")
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/chores?event=other-event", nil)
+	rr = httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	var listEmpty struct {
+		Chores []ChoreView `json:"chores"`
+	}
+	_ = json.NewDecoder(rr.Body).Decode(&listEmpty)
+	if len(listEmpty.Chores) != 0 {
+		t.Fatalf("expected 0 chores for other-event, got %d", len(listEmpty.Chores))
+	}
+
+	_ = webInstance
+}

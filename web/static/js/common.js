@@ -53,12 +53,19 @@ const WS_STALE_MS = 45000;  // no traffic for this long => assume dead, reconnec
 function connectWS(onMessage, onStatus) {
   let ws, closed = false, backoff = 500, lastRx = Date.now();
   let pingTimer, watchdog;
-  const url = (location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws";
+  const getWsUrl = () => {
+    let base = (location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws";
+    const ev = (typeof EventManager !== 'undefined' ? EventManager.getSelectedEvent() : "") || new URLSearchParams(window.location.search).get("event");
+    if (ev && ev !== "all") {
+      base += "?event=" + encodeURIComponent(ev);
+    }
+    return base;
+  };
 
   function clearTimers() { clearInterval(pingTimer); clearInterval(watchdog); }
 
   function open() {
-    ws = new WebSocket(url);
+    ws = new WebSocket(getWsUrl());
     ws.onopen = () => {
       backoff = 500; lastRx = Date.now(); onStatus && onStatus(true);
       clearTimers();

@@ -31,7 +31,7 @@ async function init() {
           class: "chip",
           "aria-pressed": "false",
           onclick: () => toggleSkill(chip, s)
-        }, s);
+        }, s.replace(/^skill::/, ''));
         sbox.appendChild(chip);
       });
     }

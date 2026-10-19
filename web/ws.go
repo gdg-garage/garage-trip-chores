@@ -94,7 +94,13 @@ func (w *Web) handleWS(rw http.ResponseWriter, r *http.Request) {
 	w.wsHub.register <- client
 
 	// Send initial snapshot
-	chores, _ := w.ListChoreViews(true)
+	event := r.URL.Query().Get("event")
+	var chores []ChoreView
+	if event != "" && event != "all" {
+		chores, _ = w.ListChoreViewsForEvent(true, event)
+	} else {
+		chores, _ = w.ListChoreViews(true)
+	}
 	suggestionsMap := make(map[uint]SuggestionsResult)
 	for _, c := range chores {
 		sug := w.SuggestionsFor(storage.Chore{
