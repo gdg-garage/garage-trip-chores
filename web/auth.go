@@ -90,6 +90,7 @@ func (w *Web) AuthMiddleware(next http.Handler) http.Handler {
 				if userJSON, ok := sess.Values["user"].(string); ok && userJSON != "" {
 					var u UserInfo
 					if json.Unmarshal([]byte(userJSON), &u) == nil {
+						w.checkAndUpdateAdmin(r, rw, sess, &u)
 						ctx = context.WithValue(ctx, UserContextKey, &u)
 					}
 				}
@@ -114,9 +115,28 @@ func (w *Web) AuthMiddleware(next http.Handler) http.Handler {
 			}
 		}
 
-		// If auth is not required, let it pass
+		// If auth is not required, let it pass (with fallback dev admin if unauthenticated)
 		if !w.conf.AuthRequired {
-			next.ServeHTTP(rw, r)
+			sess, _ := w.cookieStore.Get(r, SessionCookieName)
+			ctx := r.Context()
+			if sess != nil {
+				if userJSON, ok := sess.Values["user"].(string); ok && userJSON != "" {
+					var u UserInfo
+					if json.Unmarshal([]byte(userJSON), &u) == nil {
+						w.checkAndUpdateAdmin(r, rw, sess, &u)
+						ctx = context.WithValue(ctx, UserContextKey, &u)
+					}
+				}
+			}
+			if ctx.Value(UserContextKey) == nil {
+				ctx = context.WithValue(ctx, UserContextKey, &UserInfo{
+					DiscordId: "dev-admin",
+					Name:      "Admin (No Auth)",
+					Handle:    "admin",
+					IsAdmin:   true,
+				})
+			}
+			next.ServeHTTP(rw, r.WithContext(ctx))
 			return
 		}
 
@@ -136,6 +156,7 @@ func (w *Web) AuthMiddleware(next http.Handler) http.Handler {
 			if userJSON != "" {
 				var u UserInfo
 				if json.Unmarshal([]byte(userJSON), &u) == nil && u.DiscordId != "" {
+					w.checkAndUpdateAdmin(r, rw, sess, &u)
 					ctx := context.WithValue(r.Context(), UserContextKey, &u)
 					next.ServeHTTP(rw, r.WithContext(ctx))
 					return
@@ -333,3 +354,40 @@ func (w *Web) renderErrorPage(rw http.ResponseWriter, title, body string, status
 </div></div>`, title, title, body)
 	rw.Write([]byte(html))
 }
+
+func (w *Web) checkAndUpdateAdmin(r *http.Request, rw http.ResponseWriter, sess *sessions.Session, u *UserInfo) {
+	if u == nil || u.IsAdmin || u.DiscordId == "" {
+		return
+	}
+	dg := w.storage.GetDiscord()
+	guildID := w.storage.GetDiscordGuildId()
+	if dg == nil || guildID == "" {
+		return
+	}
+	member, err := dg.GuildMember(guildID, u.DiscordId)
+	if err != nil || member == nil {
+		return
+	}
+	guildRoles, err := dg.GuildRoles(guildID)
+	if err != nil {
+		return
+	}
+	roleNameMap := make(map[string]string)
+	for _, gr := range guildRoles {
+		roleNameMap[gr.ID] = gr.Name
+	}
+	for _, rid := range member.Roles {
+		rname := roleNameMap[rid]
+		if (w.conf.DiscordAdminRole != "" && rname == w.conf.DiscordAdminRole) ||
+			rname == "g::t::orgs" || rname == "ork" || rname == "chores::admin" {
+			u.IsAdmin = true
+			if sess != nil {
+				uBytes, _ := json.Marshal(u)
+				sess.Values["user"] = string(uBytes)
+				_ = sess.Save(r, rw)
+			}
+			break
+		}
+	}
+}
+

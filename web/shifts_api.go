@@ -11,6 +11,9 @@ import (
 )
 
 func (w *Web) requireAdmin(rw http.ResponseWriter, r *http.Request) bool {
+	if !w.conf.AuthRequired {
+		return true
+	}
 	u := w.GetCurrentUser(r)
 	if u == nil {
 		writeError(rw, http.StatusUnauthorized, "Login required")

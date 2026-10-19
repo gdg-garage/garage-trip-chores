@@ -11,8 +11,9 @@
     <button type="button" class="chip" data-tab="tab-calendar">📆 event calendar & predictions</button>
     <button type="button" class="chip" data-tab="tab-my-shifts">👤 my shifts</button>
     <button type="button" class="chip" data-tab="tab-fairness">⚖️ fairness stats</button>
+    <button type="button" class="chip" data-tab="tab-definitions">📋 shift definitions</button>
     {% if user and user.IsAdmin %}
-    <button type="button" class="chip" data-tab="tab-admin" style="border-color:#ff79c6;color:#ff79c6">⚙️ g::t::orgs admin</button>
+    <button type="button" class="chip" data-tab="tab-admin" style="border-color:#ff79c6;color:#ff79c6">⚙️ schedule generator</button>
     {% endif %}
   </div>
 </div>
@@ -105,27 +106,25 @@
   </div>
 </div>
 
-<!-- SECTION 4: G::T::ORGS ADMIN -->
-{% if user and user.IsAdmin %}
-<div id="tab-admin" class="tab-pane" hidden>
-  <div class="card" style="margin-bottom:16px;border-color:rgba(255,121,198,0.4)">
-    <h2 style="color:#ff79c6">g::t::orgs::schedule_generator; ⚡</h2>
-    <p class="muted">manually trigger the ILP optimization solver or freeze the schedule for a specific date.</p>
-    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:12px">
+<!-- SECTION 4: SHIFT DEFINITIONS -->
+<div id="tab-definitions" class="tab-pane" hidden>
+  <div class="card" style="margin-bottom:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
       <div>
-        <label for="admin-gen-date" style="font-size:0.85rem">target date:</label>
-        <input type="date" id="admin-gen-date" style="padding:6px 10px;font-family:inherit" />
+        <h2 style="margin:0">shift::definitions & runbooks; 📋</h2>
+        <p class="muted" style="margin:4px 0 0;font-size:0.85rem">
+          Configure recurring on-call shift roles (kitchen stewards, bathroom refresh, bar duty, trash runs) and their runbook links.
+        </p>
       </div>
-      <div style="display:flex;gap:8px;align-self:flex-end">
-        <button type="button" id="btn-generate-schedule" class="primary">⚡ generate & balance schedule</button>
-        <button type="button" id="btn-freeze-schedule" class="secondary">🔒 freeze schedule</button>
+      <div>
+        <button type="button" class="chip" onclick="loadDefinitions()">🔄 refresh</button>
       </div>
     </div>
-    <div id="admin-gen-status" style="margin-top:10px;font-size:0.85rem"></div>
   </div>
 
-  <div class="card">
+  <div class="card" style="margin-bottom:16px">
     <h2 id="def-form-title">add::shift_definition;</h2>
+    <p class="muted" style="font-size:0.85rem;margin-top:0">Define a duty template with required workers, time window, and runbook instructions.</p>
     <form id="shift-def-form">
       <input type="hidden" id="def-id" />
       <div class="grid2">
@@ -188,8 +187,10 @@
         <button type="button" id="btn-cancel-def" class="ghost" hidden>cancel</button>
       </div>
     </form>
+  </div>
 
-    <h3 style="margin-top:24px">configured::definitions;</h3>
+  <div class="card">
+    <h3 style="margin-top:0">configured::definitions;</h3>
     <div id="definitions-table-wrap" style="overflow-x:auto;margin-top:10px">
       <table style="width:100%;border-collapse:collapse;font-size:0.85rem">
         <thead>
@@ -209,6 +210,26 @@
         </tbody>
       </table>
     </div>
+  </div>
+</div>
+
+<!-- SECTION 5: G::T::ORGS ADMIN -->
+{% if user and user.IsAdmin %}
+<div id="tab-admin" class="tab-pane" hidden>
+  <div class="card" style="margin-bottom:16px;border-color:rgba(255,121,198,0.4)">
+    <h2 style="color:#ff79c6">g::t::orgs::schedule_generator; ⚡</h2>
+    <p class="muted">manually trigger the ILP optimization solver or freeze the schedule for a specific date.</p>
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:12px">
+      <div>
+        <label for="admin-gen-date" style="font-size:0.85rem">target date:</label>
+        <input type="date" id="admin-gen-date" style="padding:6px 10px;font-family:inherit" />
+      </div>
+      <div style="display:flex;gap:8px;align-self:flex-end">
+        <button type="button" id="btn-generate-schedule" class="primary">⚡ generate & balance schedule</button>
+        <button type="button" id="btn-freeze-schedule" class="secondary">🔒 freeze schedule</button>
+      </div>
+    </div>
+    <div id="admin-gen-status" style="margin-top:10px;font-size:0.85rem"></div>
   </div>
 </div>
 {% endif %}
@@ -262,6 +283,7 @@
       if (target) target.hidden = false;
       if (targetId === 'tab-calendar') loadCalendar();
       if (targetId === 'tab-fairness') loadFairnessStats();
+      if (targetId === 'tab-definitions') loadDefinitions();
       if (targetId === 'tab-admin') loadDefinitions();
     });
   });
@@ -281,8 +303,11 @@
         fetch('/api/shifts'),
         fetch('/api/users')
       ]);
-      allShifts = await shiftsRes.json() || [];
-      allUsers = await usersRes.json() || [];
+      const shiftsData = await shiftsRes.json();
+      allShifts = Array.isArray(shiftsData) ? shiftsData : (shiftsData.shifts || []);
+
+      const usersData = await usersRes.json();
+      allUsers = Array.isArray(usersData) ? usersData : (usersData.users || usersData.people || []);
 
       // Populate swap dialog select
       const select = document.getElementById('swap-target-user');
@@ -300,6 +325,7 @@
 
       renderShifts('today');
       renderMyShifts();
+      loadDefinitions();
     } catch (e) {
       console.error("Failed to load shift data:", e);
     }
@@ -326,7 +352,16 @@
     }
 
     if (filtered.length === 0) {
-      container.innerHTML = '<p class="muted">no shifts scheduled for this period.</p>';
+      const filterLabel = filter === 'today' ? 'today' : (filter === 'tomorrow' ? 'tomorrow' : 'the selected date');
+      container.innerHTML = `
+        <div class="card" style="grid-column: 1 / -1; padding: 24px; text-align: center">
+          <p class="muted" style="margin: 0 0 12px 0; font-size: 0.95rem">No duty shifts scheduled for ${filterLabel}.</p>
+          <div style="display:flex;justify-content:center;gap:10px;flex-wrap:wrap">
+            <button type="button" class="chip" onclick="document.querySelector('[data-tab=\\'tab-calendar\\']').click()">🔮 View Event Calendar & Schedule Predictions</button>
+            <button type="button" class="chip ghost" onclick="document.querySelector('[data-tab=\\'tab-definitions\\']').click()">📋 View / Add Shift Definitions</button>
+          </div>
+        </div>
+      `;
       return;
     }
 
@@ -419,6 +454,8 @@
         </div>
       `;
     }).join('');
+  }
+
   async function loadCalendar(eventCode) {
     const container = document.getElementById('calendar-content');
     const select = document.getElementById('calendar-event-select');
@@ -776,7 +813,11 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
-        if (!res.ok) throw new Error((await res.json()).detail || 'Failed to save');
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || errData.error || `HTTP ${res.status}`);
+        }
+        alert(defId ? "Shift definition updated!" : "Shift definition created!");
         resetDefForm();
         await loadDefinitions();
       } catch (err) {
@@ -801,6 +842,7 @@
     document.getElementById('def-enabled').checked = def.enabled;
     document.getElementById('def-form-title').textContent = 'edit::shift_definition;';
     document.getElementById('btn-cancel-def').hidden = false;
+    document.getElementById('shift-def-form')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
 
   window.deleteDef = async function(id) {
